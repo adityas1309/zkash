@@ -122,8 +122,8 @@ export class SorobanService {
 
     const args = [
       StellarSdk.nativeToScVal(StellarSdk.Address.fromString(keypair.publicKey())),
-      StellarSdk.nativeToScVal(commitmentBytes),
-      StellarSdk.nativeToScVal(newRootBytes),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(commitmentBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(newRootBytes)),
     ];
 
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
@@ -163,9 +163,9 @@ export class SorobanService {
 
     const args = [
       StellarSdk.nativeToScVal(StellarSdk.Address.fromString(toAddress)),
-      StellarSdk.nativeToScVal(proofBytes),
-      StellarSdk.nativeToScVal(pubSignalsBytes),
-      StellarSdk.nativeToScVal(nullifierBytes),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(proofBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(pubSignalsBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(nullifierBytes)),
     ];
 
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
@@ -233,12 +233,12 @@ export class SorobanService {
       StellarSdk.nativeToScVal(StellarSdk.Address.fromString(aliceAddress)),
       StellarSdk.nativeToScVal(StellarSdk.Address.fromString(bobAddress)),
       paramsSc,
-      StellarSdk.nativeToScVal(aliceProof),
-      StellarSdk.nativeToScVal(alicePubSignals),
-      StellarSdk.nativeToScVal(aliceNullifier),
-      StellarSdk.nativeToScVal(bobProof),
-      StellarSdk.nativeToScVal(bobPubSignals),
-      StellarSdk.nativeToScVal(bobNullifier),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(aliceProof)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(alicePubSignals)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(aliceNullifier)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobProof)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobPubSignals)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobNullifier)),
     ];
 
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {

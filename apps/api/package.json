@@ -7,7 +7,8 @@
     "dev": "nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
-    "test": "jest"
+    "test": "jest",
+    "test:e2e": "jest --config jest.e2e.config.js --verbose --forceExit"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -35,6 +36,7 @@
     "@nestjs/testing": "^10.0.0",
     "@types/express": "^4.17.0",
     "@types/express-session": "^1.18.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/passport": "^1.0.16",
     "@types/passport-google-oauth20": "^2.0.14",
