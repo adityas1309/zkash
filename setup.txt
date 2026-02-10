@@ -1,0 +1,72 @@
+singh@SHIVA:/mnt/c/Users/singh/Downloads/lop-main (1)/lop-main$ cd packages/circuits
+singh@SHIVA:/mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits$ pnpm run build && pnpm run setup
+
+> circuits@1.0.0 build /mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits
+> node scripts/build-win.js
+
+Compiling circuit...
+template instances: 217
+non-linear constraints: 6392
+linear constraints: 6848
+public inputs: 3
+private inputs: 28
+public outputs: 1
+wires: 13266
+labels: 19964
+Written successfully: /mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits/private_transfer/build/main.r1cs
+Written successfully: /mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits/private_transfer/build/main.sym
+Written successfully: /mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits/private_transfer/build/main_js/main.wasm
+Everything went okay
+Circuit compiled. Run trusted setup: pnpm run setup
+
+> circuits@1.0.0 setup /mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits
+> node scripts/setup-zkey.js
+
+Phase 1: Powers of Tau (BN254)...
+[INFO]  snarkJS: First Contribution Hash:
+                846b0f0e 50b04ebd 9e12c388 097af122
+                5a708bf0 c55d5756 fcf38fff 1fa92beb
+                3db66f02 718c8301 442a5e06 2ed800d2
+                cfa58135 250d6118 e2762f94 d23959e5
+[INFO]  snarkJS: Contribution Response Hash imported: 
+                39d63615 0533e069 cb0069f2 ebec5338
+                5a4eaaba ba5dfa3e 0fb30f51 58410c0b
+                49a1f225 b8db4d78 6a88ccef 55a3b2fa
+                c4feddb6 d14a7f12 0cae9db1 110917a4
+[INFO]  snarkJS: Next Challenge Hash: 
+                2467611a c9b46ec7 b843ec2f 9d5bb4fc
+                85d5a3de c2248d58 8a1f4a44 adc5aa48
+                42a5595b ebae0af0 e2af8bc9 0ea938fc
+                5af553ab 8287d5aa 8fd64d40 5e4b5168
+Phase 2: Groth16 setup...
+[INFO]  snarkJS: Reading r1cs
+[INFO]  snarkJS: Reading tauG1
+[INFO]  snarkJS: Reading tauG2
+[INFO]  snarkJS: Reading alphatauG1
+[INFO]  snarkJS: Reading betatauG1
+[INFO]  snarkJS: Circuit hash: 
+                b663a30e 7fedb822 dac2fd84 30575fe6
+                21992367 47f5244d 22aa0e0b a29a6275
+                845bd845 734c9dc1 13e551ba d104cfe5
+                734ef342 ba1b1a40 efa0a886 856db8f6
+[INFO]  snarkJS: Circuit Hash: 
+                b663a30e 7fedb822 dac2fd84 30575fe6
+                21992367 47f5244d 22aa0e0b a29a6275
+                845bd845 734c9dc1 13e551ba d104cfe5
+                734ef342 ba1b1a40 efa0a886 856db8f6
+[INFO]  snarkJS: Contribution Hash: 
+                1e2e1ce5 476f1a96 c858d9bb ff6631e0
+                879d9bb9 1cad46c3 a74775e4 11b1d401
+                96857e47 a22b58af 7bcc94b9 5eb58453
+                c527fdd5 f3caaeec a6de7a1d cf47be11
+Exporting verification key...
+[INFO]  snarkJS: EXPORT VERIFICATION KEY STARTED
+[INFO]  snarkJS: > Detected protocol: groth16
+[INFO]  snarkJS: EXPORT VERIFICATION KEY FINISHED
+Done. Artifacts in /mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits/private_transfer/output
+Note: Soroban groth16_verifier uses BLS12-381. This zkey is BN254.
+singh@SHIVA:/mnt/c/Users/singh/Downloads/lop-main (1)/lop-main/packages/circuits$ 
+
+
+
+

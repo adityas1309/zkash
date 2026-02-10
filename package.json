@@ -1,0 +1,22 @@
+{
+  "name": "lop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Private P2P Payments and Swaps on Stellar Testnet",
+  "scripts": {
+    "dev": "pnpm run --parallel dev",
+    "dev:api": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:indexer": "pnpm --filter indexer dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "init-shielded-pool": "node --env-file=.env scripts/init-shielded-pool.mjs"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "^14.5.0"
+  }
+}

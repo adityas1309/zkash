@@ -1,0 +1,16 @@
+{
+  "name": "circuits",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-win.js",
+    "build:win": "node scripts/build-win.js",
+    "setup": "node scripts/setup-zkey.js"
+  },
+  "devDependencies": {
+    "snarkjs": "^0.7.0"
+  },
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
+}

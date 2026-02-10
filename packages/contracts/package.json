@@ -1,0 +1,9 @@
+{
+  "name": "contracts",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:shielded": "cd shielded_pool && cargo build --target wasm32-unknown-unknown --release",
+    "build:zkswap": "cd zk_swap && cargo build --target wasm32-unknown-unknown --release"
+  }
+}
