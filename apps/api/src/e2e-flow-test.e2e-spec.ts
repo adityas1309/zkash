@@ -426,6 +426,10 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
                     '1',
                 );
 
+                if (!result.success) {
+                    console.error('[TEST 6.1] sendPrivate failed:', result.error);
+                }
+
                 expect(result.success).toBe(true);
                 expect(result.error).toBeUndefined();
 

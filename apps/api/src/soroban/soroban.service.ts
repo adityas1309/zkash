@@ -12,6 +12,26 @@ export class SorobanService {
     this.server = new StellarSdk.rpc.Server(rpcUrl);
   }
 
+  /**
+   * Poll getTransaction until the TX is confirmed or fails.
+   * Returns the confirmed TX hash, or throws on failure/timeout.
+   */
+  private async waitForTransaction(hash: string, timeoutMs = 120_000): Promise<string> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const response = await this.server.getTransaction(hash);
+      if (response.status === 'SUCCESS') {
+        return hash;
+      }
+      if (response.status === 'FAILED') {
+        throw new Error(`Transaction ${hash} failed on-chain`);
+      }
+      // status === 'NOT_FOUND' means still pending
+      await new Promise(r => setTimeout(r, 3000));
+    }
+    throw new Error(`Transaction ${hash} not confirmed after ${timeoutMs / 1000}s`);
+  }
+
   private scValToBytes32Array(retval: StellarSdk.xdr.ScVal): Uint8Array[] {
     const switchName = retval.switch().name;
     if (switchName !== 'scvVec') throw new Error(`Unexpected retval type: ${switchName}`);
@@ -140,7 +160,8 @@ export class SorobanService {
     if (result.status === 'ERROR') {
       throw new Error(String(result.errorResult ?? 'Transaction failed'));
     }
-    return result.hash;
+    // Wait for on-chain confirmation before returning
+    return this.waitForTransaction(result.hash);
   }
 
   /**
@@ -182,7 +203,8 @@ export class SorobanService {
     if (result.status === 'ERROR') {
       throw new Error(String(result.errorResult ?? 'Transaction failed'));
     }
-    return result.hash;
+    // Wait for on-chain confirmation before returning
+    return this.waitForTransaction(result.hash);
   }
 
   /**

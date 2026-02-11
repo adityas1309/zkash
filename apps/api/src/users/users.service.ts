@@ -223,21 +223,36 @@ export class UsersService {
     asset: 'USDC' | 'XLM',
     amount: string,
   ): Promise<{ success: boolean; error?: string }> {
+    console.log(`[sendPrivate] START senderId=${senderId}, recipient=${recipientIdentifier}, asset=${asset}, amount=${amount}`);
     const recipient = await this.findByUsername(recipientIdentifier) ?? await this.findByStellarPublicKey(recipientIdentifier);
-    if (!recipient || !recipient.googleId) return { success: false, error: 'Recipient not found' };
+    if (!recipient || !recipient.googleId) {
+      console.log('[sendPrivate] FAIL: Recipient not found');
+      return { success: false, error: 'Recipient not found' };
+    }
 
     const amountNum = Number(amount);
-    if (!Number.isFinite(amountNum) || amountNum <= 0) return { success: false, error: 'Invalid amount' };
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      console.log('[sendPrivate] FAIL: Invalid amount');
+      return { success: false, error: 'Invalid amount' };
+    }
     // ShieldedPool only supports fixed-amount notes/transfers.
-    if (amountNum !== 1) return { success: false, error: 'Private transfers currently support only amount=1' };
+    if (amountNum !== 1) {
+      console.log('[sendPrivate] FAIL: amount != 1');
+      return { success: false, error: 'Private transfers currently support only amount=1' };
+    }
 
     const poolAddress =
       asset === 'USDC'
         ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
         : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
-    if (!poolAddress) return { success: false, error: 'Pool not configured for this asset' };
+    if (!poolAddress) {
+      console.log('[sendPrivate] FAIL: Pool not configured');
+      return { success: false, error: 'Pool not configured for this asset' };
+    }
+    console.log(`[sendPrivate] poolAddress=${poolAddress}`);
 
     const notes = await this.getSpendableNotes(senderId, asset, UsersService.SHIELDED_POOL_FIXED_AMOUNT);
+    console.log(`[sendPrivate] spendable notes found: ${notes.length}`);
     if (notes.length === 0) return { success: false, error: 'No spendable private balance. Deposit first.' };
 
     // Get sender's public key for the contract call
@@ -245,52 +260,71 @@ export class UsersService {
     if (!sender) return { success: false, error: 'Sender not found' };
 
     const note = notes[0];
+    console.log(`[sendPrivate] note commitment: ${note.commitment}`);
     const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, sender.stellarPublicKey);
+    console.log(`[sendPrivate] stateRoot: ${Buffer.from(stateRoot).toString('hex').slice(0, 32)}...`);
 
     const leaves = await this.sorobanService.getCommitments(poolAddress, sender.stellarPublicKey);
+    console.log(`[sendPrivate] on-chain leaves: ${leaves.length}`);
     const commitmentBytes = new Uint8Array(Buffer.from(note.commitment, 'hex'));
     const stateIndex = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(commitmentBytes)));
-    if (stateIndex < 0) return { success: false, error: 'Deposit not indexed on-chain yet. Wait and retry.' };
+    console.log(`[sendPrivate] stateIndex: ${stateIndex}`);
+    if (stateIndex < 0) {
+      console.log('[sendPrivate] FAIL: commitment not found on-chain');
+      if (leaves.length > 0) {
+        console.log(`[sendPrivate] first leaf hex: ${Buffer.from(leaves[0]).toString('hex').slice(0, 32)}...`);
+        console.log(`[sendPrivate] seeking commitment: ${note.commitment.slice(0, 32)}...`);
+      }
+      return { success: false, error: 'Deposit not indexed on-chain yet. Wait and retry.' };
+    }
     const stateSiblings = await this.merkleTree.computeSiblingsForIndex(leaves, stateIndex, 20);
-
-    const { proofBytes, pubSignalsBytes, nullifierHex } = await this.proofService.generateProof(
-      { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
-      stateRoot,
-      UsersService.SHIELDED_POOL_FIXED_AMOUNT,
-      { commitmentBytes, stateIndex, stateSiblings },
-    );
-
-    await this.pendingWithdrawalModel.create({
-      recipientId: recipient._id,
-      proofBytes: Buffer.from(proofBytes).toString('base64'),
-      pubSignalsBytes: Buffer.from(pubSignalsBytes).toString('base64'),
-      nullifier: nullifierHex,
-      amount,
-      asset,
-    });
+    console.log(`[sendPrivate] computed ${stateSiblings.length} siblings, generating proof...`);
 
     try {
-      const recipientEncKey = this.authService.getDecryptionKeyForUser(recipient, recipient.googleId, recipient.email);
-      const recipientViewKeyHex = this.authService.decrypt(recipient.zkViewKeyEncrypted, recipientEncKey);
-      const recipientViewKey = new Uint8Array(Buffer.from(recipientViewKeyHex, 'hex'));
-      const payload = JSON.stringify({ value: amountNum, asset });
-      const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
-      const ciphertext = nacl.secretbox(naclUtil.decodeUTF8(payload), nonce, recipientViewKey);
-      const combined = Buffer.concat([Buffer.from(nonce), Buffer.from(ciphertext)]);
-      await this.encryptedNoteModel.create({
-        commitment: '',
-        ciphertext: Buffer.from(combined).toString('base64'),
-        recipientId: recipient._id,
-        asset,
-        txHash: 'pending',
-        poolAddress,
-      });
-    } catch (e) {
-      console.error('[UsersService] sendPrivate: failed to create EncryptedNote:', e);
-    }
+      const { proofBytes, pubSignalsBytes, nullifierHex } = await this.proofService.generateProof(
+        { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
+        stateRoot,
+        UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+        { commitmentBytes, stateIndex, stateSiblings },
+      );
+      console.log(`[sendPrivate] proof generated, nullifier: ${nullifierHex.slice(0, 16)}...`);
 
-    await this.markNoteSpent(senderId, nullifierHex);
-    return { success: true };
+      await this.pendingWithdrawalModel.create({
+        recipientId: recipient._id,
+        proofBytes: Buffer.from(proofBytes).toString('base64'),
+        pubSignalsBytes: Buffer.from(pubSignalsBytes).toString('base64'),
+        nullifier: nullifierHex,
+        amount,
+        asset,
+      });
+
+      try {
+        const recipientEncKey = this.authService.getDecryptionKeyForUser(recipient, recipient.googleId, recipient.email);
+        const recipientViewKeyHex = this.authService.decrypt(recipient.zkViewKeyEncrypted, recipientEncKey);
+        const recipientViewKey = new Uint8Array(Buffer.from(recipientViewKeyHex, 'hex'));
+        const payload = JSON.stringify({ value: amountNum, asset });
+        const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+        const ciphertext = nacl.secretbox(naclUtil.decodeUTF8(payload), nonce, recipientViewKey);
+        const combined = Buffer.concat([Buffer.from(nonce), Buffer.from(ciphertext)]);
+        await this.encryptedNoteModel.create({
+          commitment: '',
+          ciphertext: Buffer.from(combined).toString('base64'),
+          recipientId: recipient._id,
+          asset,
+          txHash: 'pending',
+          poolAddress,
+        });
+      } catch (e) {
+        console.error('[UsersService] sendPrivate: failed to create EncryptedNote:', e);
+      }
+
+      await this.markNoteSpent(senderId, nullifierHex);
+      console.log('[sendPrivate] SUCCESS');
+      return { success: true };
+    } catch (proofErr: any) {
+      console.error('[sendPrivate] PROOF/WITHDRAWAL ERROR:', proofErr.message || proofErr);
+      return { success: false, error: proofErr.message || String(proofErr) };
+    }
   }
 
   /** Process pending withdrawals for the current user (submit withdraw txs to ShieldedPool). */

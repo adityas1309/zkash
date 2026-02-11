@@ -20,6 +20,7 @@
     "@stellar/stellar-sdk": "^14.0.0",
     "circomlibjs": "^0.1.7",
     "express-session": "^1.17.0",
+    "ffjavascript": "^0.3.1",
     "mongoose": "^8.0.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

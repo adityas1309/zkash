@@ -2,36 +2,10 @@
  * Commitment computation matching the circuit's CommitmentHasher:
  * precommitment = Poseidon(nullifier, secret)
  * commitment = Poseidon(value, label, precommitment)
- * Uses circomlibjs Poseidon (BN254 scalar field).
+ * Uses BLS12-381 scalar field Poseidon to match the compiled circuit.
  */
 
-import { buildPoseidon } from 'circomlibjs';
-
-interface PoseidonFn {
-  (arr: bigint[] | Uint8Array, state?: unknown, nOut?: number): Uint8Array;
-  F: {
-    toObject: (bytes: Uint8Array | Uint8Array[]) => bigint;
-    e: (x: bigint | string) => any;
-    [key: string]: any;
-  };
-}
-
-let poseidonInstance: PoseidonFn | null = null;
-
-async function getPoseidon(): Promise<PoseidonFn> {
-  if (!poseidonInstance) {
-    poseidonInstance = (await buildPoseidon()) as unknown as PoseidonFn;
-  }
-  return poseidonInstance;
-}
-
-function bytesToBigInt(buf: Uint8Array): bigint {
-  let hex = '';
-  for (let i = 0; i < buf.length; i++) {
-    hex += buf[i].toString(16).padStart(2, '0');
-  }
-  return BigInt('0x' + hex);
-}
+import { buildPoseidonBls12381 } from './poseidon-bls12381';
 
 function bigIntToBytes32BE(n: bigint): Uint8Array {
   const hex = n.toString(16).padStart(64, '0');
@@ -52,7 +26,6 @@ export interface NoteFields {
 
 /**
  * Compute commitment and nullifier hash matching the circuit.
- * circomlibjs poseidon returns 32-byte buffer for single output.
  */
 export async function computeCommitment(fields: NoteFields): Promise<{
   commitmentBytes: Uint8Array;
@@ -60,25 +33,17 @@ export async function computeCommitment(fields: NoteFields): Promise<{
   nullifierHash: bigint;
   nullifierHashBytes: Uint8Array;
 }> {
-  const poseidon = await getPoseidon();
-  const F = poseidon.F;
-
-  // Helper to convert Poseidon output (Uint8Array) to BigInt via Field Element
-  // This matches circom/snarkjs behavior: interpreting the array as a LE number (Mont form handled by F)
-  const toBigInt = (bytes: Uint8Array) => F.toObject(bytes);
+  const poseidon = await buildPoseidonBls12381();
 
   // 1. Nullifier Hash
-  const nullifierHashBytesLE = poseidon([fields.nullifier]);
-  const nullifierHash = toBigInt(nullifierHashBytesLE);
+  const nullifierHash = poseidon([fields.nullifier]) as bigint;
   const nullifierHashBytes = bigIntToBytes32BE(nullifierHash);
 
-  // 2. Precommitment
-  const precommitmentBytesLE = poseidon([fields.nullifier, fields.secret]);
-  const precommitmentBigInt = toBigInt(precommitmentBytesLE);
+  // 2. Precommitment = Poseidon(nullifier, secret)
+  const precommitmentBigInt = poseidon([fields.nullifier, fields.secret]) as bigint;
 
-  // 3. Commitment
-  const commitmentBytesLE = poseidon([fields.value, fields.label, precommitmentBigInt]);
-  const commitmentBigInt = toBigInt(commitmentBytesLE);
+  // 3. Commitment = Poseidon(value, label, precommitment)
+  const commitmentBigInt = poseidon([fields.value, fields.label, precommitmentBigInt]) as bigint;
   const commitmentBytes = bigIntToBytes32BE(commitmentBigInt);
 
   return { commitmentBytes, commitmentBigInt, nullifierHash, nullifierHashBytes };
