@@ -15,3 +15,7 @@ dist
 *.sym
 target
 .vercel
+deploy.sh
+pnpm-lock.yaml
+pnpm-lock.yaml
+packages/circuits/private_transfer/output/verification_key.json
