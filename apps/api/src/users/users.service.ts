@@ -291,6 +291,7 @@ export class UsersService {
 
       await this.pendingWithdrawalModel.create({
         recipientId: recipient._id,
+        poolAddress,
         proofBytes: Buffer.from(proofBytes).toString('base64'),
         pubSignalsBytes: Buffer.from(pubSignalsBytes).toString('base64'),
         nullifier: nullifierHex,
@@ -332,9 +333,6 @@ export class UsersService {
     const user = await this.findById(userId);
     if (!user || !user.googleId) throw new Error('User not found');
 
-    const poolAddress = process.env.SHIELDED_POOL_ADDRESS;
-    if (!poolAddress) throw new Error('SHIELDED_POOL_ADDRESS not configured');
-
     const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
     const secretKey = this.authService.decrypt(user.stellarSecretKeyEncrypted, encKey);
 
@@ -343,11 +341,20 @@ export class UsersService {
 
     for (const p of pending) {
       try {
+        const poolAddressForPending =
+          p.poolAddress ||
+          (p.asset === 'USDC'
+            ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
+            : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? ''));
+        if (!poolAddressForPending) {
+          throw new Error('Pool address not configured for pending withdrawal asset');
+        }
+
         const proofBytes = Buffer.from(p.proofBytes, 'base64');
         const pubSignalsBytes = Buffer.from(p.pubSignalsBytes, 'base64');
         const nullifierBytes = Buffer.from(p.nullifier, 'hex');
         const hash = await this.sorobanService.invokeShieldedPoolWithdraw(
-          poolAddress,
+          poolAddressForPending,
           secretKey,
           user.stellarPublicKey,
           new Uint8Array(proofBytes),

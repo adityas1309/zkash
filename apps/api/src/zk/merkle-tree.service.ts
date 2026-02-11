@@ -1,31 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { buildPoseidon } from 'circomlibjs';
-
-type PoseidonFn = (arr: bigint[] | Uint8Array, state?: unknown, nOut?: number) => Uint8Array | Uint8Array[];
-
-function bytesToBigInt(buf: Uint8Array): bigint {
-    let hex = '';
-    for (let i = 0; i < buf.length; i++) hex += buf[i].toString(16).padStart(2, '0');
-    return BigInt('0x' + hex);
-}
-
-function bigIntToBytes32BE(n: bigint): Uint8Array {
-    const hex = n.toString(16).padStart(64, '0');
-    const out = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-    return out;
-}
+import {
+  bigIntToBytes32BE,
+  bytesToBigInt,
+  poseidonHash2,
+} from './poseidon-bls';
 
 @Injectable()
 export class MerkleTreeService {
-    private poseidonInstance: any = null;
-
-    private async poseidon(inputs: bigint[]): Promise<bigint> {
-        if (!this.poseidonInstance) {
-            this.poseidonInstance = await buildPoseidon();
-        }
-        const outBytes = this.poseidonInstance(inputs);
-        return this.poseidonInstance.F.toObject(outBytes);
+    /**
+     * Poseidon(2) over BLS12-381 for internal Merkle node hashing.
+     */
+    private hashNode(left: bigint, right: bigint): bigint {
+        return poseidonHash2(left, right);
     }
 
     /**
@@ -44,7 +30,7 @@ export class MerkleTreeService {
         for (let d = 0; d < depth; d++) {
             const next: bigint[] = [];
             for (let i = 0; i < level.length; i += 2) {
-                next.push(await this.poseidon([level[i], level[i + 1]]));
+                next.push(this.hashNode(level[i], level[i + 1]));
             }
             level = next;
         }
@@ -73,7 +59,7 @@ export class MerkleTreeService {
             // build next level
             const next: bigint[] = [];
             for (let i = 0; i < level.length; i += 2) {
-                next.push(await this.poseidon([level[i], level[i + 1]]));
+                next.push(this.hashNode(level[i], level[i + 1]));
             }
             level = next;
             idx = idx >> 1;
@@ -93,7 +79,7 @@ export class MerkleTreeService {
             const bit = idx & 1;
             const left = bit === 0 ? node : sib;
             const right = bit === 0 ? sib : node;
-            node = await this.poseidon([left, right]);
+            node = this.hashNode(left, right);
             idx = idx >> 1;
         }
         return bigIntToBytes32BE(node);

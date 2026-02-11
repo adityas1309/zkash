@@ -7,6 +7,9 @@ export class PendingWithdrawal extends Document {
   recipientId: Types.ObjectId;
 
   @Prop({ required: true })
+  poolAddress: string;
+
+  @Prop({ required: true })
   proofBytes: string; // base64
 
   @Prop({ required: true })
