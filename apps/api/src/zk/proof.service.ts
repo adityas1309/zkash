@@ -8,7 +8,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { proofToBytes, publicSignalsToBytes, type SnarkJsProof } from 'sdk';
 import { MerkleTreeService } from './merkle-tree.service';
-import { computeCommitment } from './commitment';
 
 export interface NoteForProof {
   label: bigint;
@@ -119,19 +118,6 @@ export class ProofService {
       if (!ok) {
         throw new Error('Merkle path does not match stateRoot (commitment/index/siblings mismatch)');
       }
-
-      // Additional diagnostic: recompute commitment from note fields to check circuit will use same leaf
-      const recomputedCommitment = await computeCommitment({
-        value: note.value,
-        label: note.label,
-        nullifier: note.nullifier,
-        secret: note.secret,
-      });
-      const recomputedHex = Buffer.from(recomputedCommitment.commitmentBytes).toString('hex');
-      const storedHex = Buffer.from(opts.commitmentBytes).toString('hex');
-      console.log(`[ProofService] Recomputed commitment from note fields: ${recomputedHex}`);
-      console.log(`[ProofService] Stored commitment from deposit:         ${storedHex}`);
-      console.log(`[ProofService] Commitment match: ${recomputedHex === storedHex}`);
     } else {
       console.log('[ProofService] Skipping sanity check (no commitmentBytes provided)');
     }
