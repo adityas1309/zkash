@@ -89,6 +89,14 @@ export class UsersController {
     return this.usersService.processPendingWithdrawals(req.user._id);
   }
 
+  @Post('withdrawals/self')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async withdrawSelf(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM'; amount: number }) {
+    if (!body?.asset || !body?.amount) return { success: false, error: 'Missing asset or amount' };
+    return this.usersService.withdrawSelf(req.user._id, body.asset, body.amount);
+  }
+
   @Post('deposit')
   @UseGuards(SessionAuthGuard)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

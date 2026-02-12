@@ -15,8 +15,8 @@ pub enum Error {
 pub struct SwapParams {
     pub usdc_pool: Address,
     pub xlm_pool: Address,
-    pub amount_usdc: i128,
-    pub amount_xlm: i128,
+    pub amount_usdc: i64,
+    pub amount_xlm: i64,
 }
 
 #[contract]
@@ -38,8 +38,13 @@ impl ZkSwap {
         bob_pub_signals: soroban_sdk::Bytes,
         bob_nullifier: BytesN<32>,
     ) -> Result<(), Error> {
+        soroban_sdk::log!(&env, "ZkSwap: execute called"); // Top-level log
+        
         alice.require_auth();
         bob.require_auth();
+        
+        soroban_sdk::log!(&env, "ZkSwap: auth verified");
+        soroban_sdk::log!(&env, "ZkSwap: calling USDC withdraw");
 
         // USDC pool: Alice's note -> withdraw to Bob
         env.invoke_contract::<()>(
@@ -54,6 +59,8 @@ impl ZkSwap {
             ],
         );
 
+        soroban_sdk::log!(&env, "ZkSwap: calling XLM withdraw");
+
         // XLM pool: Bob's note -> withdraw to Alice
         env.invoke_contract::<()>(
             &params.xlm_pool,
@@ -66,6 +73,8 @@ impl ZkSwap {
                 bob_nullifier.into_val(&env),
             ],
         );
+
+        soroban_sdk::log!(&env, "ZkSwap: execute finished");
 
         Ok(())
     }

@@ -39,6 +39,43 @@ function ProcessWithdrawalsButton({ onDone }: { onDone: () => void }) {
   );
 }
 
+function UnshieldButton({ asset, onDone }: { asset: 'USDC' | 'XLM'; onDone: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const handleUnshield = async () => {
+    if (!confirm(`Unshield 1 ${asset} from private balance?`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/users/withdrawals/self`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ asset, amount: 10_000_000 }), // Fixed amount for now
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Unshielding initiated! TX: ${data.txHash}`);
+        onDone();
+      } else {
+        alert(`Failed: ${data.error}`);
+      }
+    } catch (e) {
+      alert('Error unshielding funds');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleUnshield}
+      disabled={loading}
+      className="text-xs bg-red-900 hover:bg-red-800 text-red-100 px-2 py-1 rounded ml-2 disabled:opacity-50"
+    >
+      {loading ? '...' : `Unshield 1 ${asset}`}
+    </button>
+  );
+}
+
 export default function WalletPage() {
   const [user, setUser] = useState<{ username?: string; stellarPublicKey?: string } | null>(null);
   const [balance, setBalance] = useState<{ usdc: string; xlm: string }>({ usdc: '0', xlm: '0' });
@@ -74,6 +111,7 @@ export default function WalletPage() {
       .catch(console.error);
   };
 
+  // ... (keeping existing handlers) ...
   const handleXlmFaucet = async () => {
     if (!user?.stellarPublicKey) return;
     setFaucetLoading(true);
@@ -86,7 +124,6 @@ export default function WalletPage() {
       });
       const data = await res.json();
       if (data.success) {
-        // Wait a bit for ledger to update
         setTimeout(fetchBalance, 4000);
       }
     } finally {
@@ -153,11 +190,18 @@ export default function WalletPage() {
 
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
         <p className="text-slate-400 text-sm mb-2">Private Balance (from notes)</p>
-        <p className="text-2xl font-mono">USDC: {privateBalance.usdc}</p>
-        <p className="text-2xl font-mono mt-2">XLM: {privateBalance.xlm}</p>
+        <div className="flex items-center justify-between">
+          <p className="text-2xl font-mono">USDC: {privateBalance.usdc}</p>
+          <UnshieldButton asset="USDC" onDone={() => { fetchPrivateBalance(); fetchBalance(); }} />
+        </div>
+        <div className="flex items-center justify-between mt-2">
+          <p className="text-2xl font-mono">XLM: {privateBalance.xlm}</p>
+          <UnshieldButton asset="XLM" onDone={() => { fetchPrivateBalance(); fetchBalance(); }} />
+        </div>
+
         <button
           onClick={() => { fetchBalance(); fetchPrivateBalance(); }}
-          className="text-xs text-indigo-400 hover:text-indigo-300 mt-2"
+          className="text-xs text-indigo-400 hover:text-indigo-300 mt-4 block"
         >
           Refresh Balance
         </button>

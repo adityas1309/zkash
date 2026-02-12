@@ -360,6 +360,74 @@ export class UsersService {
     }
   }
 
+  /**
+   * Withdraw specific amount from private notes to self (public account).
+   * Consumes SpendableNotes and calls contract withdraw immediately.
+   */
+  async withdrawSelf(userId: string, asset: 'USDC' | 'XLM', amount: number): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    const user = await this.findById(userId);
+    if (!user || !user.googleId) return { success: false, error: 'User not found' };
+
+    const poolAddress =
+      asset === 'USDC'
+        ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
+        : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
+    if (!poolAddress) return { success: false, error: 'Pool not configured' };
+
+    // 1. Pick notes to spend. For now complexity, pick ONE note of fixed amount.
+    // TODO: Handle splitting/merging if needed. Current system uses fixed notes (10_000_000).
+    const fixedAmount = Number(UsersService.SHIELDED_POOL_FIXED_AMOUNT);
+    if (amount !== fixedAmount) {
+      return { success: false, error: `Can only withdraw fixed amount of ${fixedAmount} (1 unit)` };
+    }
+
+    const notes = await this.getSpendableNotes(userId, asset, UsersService.SHIELDED_POOL_FIXED_AMOUNT);
+    if (notes.length === 0) return { success: false, error: 'No spendable note found for this asset' };
+
+    const note = notes[0]; // Pick first available note
+
+    // 2. Generate Proof targeting USER'S own public key
+    const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);
+    const leaves = await this.sorobanService.getCommitments(poolAddress, user.stellarPublicKey);
+    const commitmentBytes = new Uint8Array(Buffer.from(note.commitment, 'hex'));
+    const stateIndex = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(commitmentBytes)));
+
+    if (stateIndex < 0) return { success: false, error: 'Note commitment not found on-chain' };
+
+    const stateSiblings = await this.merkleTree.computeSiblingsForIndex(leaves, stateIndex, 20);
+
+    try {
+      const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
+        { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
+        stateRoot,
+        UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+        { commitmentBytes, stateIndex, stateSiblings },
+      );
+
+      // 3. Submit withdrawal to contract immediately
+      const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
+      const secretKey = this.authService.decrypt(user.stellarSecretKeyEncrypted, encKey);
+
+      const txHash = await this.sorobanService.invokeShieldedPoolWithdraw(
+        poolAddress,
+        secretKey,
+        user.stellarPublicKey, // Withdraw to self
+        new Uint8Array(proofBytes),
+        new Uint8Array(pubSignalsBytes),
+        new Uint8Array(Buffer.from(nullifierHash, 'hex')),
+      );
+
+      // 4. Mark note spent
+      await this.markNoteSpent(userId, nullifierSecret);
+
+      return { success: true, txHash };
+
+    } catch (e: any) {
+      console.error('[withdrawSelf] error:', e);
+      return { success: false, error: e.message || String(e) };
+    }
+  }
+
   /** Process pending withdrawals for the current user (submit withdraw txs to ShieldedPool). */
   async processPendingWithdrawals(userId: string): Promise<{ processed: number; txHashes: string[] }> {
     const user = await this.findById(userId);

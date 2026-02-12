@@ -189,6 +189,15 @@ export class SorobanService {
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(nullifierBytes)),
     ];
 
+    // Debug: log state root from pubSignals
+    // pubSignals = [nullifierHash(32), withdrawnValue(32), stateRoot(32), associationRoot(32)]
+    if (pubSignalsBytes.length >= 96) {
+      const stateRoot = pubSignalsBytes.subarray(64, 96);
+      console.log(`[SorobanService] invokeShieldedPoolWithdraw: stateRoot in signals: ${Buffer.from(stateRoot).toString('hex')}`);
+    } else {
+      console.warn(`[SorobanService] invokeShieldedPoolWithdraw: pubSignalsBytes too short: ${pubSignalsBytes.length}`);
+    }
+
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
       fee: StellarSdk.BASE_FEE,
       networkPassphrase: this.networkPassphrase,
@@ -229,10 +238,26 @@ export class SorobanService {
   ): Promise<string> {
     const aliceKp = StellarSdk.Keypair.fromSecret(aliceSecretKey);
     const bobKp = StellarSdk.Keypair.fromSecret(bobSecretKey);
+
+    console.log(`[SorobanService] Alice Keypair: ${aliceKp.publicKey()} | Arg Address: ${aliceAddress}`);
+    console.log(`[SorobanService] Bob Keypair:   ${bobKp.publicKey()} | Arg Address: ${bobAddress}`);
+
+    if (aliceKp.publicKey() !== aliceAddress) console.warn('[SorobanService] WARNING: Alice Keypair/Address mismatch!');
+    if (bobKp.publicKey() !== bobAddress) console.warn('[SorobanService] WARNING: Bob Keypair/Address mismatch!');
+
+    // @ts-ignore
     const sourceAccount = await this.server.getAccount(aliceKp.publicKey());
     const contract = new StellarSdk.Contract(zkSwapContractId);
 
     const paramsSc = StellarSdk.xdr.ScVal.scvMap([
+      new StellarSdk.xdr.ScMapEntry({
+        key: StellarSdk.xdr.ScVal.scvSymbol('amount_usdc'),
+        val: StellarSdk.xdr.ScVal.scvI64(StellarSdk.xdr.Int64.fromString(amountUsdc)),
+      }),
+      new StellarSdk.xdr.ScMapEntry({
+        key: StellarSdk.xdr.ScVal.scvSymbol('amount_xlm'),
+        val: StellarSdk.xdr.ScVal.scvI64(StellarSdk.xdr.Int64.fromString(amountXlm)),
+      }),
       new StellarSdk.xdr.ScMapEntry({
         key: StellarSdk.xdr.ScVal.scvSymbol('usdc_pool'),
         val: StellarSdk.nativeToScVal(StellarSdk.Address.fromString(usdcPoolAddress)),
@@ -240,14 +265,6 @@ export class SorobanService {
       new StellarSdk.xdr.ScMapEntry({
         key: StellarSdk.xdr.ScVal.scvSymbol('xlm_pool'),
         val: StellarSdk.nativeToScVal(StellarSdk.Address.fromString(xlmPoolAddress)),
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol('amount_usdc'),
-        val: StellarSdk.nativeToScVal(BigInt(amountUsdc)),
-      }),
-      new StellarSdk.xdr.ScMapEntry({
-        key: StellarSdk.xdr.ScVal.scvSymbol('amount_xlm'),
-        val: StellarSdk.nativeToScVal(BigInt(amountXlm)),
       }),
     ]);
 
@@ -271,12 +288,159 @@ export class SorobanService {
       .setTimeout(180)
       .build();
 
-    const prepared = await this.server.prepareTransaction(tx);
-    prepared.sign(aliceKp);
-    prepared.sign(bobKp);
-    const result = await this.server.sendTransaction(prepared);
+    // DEBUG: Simulate manually to inspect auth
+    console.log('[SorobanService] Simulating ZK Swap execution...');
+    // @ts-ignore
+    const sim = await this.server.simulateTransaction(tx);
+    if (StellarSdk.rpc.Api.isSimulationError(sim)) {
+      console.error('[SorobanService] Simulation FAILED:', JSON.stringify(sim, null, 2));
+      throw new Error('Simulation failed');
+    }
+    console.log('[SorobanService] Simulation SUCCESS');
+    // @ts-ignore
+    if (sim.result && sim.result.auth) {
+      // @ts-ignore
+      console.log(`[SorobanService] Simulation Auth entries: ${sim.result.auth.length}`);
+    } else {
+      console.log('[SorobanService] Simulation Auth entries: 0/Undefined');
+    }
+
+
+    // Verify simulation result before assembly
+    // @ts-ignore
+    if (StellarSdk.rpc.Api.isSimulationError(sim) || !sim.transactionData) {
+      throw new Error('Simulation failed or transaction data missing');
+    }
+
+    // Calculate Fee
+    let finalFee = StellarSdk.BASE_FEE;
+    // @ts-ignore
+    if (sim.minResourceFee) {
+      // @ts-ignore
+      finalFee += parseInt(sim.minResourceFee, 10) + 1000; // Add buffer
+    }
+
+    // RELOAD source account to get the correct sequence number
+    console.log('[SorobanService] Reloading source account for final transaction seqNum...');
+    // @ts-ignore
+    const accountResponse = await this.server.getAccount(aliceKp.publicKey());
+    // @ts-ignore
+    const freshSourceAccount = new StellarSdk.Account(aliceKp.publicKey(), accountResponse.sequence.toString());
+
+    // Prepare Operation (Standard)
+    const callOp = contract.call('execute', ...args);
+
+    // Rebuild transaction with correct fee
+    const finalTx = new StellarSdk.TransactionBuilder(freshSourceAccount, {
+      fee: finalFee.toString(),
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(callOp)
+      .setTimeout(180)
+      .build();
+
+    console.log(`[SorobanService] Rebuilt Final Tx with Fee: ${finalFee}`);
+
+    // Convert to XDR Envelope to manipulate the XDR tree for Soroban Data AND Auth
+    const envelope = finalTx.toEnvelope();
+    const txV1 = envelope.v1().tx();
+
+    // 1. Attach Soroban Resource Data
+    // @ts-ignore
+    // @ts-ignore
+    // @ts-ignore
+    const sorobanData = sim.transactionData.build();
+    // @ts-ignore
+    const newExt = new StellarSdk.xdr.TransactionExt(1, sorobanData);
+    txV1.ext(newExt);
+
+    // 2. Attach Auth Entries (Signatures/Authorization)
+    // @ts-ignore
+    if (sim.result && sim.result.auth) {
+      // @ts-ignore
+      const authEntries = sim.result.auth;
+      const signedAuthEntries = [];
+
+      console.log(`[SorobanService] Found ${authEntries.length} auth entries. Signing them...`);
+
+      for (const entry of authEntries) {
+        // Determine credential type and signer
+        // @ts-ignore
+        const credentials = entry.credentials();
+        const switchName = credentials.switch().name;
+        let signerKp;
+        let signerAddress;
+
+        console.log(`[SorobanService] Processing auth entry type: ${switchName}`);
+
+        if (switchName === 'sorobanCredentialsSourceAccount') {
+          // Source account (Alice)
+          signerKp = aliceKp;
+          signerAddress = aliceKp.publicKey();
+          console.log(`[SorobanService] - Identified as Source Account (Alice): ${signerAddress}`);
+        } else if (switchName === 'sorobanCredentialsAddress') {
+          // Specific address
+          // @ts-ignore
+          const addressCred = credentials.address();
+          // @ts-ignore
+          signerAddress = StellarSdk.StrKey.encodeEd25519PublicKey(addressCred.address().accountId().ed25519());
+          console.log(`[SorobanService] - Identified as Address: ${signerAddress}`);
+
+          if (signerAddress === aliceKp.publicKey()) {
+            signerKp = aliceKp;
+          } else if (signerAddress === bobKp.publicKey()) {
+            signerKp = bobKp;
+          } else {
+            console.warn(`[SorobanService] Unknown signer in auth entry: ${signerAddress}. Skipping signing.`);
+            signedAuthEntries.push(entry);
+            continue;
+          }
+        } else {
+          console.warn(`[SorobanService] Unhandled credential type: ${switchName}. Skipping signing.`);
+          signedAuthEntries.push(entry);
+          continue;
+        }
+
+        // Sign the entry
+        // @ts-ignore
+        const currentLedger = sim.latestLedger || 0;
+        const validUntil = currentLedger + 100;
+
+        // @ts-ignore
+        const signedEntry = await StellarSdk.authorizeEntry(
+          entry,
+          signerKp,
+          validUntil,
+          this.networkPassphrase
+        );
+        signedAuthEntries.push(signedEntry);
+      }
+
+      // Access the first operation -> body -> invokeHostFunctionOp -> auth field
+      txV1.operations()[0].body().invokeHostFunctionOp().auth(signedAuthEntries);
+
+      console.log(`[SorobanService] XDR Patch: Attached ${signedAuthEntries.length} SIGNED auth entries to envelope.`);
+
+      // VERIFICATION: Read it back to ensure it stuck
+      const attachedCount = txV1.operations()[0].body().invokeHostFunctionOp().auth().length;
+      console.log(`[SorobanService] VERIFICATION: Envelope now has ${attachedCount} auth entries.`);
+    } else {
+      console.warn('[SorobanService] No auth entries found in simulation result!');
+    }
+
+    // 3. Re-create Transaction object from the patched envelope XDR
+    // @ts-ignore
+    const patchedTx = new StellarSdk.Transaction(envelope.toXDR('base64'), this.networkPassphrase);
+
+    console.log('[SorobanService] Transaction recreated from patched XDR.');
+
+    patchedTx.sign(aliceKp);
+    // Bob's auth is inside the operation auth entries, so he does NOT sign the envelope.
+
+    const result = await this.server.sendTransaction(patchedTx);
     if (result.status === 'ERROR') {
-      throw new Error(String(result.errorResult ?? 'Transaction failed'));
+      console.error('[SorobanService] invokeZkSwapExecute failed:', JSON.stringify(result, null, 2));
+      throw new Error(`Transaction failed: ${JSON.stringify(result.errorResult)}`);
     }
     return result.hash;
   }

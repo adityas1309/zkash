@@ -15,3 +15,7 @@ dist
 *.sym
 target
 .vercel
+shielded_pool_address.txt
+shielded_pool_address.txt
+verifier_address.txt
+zk_swap_address.txt
