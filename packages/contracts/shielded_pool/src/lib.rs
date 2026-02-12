@@ -25,7 +25,7 @@ const ADMIN_KEY: Symbol = symbol_short!("admin");
 
 const FIXED_AMOUNT: i128 = 10_000_000; // 1 token (6 decimals)
 const PUB_SIGNAL_SIZE: u32 = 32;
-const N_PUB_SIGNALS: u32 = 3; // withdrawnValue, stateRoot, associationRoot
+const N_PUB_SIGNALS: u32 = 4; // nullifierHash, withdrawnValue, stateRoot, associationRoot
 const MAX_ROOTS: u32 = 16;
 
 #[contracttype]
@@ -61,9 +61,21 @@ fn parse_state_root_from_pub_signals(env: &Env, pub_signals_bytes: &Bytes) -> Re
     if pub_signals_bytes.len() != PUB_SIGNAL_SIZE * N_PUB_SIGNALS {
         return Err(Error::ProofFailed);
     }
-    // stateRoot is the 2nd public signal => bytes [32..64)
-    let start = PUB_SIGNAL_SIZE;
-    let end = PUB_SIGNAL_SIZE * 2;
+    // Signals: [nullifierHash, withdrawnValue, stateRoot, associationRoot]
+    // stateRoot is the 3rd public signal => bytes [64..96)
+    let start = PUB_SIGNAL_SIZE * 2;
+    let end = PUB_SIGNAL_SIZE * 3;
+    let mut arr = [0u8; 32];
+    pub_signals_bytes
+        .slice(start..end)
+        .copy_into_slice(&mut arr);
+    Ok(BytesN::from_array(env, &arr))
+}
+
+fn parse_nullifier_hash_from_signals(env: &Env, pub_signals_bytes: &Bytes) -> Result<BytesN<32>, Error> {
+    // nullifierHash is the 1st public signal => bytes [0..32)
+    let start = 0;
+    let end = PUB_SIGNAL_SIZE;
     let mut arr = [0u8; 32];
     pub_signals_bytes
         .slice(start..end)
@@ -76,6 +88,7 @@ pub struct ShieldedPool;
 
 #[contractimpl]
 impl ShieldedPool {
+// ... existing initialize/deposit ... (unchanged)
     pub fn initialize(
         env: Env,
         verifier_address: Address,
@@ -145,8 +158,14 @@ impl ShieldedPool {
     ) -> Result<(), Error> {
         to.require_auth();
 
+        // VALIDATE NULLIFIER: Must match the proof's public signal (index 0)
+        let signal_nullifier = parse_nullifier_hash_from_signals(&env, &pub_signals_bytes)?;
+        if signal_nullifier != nullifier {
+             return Err(Error::ProofFailed);
+        }
+
         // Enforce that the proof's public stateRoot matches a root the pool has accepted.
-        // publicSignals = [withdrawnValue, stateRoot, associationRoot]
+        // publicSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot]
         let state_root = parse_state_root_from_pub_signals(&env, &pub_signals_bytes)?;
         let roots: Vec<BytesN<32>> = env
             .storage()

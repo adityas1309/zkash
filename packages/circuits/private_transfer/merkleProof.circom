@@ -1,6 +1,6 @@
 pragma circom 2.2.0;
 
-include "../node_modules/circomlib/circuits/poseidon.circom";
+include "./poseidon255.circom";
 include "../node_modules/circomlib/circuits/mux1.circom";
 include "../node_modules/circomlib/circuits/bitify.circom";
 
@@ -47,9 +47,9 @@ template MerkleProof(depth) {
         mux[i].c[1][1] <== nodes[i];
         mux[i].s <== indices[i];
 
-        hashers[i] = Poseidon(2);
-        hashers[i].inputs[0] <== mux[i].out[0];
-        hashers[i].inputs[1] <== mux[i].out[1];
+        hashers[i] = Poseidon255(2);
+        hashers[i].in[0] <== mux[i].out[0];
+        hashers[i].in[1] <== mux[i].out[1];
 
         nodes[i + 1] <== hashers[i].out;
     }

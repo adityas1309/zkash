@@ -41,7 +41,7 @@ function sh(cmd) {
   execSync(cmd, { stdio: 'inherit', shell: true, cwd: outputDir });
 }
 
-console.log('Phase 1: Powers of Tau (BN254)...');
+console.log('Phase 1: Powers of Tau (BLS12-381)...');
 if (!fs.existsSync(ptauFinal)) {
   if (!fs.existsSync(ptau0)) {
     sh(useNpx ? `npx snarkjs powersoftau new bls12381 15 "${ptau0}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau new bls12381 15 "${ptau0}"`);
@@ -64,4 +64,4 @@ console.log('Exporting verification key...');
 sh(useNpx ? `npx snarkjs zkey export verificationkey "${zkeyFinal}" "${vkeyJson}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" zkey export verificationkey "${zkeyFinal}" "${vkeyJson}"`);
 
 console.log('Done. Artifacts in', outputDir);
-console.log('Note: Soroban groth16_verifier uses BLS12-381. This zkey is BN254.');
+console.log('Note: Soroban groth16_verifier uses BLS12-381. This zkey is BLS12-381.');

@@ -163,7 +163,7 @@ export class SwapService {
     if (stateIndex < 0) return { ready: false, error: 'Deposit not indexed on-chain yet for this pool. Wait and retry.' };
     const stateSiblings = await this.merkleTree.computeSiblingsForIndex(leaves, stateIndex, 20);
 
-    const { proofBytes, pubSignalsBytes, nullifierHex } = await this.proofService.generateProof(
+    const { proofBytes, pubSignalsBytes, nullifierHash } = await this.proofService.generateProof(
       { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
       stateRoot,
       SwapService.SHIELDED_POOL_FIXED_AMOUNT,
@@ -175,7 +175,7 @@ export class SwapService {
       userId,
       Buffer.from(proofBytes).toString('base64'),
       Buffer.from(pubSignalsBytes).toString('base64'),
-      nullifierHex,
+      nullifierHash,
     );
 
     const updated = await this.swapModel.findById(swapId).exec();

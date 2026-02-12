@@ -7,8 +7,8 @@ module.exports = {
         '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
     },
     testEnvironment: 'node',
-    // Testnet ops are slow — allow 5 min per test, 20 min total
-    testTimeout: 300_000,
+    // Testnet ops are slow — allow 10 min per test
+    testTimeout: 600_000,
     moduleNameMapper: {
         '^sdk$': '<rootDir>/../../packages/sdk/src/index.ts',
         '^@/(.*)$': '<rootDir>/src/$1',

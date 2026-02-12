@@ -31,18 +31,18 @@ template CommitmentHasher() {
     signal output commitment;
     signal output nullifierHash;
 
-    component nullifierHasher = Poseidon(1);
-    nullifierHasher.inputs[0] <== nullifier;
+    component nullifierHasher = Poseidon255(1);
+    nullifierHasher.in[0] <== nullifier;
 
-    component precommitmentHasher = Poseidon(2);
-    precommitmentHasher.inputs[0] <== nullifier;
-    precommitmentHasher.inputs[1] <== secret;
+    component precommitmentHasher = Poseidon255(2);
+    precommitmentHasher.in[0] <== nullifier;
+    precommitmentHasher.in[1] <== secret;
 
     // Commitment = Poseidon(value, label, precommitment)
-    component commitmentHasher = Poseidon(3);
-    commitmentHasher.inputs[0] <== value;
-    commitmentHasher.inputs[1] <== label;
-    commitmentHasher.inputs[2] <== precommitmentHasher.out;
+    component commitmentHasher = Poseidon255(3);
+    commitmentHasher.in[0] <== value;
+    commitmentHasher.in[1] <== label;
+    commitmentHasher.in[2] <== precommitmentHasher.out;
 
     commitment <== commitmentHasher.out;
     nullifierHash <== nullifierHasher.out;

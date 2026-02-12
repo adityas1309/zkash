@@ -1,6 +1,6 @@
 /**
- * Initialize ShieldedPool XLM contract with proper TX confirmation.
- * Run: npx ts-node src/init-xlm-pool.ts
+ * Initialize ShieldedPool USDC contract with proper TX confirmation.
+ * Run: npx ts-node src/init-usdc-pool.ts
  */
 import * as dotenv from 'dotenv';
 import * as path from 'path';
@@ -11,10 +11,10 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 
 const RPC_URL = process.env.RPC_URL || 'https://soroban-testnet.stellar.org';
 const NETWORK = StellarSdk.Networks.TESTNET;
-const XLM_POOL = process.env.SHIELDED_POOL_XLM_ADDRESS || '';
+const USDC_POOL = process.env.SHIELDED_POOL_ADDRESS || '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY || '';
 const VERIFIER_ADDR = process.env.GROTH16_VERIFIER_ADDRESS || '';
-const XLM_TOKEN = process.env.XLM_TOKEN_ADDRESS || '';
+const USDC_TOKEN = process.env.USDC_TOKEN_ADDRESS || '';
 
 async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -88,11 +88,11 @@ function buildVkBytes(vk: any): Uint8Array {
 async function main() {
     const server = new StellarSdk.rpc.Server(RPC_URL);
     console.log('RPC:', RPC_URL);
-    console.log('XLM Pool:', XLM_POOL);
-    console.log('XLM Token:', XLM_TOKEN);
+    console.log('USDC Pool:', USDC_POOL);
+    console.log('USDC Token:', USDC_TOKEN);
     console.log('Verifier:', VERIFIER_ADDR);
 
-    if (!XLM_POOL || !ADMIN_SECRET || !VERIFIER_ADDR || !XLM_TOKEN) {
+    if (!USDC_POOL || !ADMIN_SECRET || !VERIFIER_ADDR || !USDC_TOKEN) {
         console.error('Missing env vars');
         return;
     }
@@ -108,12 +108,12 @@ async function main() {
 
     // Build initialize transaction
     const sourceAccount = await server.getAccount(keypair.publicKey());
-    const contract = new StellarSdk.Contract(XLM_POOL);
+    const contract = new StellarSdk.Contract(USDC_POOL);
 
     const args = [
         StellarSdk.nativeToScVal(StellarSdk.Address.fromString(VERIFIER_ADDR)),
         StellarSdk.xdr.ScVal.scvBytes(Buffer.from(vkBytes)),
-        StellarSdk.nativeToScVal(StellarSdk.Address.fromString(XLM_TOKEN)),
+        StellarSdk.nativeToScVal(StellarSdk.Address.fromString(USDC_TOKEN)),
         StellarSdk.nativeToScVal(StellarSdk.Address.fromString(keypair.publicKey())),
     ];
 
@@ -156,7 +156,7 @@ async function main() {
     console.log('\nFinal status:', txResult.status);
 
     if (txResult.status === 'SUCCESS') {
-        console.log('✅ XLM Pool initialized successfully!');
+        console.log('✅ USDC Pool initialized successfully!');
 
         // Verify
         console.log('\nVerifying...');

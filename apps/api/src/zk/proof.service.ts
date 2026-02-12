@@ -89,7 +89,7 @@ export class ProofService {
       /** Siblings (depth 20) for the leaf. */
       stateSiblings?: Uint8Array[];
     },
-  ): Promise<{ proofBytes: Uint8Array; pubSignalsBytes: Uint8Array; nullifierHex: string }> {
+  ): Promise<{ proofBytes: Uint8Array; pubSignalsBytes: Uint8Array; nullifierHash: string; nullifierSecret: string }> {
     if (stateRoot.length !== 32) throw new Error('stateRoot must be 32 bytes');
 
     const stateRootBigInt = bytesToBigInt(stateRoot);
@@ -110,16 +110,10 @@ export class ProofService {
     if (opts.commitmentBytes) {
       const recomputed = await this.merkleTree.computeRootFromPath(opts.commitmentBytes, stateIndex, opts.stateSiblings);
       const ok = Buffer.from(recomputed).equals(Buffer.from(stateRoot));
-      console.log(`[ProofService] Sanity Check: ${ok ? 'PASS' : 'FAIL'}`);
-      console.log(`[ProofService] Exepcted Root (Soroban): ${Buffer.from(stateRoot).toString('hex')}`);
-      console.log(`[ProofService] Recomputed Root (Local): ${Buffer.from(recomputed).toString('hex')}`);
-      console.log(`[ProofService] Commitment: ${Buffer.from(opts.commitmentBytes).toString('hex')}`);
 
       if (!ok) {
         throw new Error('Merkle path does not match stateRoot (commitment/index/siblings mismatch)');
       }
-    } else {
-      console.log('[ProofService] Skipping sanity check (no commitmentBytes provided)');
     }
 
     const input = {
@@ -145,17 +139,54 @@ export class ProofService {
       throw new Error(`zkey not found at ${this.zkeyPath}. Run: pnpm run setup (in packages/circuits)`);
     }
 
-    const snarkjs = await import('snarkjs');
-    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-      input,
-      this.wasmPath,
-      this.zkeyPath,
-    );
+    // Use require to match working reproduction script and avoid ESM/Jest issues
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const snarkjs = require('snarkjs');
 
-    const proofBytes = proofToBytes(proof as SnarkJsProof);
-    const pubSignalsBytes = publicSignalsToBytes(publicSignals);
-    const nullifierHex = bigIntToBytes32Hex(note.nullifier);
+    // Manual witness calculation to avoid snarkjs internal issues with BLS12-381
+    console.log('Resolving witness_calculator from:', require.resolve('./witness_calculator'));
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const wcBuilder = require('./witness_calculator');
 
-    return { proofBytes, pubSignalsBytes, nullifierHex };
+    console.log(`[ProofService] Reading WASM from ${this.wasmPath}`);
+    const wasmBuffer = fs.readFileSync(this.wasmPath);
+    console.log(`[ProofService] WASM size: ${wasmBuffer.length} bytes`);
+
+    try {
+      const wc = await wcBuilder(wasmBuffer);
+      console.log('[ProofService] Witness calculator initialized. Calculating WTNS bin...');
+
+      // This is a heavy operation, might block event loop or crash if OOM
+      const wtnsBuff = await wc.calculateWTNSBin(input, 0);
+      console.log(`[ProofService] WTNS computed. Size: ${wtnsBuff.length} bytes`);
+
+      // Write witness to temporary file to avoid buffer type mismatches in Jest/NestJS
+      const tempWtnsPath = path.resolve(process.cwd(), `temp_witness_${Date.now()}_${Math.random().toString(36).substring(7)}.wtns`);
+      console.log(`[ProofService] Writing WTNS to ${tempWtnsPath}`);
+      fs.writeFileSync(tempWtnsPath, wtnsBuff);
+
+      let result;
+      try {
+        console.log(`[ProofService] Proving with zkey: ${this.zkeyPath}`);
+        result = await snarkjs.groth16.prove(this.zkeyPath, tempWtnsPath);
+        console.log('[ProofService] Proof generation successful');
+      } catch (proveErr) {
+        console.error('[ProofService] CRITICAL: snarkjs.groth16.prove failed:', proveErr);
+        throw proveErr;
+      } finally {
+        if (fs.existsSync(tempWtnsPath)) fs.unlinkSync(tempWtnsPath);
+      }
+
+      return {
+        proofBytes: new Uint8Array(proofToBytes(result.proof)),
+        pubSignalsBytes: new Uint8Array(publicSignalsToBytes(result.publicSignals)),
+        nullifierHash: bigIntToBytes32Hex(BigInt(result.publicSignals[0])),
+        nullifierSecret: bigIntToBytes32Hex(BigInt(input.nullifier)),
+      };
+
+    } catch (err) {
+      console.error('[ProofService] CRITICAL ERROR in generateProof:', err);
+      throw err;
+    }
   }
 }

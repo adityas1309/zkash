@@ -166,54 +166,81 @@ export class UsersService {
     }
   }
 
-  /** Private balance from decrypted notes (indexer-stored). */
+  /**
+   * Private balance calculation:
+   * 1. Sum of all UNSPENT SpendableNotes (funds currently held in private notes).
+   * 2. Sum of all PENDING Withdrawals (funds received but not yet withdrawn to public).
+   *
+   * This accurately reflects "total private capability" - what you can spend further (notes)
+   * plus what you have received and just need to claim (withdrawals).
+   */
   async getPrivateBalance(userId: string): Promise<{ xlm: string; usdc: string }> {
     const user = await this.findById(userId);
     if (!user || !user.googleId) return { xlm: '0', usdc: '0' };
 
-    let viewKey: Uint8Array;
-    try {
-      const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
-      const viewKeyHex = this.authService.decrypt(user.zkViewKeyEncrypted, encKey);
-      viewKey = new Uint8Array(Buffer.from(viewKeyHex, 'hex'));
-    } catch {
-      return { xlm: '0', usdc: '0' };
-    }
-
-    // Prefer notes explicitly addressed to this user (newer writes), but keep a fallback for older
-    // notes that didn't set recipientId.
-    const byRecipient = await this.encryptedNoteModel
-      .find({ recipientId: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 })
-      .limit(2000)
+    // 1. Sum up SpendableNotes (unspent)
+    const spendableNotes = await this.spendableNoteModel
+      .find({ userId: user._id, spent: false })
       .exec();
-    const notes = byRecipient.length
-      ? byRecipient
-      : await this.encryptedNoteModel.find({}).sort({ createdAt: -1 }).limit(2000).exec();
-    let usdc = 0;
-    let xlm = 0;
-    for (const note of notes) {
-      if (!note.ciphertext) continue;
+
+    let usdcNotes = 0;
+    let xlmNotes = 0;
+
+    for (const note of spendableNotes) {
       try {
+        // Decrypt note to get value (though usually it is 1 for now)
+        const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
         const combined = Buffer.from(note.ciphertext, 'base64');
         const nonce = combined.slice(0, nacl.secretbox.nonceLength);
         const ciphertext = combined.slice(nacl.secretbox.nonceLength);
         const decrypted = nacl.secretbox.open(
           new Uint8Array(ciphertext),
           new Uint8Array(nonce),
-          viewKey,
+          encKey,
         );
+
         if (decrypted) {
-          const obj = JSON.parse(naclUtil.encodeUTF8(decrypted)) as { value?: number; asset?: string };
-          const v = Number(obj?.value ?? 0);
-          if (obj?.asset === 'USDC') usdc += v;
-          if (obj?.asset === 'XLM') xlm += v;
+          const obj = JSON.parse(naclUtil.encodeUTF8(decrypted));
+          const val = Number(obj.value || 0); // Should be 10_000_000n usually, but stored as string in schema?
+          // Schema says 'ciphertext' string. The decrypted obj.value is number or string.
+          // NoteFields uses bigint.
+          // Let's assume standard unit (1) for now if the value is big (10^7).
+          // If value > 1000, it's likely stroops. If <= 1000, it's units.
+          // ShieldedPool FIXED_AMOUNT = 10_000_000 (1 unit).
+          // We want to return display units (1).
+
+          // Actually, let's look at how it enters db in deposit():
+          // value: noteFields.value.toString() -> "10000000"
+          // So we should divide by 10_000_000 to get display units.
+          const rawVal = Number(obj.value);
+          const displayVal = rawVal >= 10_000_000 ? rawVal / 10_000_000 : rawVal;
+
+          if (note.asset === 'USDC') usdcNotes += displayVal;
+          if (note.asset === 'XLM') xlmNotes += displayVal;
         }
-      } catch {
-        // skip
+      } catch (e) {
+        console.warn('[getPrivateBalance] Failed to decrypt a note:', e);
       }
     }
-    return { usdc: String(usdc), xlm: String(xlm) };
+
+    // 2. Sum up PendingWithdrawals (unprocessed)
+    const pendingWithdrawals = await this.pendingWithdrawalModel
+      .find({ recipientId: user._id, processed: false })
+      .exec();
+
+    let usdcPending = 0;
+    let xlmPending = 0;
+
+    for (const pw of pendingWithdrawals) {
+      const val = Number(pw.amount); // This is usually '1' from sendPrivate logic
+      if (pw.asset === 'USDC') usdcPending += val;
+      if (pw.asset === 'XLM') xlmPending += val;
+    }
+
+    return {
+      usdc: String(usdcNotes + usdcPending),
+      xlm: String(xlmNotes + xlmPending),
+    };
   }
 
   /** Private send: generate proof from sender's spendable note, create pending withdrawal for recipient. */
@@ -281,20 +308,24 @@ export class UsersService {
     console.log(`[sendPrivate] computed ${stateSiblings.length} siblings, generating proof...`);
 
     try {
-      const { proofBytes, pubSignalsBytes, nullifierHex } = await this.proofService.generateProof(
+      const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
         { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
         stateRoot,
         UsersService.SHIELDED_POOL_FIXED_AMOUNT,
         { commitmentBytes, stateIndex, stateSiblings },
       );
-      console.log(`[sendPrivate] proof generated, nullifier: ${nullifierHex.slice(0, 16)}...`);
+      console.warn(`[sendPrivate] proofBytes HEX: ${Buffer.from(proofBytes).toString('hex')}`);
+      console.warn(`[sendPrivate] pubSignalsBytes HEX: ${Buffer.from(pubSignalsBytes).toString('hex')}`);
+      console.log(`[sendPrivate] proof generated, nullifierHash: ${nullifierHash.slice(0, 16)}...`);
 
+      // Store 'nullifierHash' in PendingWithdrawal because the recipient interacts with the contract
+      // using this hash.
       await this.pendingWithdrawalModel.create({
         recipientId: recipient._id,
         poolAddress,
         proofBytes: Buffer.from(proofBytes).toString('base64'),
         pubSignalsBytes: Buffer.from(pubSignalsBytes).toString('base64'),
-        nullifier: nullifierHex,
+        nullifier: nullifierHash, // Use HASH for contract
         amount,
         asset,
       });
@@ -319,7 +350,8 @@ export class UsersService {
         console.error('[UsersService] sendPrivate: failed to create EncryptedNote:', e);
       }
 
-      await this.markNoteSpent(senderId, nullifierHex);
+      // Mark note spent using SECRET nullifier (database index)
+      await this.markNoteSpent(senderId, nullifierSecret);
       console.log('[sendPrivate] SUCCESS');
       return { success: true };
     } catch (proofErr: any) {
@@ -352,14 +384,26 @@ export class UsersService {
 
         const proofBytes = Buffer.from(p.proofBytes, 'base64');
         const pubSignalsBytes = Buffer.from(p.pubSignalsBytes, 'base64');
-        const nullifierBytes = Buffer.from(p.nullifier, 'hex');
+
+        // Robustness fix: Extract nullifierHash from public signals (index 0).
+        // publicSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot]
+        // Each is 32 bytes.
+        // Even if p.nullifier stored the SECRET (old bug), this extracts the HASH required by contract.
+        const nullifierHashFromSignals = pubSignalsBytes.subarray(0, 32);
+
+        // Log if mismatch (just for debug)
+        const storedNullifier = Buffer.from(p.nullifier, 'hex');
+        if (!storedNullifier.equals(nullifierHashFromSignals)) {
+          console.warn(`[processPendingWithdrawals] Correcting nullifier for withdrawal ${p._id}. Stored: ${p.nullifier}, Actual Hash: ${nullifierHashFromSignals.toString('hex')}`);
+        }
+
         const hash = await this.sorobanService.invokeShieldedPoolWithdraw(
           poolAddressForPending,
           secretKey,
           user.stellarPublicKey,
           new Uint8Array(proofBytes),
           new Uint8Array(pubSignalsBytes),
-          new Uint8Array(nullifierBytes),
+          new Uint8Array(nullifierHashFromSignals),
         );
         txHashes.push(hash);
         p.processed = true;
