@@ -6,38 +6,7 @@ import { QRCodeSVG } from 'qrcode.react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
-function ProcessWithdrawalsButton({ onDone }: { onDone: () => void }) {
-  const [loading, setLoading] = useState(false);
-  const handleProcess = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/users/withdrawals/process`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      const data = await res.json();
-      if (data.processed > 0) {
-        onDone();
-        alert(`Processed ${data.processed} withdrawal(s). TX: ${data.txHashes?.join(', ')}`);
-      } else {
-        alert('No pending withdrawals or already processed.');
-      }
-    } catch {
-      alert('Failed to process withdrawals');
-    } finally {
-      setLoading(false);
-    }
-  };
-  return (
-    <button
-      onClick={handleProcess}
-      disabled={loading}
-      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg disabled:opacity-50"
-    >
-      {loading ? 'Processing...' : 'Process private withdrawals'}
-    </button>
-  );
-}
+
 
 function UnshieldButton({ asset, onDone }: { asset: 'USDC' | 'XLM'; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -126,7 +95,35 @@ export default function WalletPage() {
       .catch(console.error);
   };
 
-  // ... (keeping existing handlers) ...
+  // Auto-process withdrawals
+  useEffect(() => {
+    if (!user) return;
+
+    const process = async () => {
+      try {
+        const res = await fetch(`${API_URL}/users/withdrawals/process`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const data = await res.json();
+        if (data.processed > 0) {
+          console.log(`Auto-processed ${data.processed} withdrawals. TX: ${data.txHashes?.join(', ')}`);
+          fetchBalance();
+          fetchPrivateBalance();
+        }
+      } catch (e) {
+        console.error('Auto-process error:', e);
+      }
+    };
+
+    // Run immediately on load
+    process();
+
+    // Then poll every 10s
+    const interval = setInterval(process, 10000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const handleXlmFaucet = async () => {
     if (!user?.stellarPublicKey) return;
     setFaucetLoading(true);
@@ -273,7 +270,7 @@ export default function WalletPage() {
         <Link href="/wallet/send" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg">
           Send
         </Link>
-        <ProcessWithdrawalsButton onDone={() => { fetchPrivateBalance(); fetchBalance(); }} />
+
         <button
           onClick={handleXlmFaucet}
           disabled={faucetLoading}

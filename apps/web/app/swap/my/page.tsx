@@ -206,53 +206,8 @@ export default function MySwapsPage() {
         }
     };
 
-    const handlePrepareProof = async (swapId: string) => {
-        setActionLoading(swapId);
-        setError('');
-        setSuccess('');
-        setNeedsSplit(null);
-        try {
-            const res = await fetch(`${API_URL}/swap/${swapId}/prepare-my-proof`, {
-                method: 'POST',
-                credentials: 'include',
-            });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            setSuccess(data.ready ? 'Both proofs ready. You can execute the private swap.' : 'Your proof is ready. Waiting for the other party.');
-            await fetchData();
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
-            setError(msg);
-            if (msg.includes('No private note with EXACT amount')) {
-                setNeedsSplit(swapId);
-            }
-        } finally {
-            setActionLoading(null);
-        }
-    };
-
-    const handleSplit = async (swapId: string, asset: 'USDC' | 'XLM', amount: number) => {
-        setActionLoading(swapId);
-        setError('');
-        setSuccess('');
-        try {
-            const res = await fetch(`${API_URL}/users/split`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ asset, amount }),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'Split failed');
-
-            setSuccess('Note split successfully! Please wait a few seconds for confirmation, then try preparing proof again.');
-            setNeedsSplit(null);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : 'Split failed');
-        } finally {
-            setActionLoading(null);
-        }
-    };
+    const [autoProcessing, setAutoProcessing] = useState<string | null>(null);
+    const [processStep, setProcessStep] = useState<string>('');
 
     const handleExecutePrivate = async (swapId: string) => {
         setActionLoading(swapId);
@@ -280,6 +235,143 @@ export default function MySwapsPage() {
             setError(err instanceof Error ? err.message : 'Failed to execute private swap');
         } finally {
             setActionLoading(null);
+            setAutoProcessing(null);
+        }
+    };
+
+    const handleSplit = async (swapId: string, asset: 'USDC' | 'XLM', amount: number) => {
+        setProcessStep('Splitting note to match exact amount...');
+        try {
+            const res = await fetch(`${API_URL}/users/split`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ asset, amount }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Split failed');
+
+            // Wait a bit for the transaction to be confirmed and indexed
+            setProcessStep('Waiting for split confirmation...');
+            await new Promise(r => setTimeout(r, 6000));
+            return true;
+        } catch (e) {
+            throw e;
+        }
+    };
+
+    const handleDeposit = async (asset: 'USDC' | 'XLM', amount: number) => {
+        setProcessStep(`Depositing ${amount} ${asset} from public balance...`);
+        try {
+            const res = await fetch(`${API_URL}/users/deposit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ asset, amount }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (data.success) {
+                // Wait for deposit to be indexed
+                setProcessStep('Waiting for deposit confirmation...');
+                await new Promise(r => setTimeout(r, 6000));
+                return true;
+            } else {
+                throw new Error(data.error || 'Deposit failed');
+            }
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            throw new Error(msg.includes('fetch') || msg.includes('Failed') ? 'Deposit failed. The network may be slow.' : `Deposit failed: ${msg}`);
+        }
+    };
+
+    const handlePrepareProof = async (swapId: string, isBuyer: boolean, amount: number, asset: 'USDC' | 'XLM') => {
+        setActionLoading(swapId);
+        setAutoProcessing(swapId);
+        setError('');
+        setSuccess('');
+        setNeedsSplit(null);
+        setProcessStep('Preparing proof...');
+
+        const runDepositFlow = async () => {
+            if (confirm(`Insufficient private balance. Do you want to transfer ${amount} ${asset} from your public pool to continue?`)) {
+                console.log('Insufficient balance, attempting auto-deposit...');
+                await handleDeposit(asset, amount);
+                return true;
+            }
+            throw new Error('Cancelled by user.');
+        };
+
+        try {
+            const attemptPrepare = async () => {
+                const res = await fetch(`${API_URL}/swap/${swapId}/prepare-my-proof`, {
+                    method: 'POST',
+                    credentials: 'include',
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                return data;
+            };
+
+            const handleSuccess = async (data: any) => {
+                setSuccess(data.ready ? 'Both proofs ready. Auto-executing...' : 'Your proof is ready. Waiting for the other party.');
+                await fetchData();
+                if (data.ready) {
+                    setProcessStep('Executing private swap...');
+                    await handleExecutePrivate(swapId);
+                }
+            };
+
+            try {
+                const data = await attemptPrepare();
+                await handleSuccess(data);
+            } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
+
+                if (msg.includes('No private note with EXACT amount')) {
+                    // Auto-split logic
+                    console.log('Exact note missing, attempting auto-split...');
+                    try {
+                        await handleSplit(swapId, asset, amount);
+                    } catch (splitErr: unknown) {
+                        const splitMsg = splitErr instanceof Error ? splitErr.message : String(splitErr);
+                        if (splitMsg.includes('Insufficient private balance')) {
+                            await runDepositFlow();
+                            // Retry preparation after deposit (deposit creates the note we need, or gives us balance to split)
+                            // Ideally deposit creates a spendable note.
+                            // However, if we needed to split, and we just deposited, we might have a NEW note.
+                            // It's safest to retry the whole flow (which will check exact note again).
+                        } else {
+                            throw splitErr;
+                        }
+                    }
+
+                    // Retry preparation
+                    setProcessStep('Retrying proof preparation...');
+                    const retryData = await attemptPrepare();
+                    await handleSuccess(retryData);
+
+                } else if (msg.includes('Insufficient private balance')) {
+                    // Direct insufficient balance error (if backend throws it directly)
+                    await runDepositFlow();
+                    setProcessStep('Retrying proof preparation after deposit...');
+                    const retryData = await attemptPrepare();
+                    await handleSuccess(retryData);
+                } else {
+                    throw err;
+                }
+            }
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
+            // Only set error if it's not a cancellation
+            if (msg !== 'Cancelled by user.') {
+                setError(msg);
+            }
+            setAutoProcessing(null);
+        } finally {
+            if (!autoProcessing) {
+                setActionLoading(null);
+                setProcessStep('');
+            }
         }
     };
 
@@ -391,22 +483,12 @@ export default function MySwapsPage() {
                                     isSeller
                                     actionLoading={actionLoading}
                                     onExecute={() => handleExecute(swap._id)}
-                                    onPrepareProof={() => handlePrepareProof(swap._id)}
+                                    onPrepareProof={() => handlePrepareProof(swap._id, true, swap.amountOut, 'USDC')}
                                     onExecutePrivate={() => handleExecutePrivate(swap._id)}
                                 />
-                                {needsSplit === swap._id && (
-                                    <div className="mt-2 p-4 bg-slate-800 border border-orange-500 rounded-lg animate-in fade-in slide-in-from-top-2">
-                                        <p className="text-orange-300 text-sm mb-3">
-                                            You don&apos;t have a single note with the exact amount required ({swap.amountOut} USDC).
-                                            Would you like to automatically split your larger notes?
-                                        </p>
-                                        <button
-                                            onClick={() => handleSplit(swap._id, 'USDC', swap.amountOut)}
-                                            disabled={actionLoading === swap._id}
-                                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-600 rounded text-sm text-white font-medium"
-                                        >
-                                            {actionLoading === swap._id ? 'Splitting...' : `Split Note for ${swap.amountOut} USDC`}
-                                        </button>
+                                {autoProcessing === swap._id && (
+                                    <div className="mt-2 text-center text-indigo-300 text-sm animate-pulse">
+                                        {processStep}
                                     </div>
                                 )}
                             </div>
@@ -427,22 +509,12 @@ export default function MySwapsPage() {
                                     isSeller={false}
                                     actionLoading={actionLoading}
                                     onExecute={() => { }}
-                                    onPrepareProof={() => handlePrepareProof(swap._id)}
+                                    onPrepareProof={() => handlePrepareProof(swap._id, false, swap.amountIn, 'XLM')}
                                     onExecutePrivate={() => handleExecutePrivate(swap._id)}
                                 />
-                                {needsSplit === swap._id && (
-                                    <div className="mt-2 p-4 bg-slate-800 border border-orange-500 rounded-lg animate-in fade-in slide-in-from-top-2">
-                                        <p className="text-orange-300 text-sm mb-3">
-                                            You don&apos;t have a single note with the exact amount required ({swap.amountIn} XLM).
-                                            Would you like to automatically split your larger notes?
-                                        </p>
-                                        <button
-                                            onClick={() => handleSplit(swap._id, 'XLM', swap.amountIn)}
-                                            disabled={actionLoading === swap._id}
-                                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-600 rounded text-sm text-white font-medium"
-                                        >
-                                            {actionLoading === swap._id ? 'Splitting...' : `Split Note for ${swap.amountIn} XLM`}
-                                        </button>
+                                {autoProcessing === swap._id && (
+                                    <div className="mt-2 text-center text-indigo-300 text-sm animate-pulse">
+                                        {processStep}
                                     </div>
                                 )}
                             </div>
