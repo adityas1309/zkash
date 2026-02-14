@@ -17,9 +17,10 @@ import { MerkleTreeService } from '../zk/merkle-tree.service';
 @Injectable()
 export class UsersService {
   private server: Horizon.Server;
-  // ShieldedPool transfers a fixed amount per deposit/withdraw.
-  // Keep this in sync with `packages/contracts/shielded_pool/src/lib.rs`.
-  private static readonly SHIELDED_POOL_FIXED_AMOUNT = 10_000_000n; // 1 token (6 decimals)
+  // ShieldedPool transfers a variable amount per deposit/withdraw.
+  // We use 7 decimals for calculations (1 unit = 10_000_000 stroops).
+  private static readonly DECIMAL_PRECISION = 7;
+  private static readonly SCALE_FACTOR = 10_000_000n;
 
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
@@ -209,11 +210,10 @@ export class UsersService {
           // ShieldedPool FIXED_AMOUNT = 10_000_000 (1 unit).
           // We want to return display units (1).
 
-          // Actually, let's look at how it enters db in deposit():
           // value: noteFields.value.toString() -> "10000000"
           // So we should divide by 10_000_000 to get display units.
           const rawVal = Number(obj.value);
-          const displayVal = rawVal >= 10_000_000 ? rawVal / 10_000_000 : rawVal;
+          const displayVal = rawVal / Number(UsersService.SCALE_FACTOR);
 
           if (note.asset === 'USDC') usdcNotes += displayVal;
           if (note.asset === 'XLM') xlmNotes += displayVal;
@@ -262,11 +262,9 @@ export class UsersService {
       console.log('[sendPrivate] FAIL: Invalid amount');
       return { success: false, error: 'Invalid amount' };
     }
-    // ShieldedPool only supports fixed-amount notes/transfers.
-    if (amountNum !== 1) {
-      console.log('[sendPrivate] FAIL: amount != 1');
-      return { success: false, error: 'Private transfers currently support only amount=1' };
-    }
+
+    // Scale amount to BigInt stroops
+    const amountBigInt = BigInt(Math.round(amountNum * Number(UsersService.SCALE_FACTOR)));
 
     const poolAddress =
       asset === 'USDC'
@@ -278,7 +276,16 @@ export class UsersService {
     }
     console.log(`[sendPrivate] poolAddress=${poolAddress}`);
 
-    const notes = await this.getSpendableNotes(senderId, asset, UsersService.SHIELDED_POOL_FIXED_AMOUNT);
+    // For sendPrivate (transfer), we need a note of EXACT amount.
+    // TODO: Implement splitting/merging to handle arbitrary amounts from larger notes.
+    const notes = await this.getSpendableNotes(senderId, asset, amountBigInt);
+    const matchingNote = notes.find(n => n.value === amountBigInt);
+
+    if (!matchingNote) {
+      return { success: false, error: `No spendable private note of exact amount ${amount} found. Splitting not yet supported.` };
+    }
+
+    const notesToUse = [matchingNote]; // Use the matching note
     console.log(`[sendPrivate] spendable notes found: ${notes.length}`);
     if (notes.length === 0) return { success: false, error: 'No spendable private balance. Deposit first.' };
 
@@ -286,7 +293,7 @@ export class UsersService {
     const sender = await this.findById(senderId);
     if (!sender) return { success: false, error: 'Sender not found' };
 
-    const note = notes[0];
+    const note = notesToUse[0];
     console.log(`[sendPrivate] note commitment: ${note.commitment}`);
     const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, sender.stellarPublicKey);
     console.log(`[sendPrivate] stateRoot: ${Buffer.from(stateRoot).toString('hex').slice(0, 32)}...`);
@@ -311,7 +318,7 @@ export class UsersService {
       const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
         { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
         stateRoot,
-        UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+        amountBigInt,
         { commitmentBytes, stateIndex, stateSiblings },
       );
       console.warn(`[sendPrivate] proofBytes HEX: ${Buffer.from(proofBytes).toString('hex')}`);
@@ -374,17 +381,20 @@ export class UsersService {
         : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
     if (!poolAddress) return { success: false, error: 'Pool not configured' };
 
-    // 1. Pick notes to spend. For now complexity, pick ONE note of fixed amount.
-    // TODO: Handle splitting/merging if needed. Current system uses fixed notes (10_000_000).
-    const fixedAmount = Number(UsersService.SHIELDED_POOL_FIXED_AMOUNT);
-    if (amount !== fixedAmount) {
-      return { success: false, error: `Can only withdraw fixed amount of ${fixedAmount} (1 unit)` };
+    // 1. Pick notes to spend.
+    const scaledAmount = BigInt(Math.round(amount * Number(UsersService.SCALE_FACTOR)));
+
+    const notes = await this.getSpendableNotes(userId, asset, scaledAmount);
+    // Find exact match
+    const note = notes.find(n => n.value === scaledAmount);
+
+    if (!note) {
+      const availableAmounts = notes.map(n => Number(n.value) / Number(UsersService.SCALE_FACTOR)).join(', ');
+      return {
+        success: false,
+        error: `No spendable note of exact amount ${amount} found. Partial unshielding from a single note is not supported yet. Available note amounts: [${availableAmounts}]`
+      };
     }
-
-    const notes = await this.getSpendableNotes(userId, asset, UsersService.SHIELDED_POOL_FIXED_AMOUNT);
-    if (notes.length === 0) return { success: false, error: 'No spendable note found for this asset' };
-
-    const note = notes[0]; // Pick first available note
 
     // 2. Generate Proof targeting USER'S own public key
     const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);
@@ -400,7 +410,7 @@ export class UsersService {
       const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
         { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
         stateRoot,
-        UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+        note.value,
         { commitmentBytes, stateIndex, stateSiblings },
       );
 
@@ -500,7 +510,7 @@ export class UsersService {
   }
 
   /** Deposit to shielded pool: create spendable note, call contract, store note encrypted. */
-  async deposit(userId: string, asset: 'USDC' | 'XLM'): Promise<{ txHash: string; error?: string }> {
+  async deposit(userId: string, asset: 'USDC' | 'XLM', amount: number): Promise<{ txHash: string; error?: string }> {
     const DEPOSIT_TIMEOUT_MS = 120_000; // 2 min for RPC/sendTransaction on testnet
 
     try {
@@ -521,8 +531,10 @@ export class UsersService {
         return BigInt('0x' + buf.toString('hex'));
       };
 
+      const scaledAmount = BigInt(Math.round(amount * Number(UsersService.SCALE_FACTOR)));
+
       const noteFields: NoteFields = {
-        value: UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+        value: scaledAmount,
         label: randomBigInt(),
         nullifier: randomBigInt(),
         secret: randomBigInt(),
@@ -545,6 +557,7 @@ export class UsersService {
           secretKey,
           commitmentBytes,
           newRootBytes,
+          scaledAmount.toString(),
         ),
         DEPOSIT_TIMEOUT_MS,
         'invokeShieldedPoolDeposit',
@@ -576,7 +589,7 @@ export class UsersService {
       try {
         const viewKeyHex = this.authService.decrypt(user.zkViewKeyEncrypted, encKey);
         const viewKey = new Uint8Array(Buffer.from(viewKeyHex, 'hex'));
-        const payload = JSON.stringify({ value: 1, asset });
+        const payload = JSON.stringify({ value: amount, asset });
         const noteNonce = nacl.randomBytes(nacl.secretbox.nonceLength);
         const noteCiphertext = nacl.secretbox(
           naclUtil.decodeUTF8(payload),
@@ -608,14 +621,16 @@ export class UsersService {
    * Helper for SwapService: Generate a random note for a user without saving it yet.
    * Returns the NoteFields and commitment.
    */
-  async generateNote(userId: string): Promise<{ noteFields: NoteFields; commitmentBytes: Uint8Array }> {
+  async generateNote(userId: string, amount: number): Promise<{ noteFields: NoteFields; commitmentBytes: Uint8Array }> {
     const randomBigInt = (): bigint => {
       const buf = Buffer.from(nacl.randomBytes(31));
       return BigInt('0x' + buf.toString('hex'));
     };
 
+    const scaledAmount = BigInt(Math.round(amount * Number(UsersService.SCALE_FACTOR)));
+
     const noteFields: NoteFields = {
-      value: UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+      value: scaledAmount,
       label: randomBigInt(),
       nullifier: randomBigInt(),
       secret: randomBigInt(),

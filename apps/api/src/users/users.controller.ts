@@ -100,12 +100,12 @@ export class UsersController {
   @Post('deposit')
   @UseGuards(SessionAuthGuard)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async deposit(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM' }) {
-    if (!body?.asset || (body.asset !== 'USDC' && body.asset !== 'XLM')) {
-      return { success: false, error: 'asset must be USDC or XLM' };
+  async deposit(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM'; amount: number }) {
+    if (!body?.asset || (body.asset !== 'USDC' && body.asset !== 'XLM') || !body.amount) {
+      return { success: false, error: 'asset must be USDC or XLM, and amount is required' };
     }
     try {
-      const result = await this.usersService.deposit(req.user._id, body.asset);
+      const result = await this.usersService.deposit(req.user._id, body.asset, body.amount);
       if (result.error) return { success: false, error: result.error };
       return { success: true, txHash: result.txHash };
     } catch (e) {

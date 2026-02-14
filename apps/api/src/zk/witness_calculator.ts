@@ -1,3 +1,4 @@
+// @ts-nocheck
 console.log("!!! WITNESS CALCULATOR MODULE LOADED !!!");
 module.exports = async function builder(code, options) {
 

@@ -132,6 +132,7 @@ export class SorobanService {
     signerSecretKey: string,
     commitmentBytes: Uint8Array,
     newRootBytes: Uint8Array,
+    amount: string,
   ): Promise<string> {
     if (commitmentBytes.length !== 32) throw new Error('Commitment must be 32 bytes');
     if (newRootBytes.length !== 32) throw new Error('newRoot must be 32 bytes');
@@ -140,10 +141,20 @@ export class SorobanService {
     const sourceAccount = await this.server.getAccount(keypair.publicKey());
     const contract = new StellarSdk.Contract(poolContractId);
 
+    const amountBi = BigInt(amount);
+    const lo = amountBi & BigInt('0xFFFFFFFFFFFFFFFF');
+    const hi = amountBi >> 64n;
+
     const args = [
       StellarSdk.nativeToScVal(StellarSdk.Address.fromString(keypair.publicKey())),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(commitmentBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(newRootBytes)),
+      StellarSdk.xdr.ScVal.scvI128(
+        new StellarSdk.xdr.Int128Parts({
+          lo: StellarSdk.xdr.Uint64.fromString(lo.toString()),
+          hi: StellarSdk.xdr.Int64.fromString(hi.toString()),
+        }),
+      ),
     ];
 
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {

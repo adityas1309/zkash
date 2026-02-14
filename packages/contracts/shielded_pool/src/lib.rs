@@ -23,206 +23,228 @@ const ROOTS_KEY: Symbol = symbol_short!("roots");
 const COMMIT_KEY: Symbol = symbol_short!("comms");
 const ADMIN_KEY: Symbol = symbol_short!("admin");
 
-const FIXED_AMOUNT: i128 = 10_000_000; // 1 token (6 decimals)
-const PUB_SIGNAL_SIZE: u32 = 32;
-const N_PUB_SIGNALS: u32 = 4; // nullifierHash, withdrawnValue, stateRoot, associationRoot
-const MAX_ROOTS: u32 = 16;
+    // const FIXED_AMOUNT: i128 = 10_000_000; // REMOVED
+    const PUB_SIGNAL_SIZE: u32 = 32;
+    const N_PUB_SIGNALS: u32 = 4; // nullifierHash, withdrawnValue, stateRoot, associationRoot
+    const MAX_ROOTS: u32 = 16;
 
-#[contracttype]
-#[derive(Clone)]
-pub struct DepositEvent {
-    pub from: Address,
-    pub commitment: BytesN<32>,
-    pub index: u32,
-    pub new_root: BytesN<32>,
-}
-
-fn push_root(env: &Env, new_root: &BytesN<32>) {
-    let mut roots: Vec<BytesN<32>> = env
-        .storage()
-        .instance()
-        .get(&ROOTS_KEY)
-        .unwrap_or_else(|| Vec::new(env));
-    // keep a small rolling window
-    if roots.len() >= MAX_ROOTS {
-        // drop oldest
-        let mut shifted: Vec<BytesN<32>> = Vec::new(env);
-        for i in 1..roots.len() {
-            shifted.push_back(roots.get(i).unwrap());
-        }
-        roots = shifted;
-    }
-    roots.push_back(new_root.clone());
-    env.storage().instance().set(&ROOTS_KEY, &roots);
-}
-
-fn parse_state_root_from_pub_signals(env: &Env, pub_signals_bytes: &Bytes) -> Result<BytesN<32>, Error> {
-    // pub_signals_bytes layout: n_pub * 32 bytes big-endian field elements
-    if pub_signals_bytes.len() != PUB_SIGNAL_SIZE * N_PUB_SIGNALS {
-        return Err(Error::ProofFailed);
-    }
-    // Signals: [nullifierHash, withdrawnValue, stateRoot, associationRoot]
-    // stateRoot is the 3rd public signal => bytes [64..96)
-    let start = PUB_SIGNAL_SIZE * 2;
-    let end = PUB_SIGNAL_SIZE * 3;
-    let mut arr = [0u8; 32];
-    pub_signals_bytes
-        .slice(start..end)
-        .copy_into_slice(&mut arr);
-    Ok(BytesN::from_array(env, &arr))
-}
-
-fn parse_nullifier_hash_from_signals(env: &Env, pub_signals_bytes: &Bytes) -> Result<BytesN<32>, Error> {
-    // nullifierHash is the 1st public signal => bytes [0..32)
-    let start = 0;
-    let end = PUB_SIGNAL_SIZE;
-    let mut arr = [0u8; 32];
-    pub_signals_bytes
-        .slice(start..end)
-        .copy_into_slice(&mut arr);
-    Ok(BytesN::from_array(env, &arr))
-}
-
-#[contract]
-pub struct ShieldedPool;
-
-#[contractimpl]
-impl ShieldedPool {
-// ... existing initialize/deposit ... (unchanged)
-    pub fn initialize(
-        env: Env,
-        verifier_address: Address,
-        vk_bytes: soroban_sdk::Bytes,
-        token_address: Address,
-        admin: Address,
-    ) {
-        env.storage().instance().set(&ADMIN_KEY, &admin);
-        env.storage().instance().set(&VERIFIER_KEY, &verifier_address);
-        env.storage().instance().set(&VK_KEY, &vk_bytes);
-        env.storage().instance().set(&TOKEN_KEY, &token_address);
-        let zero = BytesN::from_array(&env, &[0u8; 32]);
-        env.storage().instance().set(&ROOT_KEY, &zero);
-        let roots_init: Vec<BytesN<32>> = vec![&env, zero.clone()];
-        env.storage().instance().set(&ROOTS_KEY, &roots_init);
-        let commits_init: Vec<BytesN<32>> = Vec::new(&env);
-        env.storage().instance().set(&COMMIT_KEY, &commits_init);
+    #[contracttype]
+    #[derive(Clone)]
+    pub struct DepositEvent {
+        pub from: Address,
+        pub commitment: BytesN<32>,
+        pub index: u32,
+        pub new_root: BytesN<32>,
+        pub amount: i128,
     }
 
-    /// Deposit a fixed amount and append a new commitment.
-    /// The caller must provide the new Merkle root computed off-chain from the full commitment list.
-    /// This contract enforces that any later withdrawal proof's public `stateRoot` matches a stored root.
-    pub fn deposit(
-        env: Env,
-        from: Address,
-        commitment: BytesN<32>,
-        new_root: BytesN<32>,
-    ) -> Result<u32, Error> {
-        from.require_auth();
-
-        let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
-        token_client.transfer(&from, &env.current_contract_address(), &FIXED_AMOUNT);
-
-        let mut commitments: Vec<BytesN<32>> = env
-            .storage()
-            .instance()
-            .get(&COMMIT_KEY)
-            .unwrap_or_else(|| Vec::new(&env));
-        let index: u32 = commitments.len();
-        commitments.push_back(commitment.clone());
-        env.storage().instance().set(&COMMIT_KEY, &commitments);
-
-        env.storage().instance().set(&ROOT_KEY, &new_root);
-        push_root(&env, &new_root);
-
-        // Emit a typed event for indexers (deprecated API; contractevent not in SDK 25.1)
-        env.events().publish(
-            (symbol_short!("deposit"),),
-            DepositEvent {
-                from: from.clone(),
-                commitment,
-                index,
-                new_root,
-            },
-        );
-
-        Ok(index)
-    }
-
-    pub fn withdraw(
-        env: Env,
-        to: Address,
-        proof_bytes: soroban_sdk::Bytes,
-        pub_signals_bytes: soroban_sdk::Bytes,
-        nullifier: BytesN<32>,
-    ) -> Result<(), Error> {
-        log!(&env, "ShieldedPool: withdraw called");
-        //to.require_auth();
-
-        // VALIDATE NULLIFIER: Must match the proof's public signal (index 0)
-        log!(&env, "ShieldedPool: parsing nullifier");
-        let signal_nullifier = parse_nullifier_hash_from_signals(&env, &pub_signals_bytes)?;
-        if signal_nullifier != nullifier {
-             log!(&env, "ShieldedPool: nullifier mismatch");
-             return Err(Error::ProofFailed);
-        }
-
-        // Enforce that the proof's public stateRoot matches a root the pool has accepted.
-        // publicSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot]
-        log!(&env, "ShieldedPool: parsing state root");
-        let state_root = parse_state_root_from_pub_signals(&env, &pub_signals_bytes)?;
-        let roots: Vec<BytesN<32>> = env
+    fn push_root(env: &Env, new_root: &BytesN<32>) {
+        let mut roots: Vec<BytesN<32>> = env
             .storage()
             .instance()
             .get(&ROOTS_KEY)
-            .unwrap_or_else(|| Vec::new(&env));
-        if !roots.contains(&state_root) {
-            log!(&env, "ShieldedPool: state root not found");
-            return Err(Error::ProofFailed);
+            .unwrap_or_else(|| Vec::new(env));
+        // keep a small rolling window
+        if roots.len() >= MAX_ROOTS {
+            // drop oldest
+            let mut shifted: Vec<BytesN<32>> = Vec::new(env);
+            for i in 1..roots.len() {
+                shifted.push_back(roots.get(i).unwrap());
+            }
+            roots = shifted;
         }
-
-        // VERIFY PROOF
-        log!(&env, "ShieldedPool: verifying proof");
-        let verifier_address: Address = env.storage().instance().get(&VERIFIER_KEY).unwrap();
-        let vk_bytes: soroban_sdk::Bytes = env.storage().instance().get(&VK_KEY).unwrap();
-        let verified: bool = env
-            .invoke_contract::<bool>(
-                &verifier_address,
-                &symbol_short!("verify"),
-                vec![
-                    &env,
-                    vk_bytes.into_val(&env),
-                    proof_bytes.into_val(&env),
-                    pub_signals_bytes.into_val(&env),
-                ],
-            )
-            .try_into()
-            .map_err(|_| Error::ProofFailed)?;
-        if !verified {
-            return Err(Error::ProofFailed);
-        }
-
-        let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
-        let balance = token_client.balance(&env.current_contract_address());
-        if balance < FIXED_AMOUNT {
-            return Err(Error::InsufficientBalance);
-        }
-
-        let mut nullifiers: Vec<BytesN<32>> =
-            env.storage().instance().get(&NULL_KEY).unwrap_or_else(|| Vec::new(&env));
-        if nullifiers.contains(&nullifier) {
-            return Err(Error::NullifierUsed);
-        }
-
-        nullifiers.push_back(nullifier);
-        env.storage().instance().set(&NULL_KEY, &nullifiers);
-
-        token_client.transfer(&env.current_contract_address(), &to, &FIXED_AMOUNT);
-
-        log!(&env, "Withdrawal successful");
-        Ok(())
+        roots.push_back(new_root.clone());
+        env.storage().instance().set(&ROOTS_KEY, &roots);
     }
+
+    fn parse_state_root_from_pub_signals(env: &Env, pub_signals_bytes: &Bytes) -> Result<BytesN<32>, Error> {
+        // pub_signals_bytes layout: n_pub * 32 bytes big-endian field elements
+        if pub_signals_bytes.len() != PUB_SIGNAL_SIZE * N_PUB_SIGNALS {
+            return Err(Error::ProofFailed);
+        }
+        // Signals: [nullifierHash, withdrawnValue, stateRoot, associationRoot]
+        // stateRoot is the 3rd public signal => bytes [64..96)
+        let start = PUB_SIGNAL_SIZE * 2;
+        let end = PUB_SIGNAL_SIZE * 3;
+        let mut arr = [0u8; 32];
+        pub_signals_bytes
+            .slice(start..end)
+            .copy_into_slice(&mut arr);
+        Ok(BytesN::from_array(env, &arr))
+    }
+
+    fn parse_nullifier_hash_from_signals(env: &Env, pub_signals_bytes: &Bytes) -> Result<BytesN<32>, Error> {
+        // nullifierHash is the 1st public signal => bytes [0..32)
+        let start = 0;
+        let end = PUB_SIGNAL_SIZE;
+        let mut arr = [0u8; 32];
+        pub_signals_bytes
+            .slice(start..end)
+            .copy_into_slice(&mut arr);
+        Ok(BytesN::from_array(env, &arr))
+    }
+
+    fn parse_withdrawn_value_from_signals(env: &Env, pub_signals_bytes: &Bytes) -> Result<i128, Error> {
+        // withdrawnValue is the 2nd public signal => bytes [32..64)
+        let start = PUB_SIGNAL_SIZE;
+        let end = PUB_SIGNAL_SIZE * 2;
+        let mut arr = [0u8; 32];
+        pub_signals_bytes.slice(start..end).copy_into_slice(&mut arr);
+        
+        // Convert [u8; 32] big-endian to i128.
+        // Since i128 is 16 bytes, we take the last 16 bytes.
+        // We assume high bytes are 0 (valid for reasonable token amounts).
+        let mut val_bytes = [0u8; 16];
+        val_bytes.copy_from_slice(&arr[16..32]);
+        let val = i128::from_be_bytes(val_bytes);
+        Ok(val)
+    }
+
+    #[contract]
+    pub struct ShieldedPool;
+
+    #[contractimpl]
+    impl ShieldedPool {
+        // ... existing initialize/deposit ... (unchanged)
+        pub fn initialize(
+            env: Env,
+            verifier_address: Address,
+            vk_bytes: soroban_sdk::Bytes,
+            token_address: Address,
+            admin: Address,
+        ) {
+            env.storage().instance().set(&ADMIN_KEY, &admin);
+            env.storage().instance().set(&VERIFIER_KEY, &verifier_address);
+            env.storage().instance().set(&VK_KEY, &vk_bytes);
+            env.storage().instance().set(&TOKEN_KEY, &token_address);
+            let zero = BytesN::from_array(&env, &[0u8; 32]);
+            env.storage().instance().set(&ROOT_KEY, &zero);
+            let roots_init: Vec<BytesN<32>> = vec![&env, zero.clone()];
+            env.storage().instance().set(&ROOTS_KEY, &roots_init);
+            let commits_init: Vec<BytesN<32>> = Vec::new(&env);
+            env.storage().instance().set(&COMMIT_KEY, &commits_init);
+        }
+
+        /// Deposit a variable `amount` and append a new commitment.
+        /// The caller must provide the new Merkle root computed off-chain.
+        pub fn deposit(
+            env: Env,
+            from: Address,
+            commitment: BytesN<32>,
+            new_root: BytesN<32>,
+            amount: i128,
+        ) -> Result<u32, Error> {
+            from.require_auth();
+
+            if amount <= 0 {
+                return Err(Error::InsufficientBalance); // Reuse error or create InvalidAmount
+            }
+
+            let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
+            let token_client = token::Client::new(&env, &token_address);
+            token_client.transfer(&from, &env.current_contract_address(), &amount);
+
+            let mut commitments: Vec<BytesN<32>> = env
+                .storage()
+                .instance()
+                .get(&COMMIT_KEY)
+                .unwrap_or_else(|| Vec::new(&env));
+            let index: u32 = commitments.len();
+            commitments.push_back(commitment.clone());
+            env.storage().instance().set(&COMMIT_KEY, &commitments);
+
+            env.storage().instance().set(&ROOT_KEY, &new_root);
+            push_root(&env, &new_root);
+
+            // Emit a typed event for indexers
+            env.events().publish(
+                (symbol_short!("deposit"),),
+                DepositEvent {
+                    from: from.clone(),
+                    commitment,
+                    index,
+                    new_root,
+                    amount,
+                },
+            );
+
+            Ok(index)
+        }
+
+        pub fn withdraw(
+            env: Env,
+            to: Address,
+            proof_bytes: soroban_sdk::Bytes,
+            pub_signals_bytes: soroban_sdk::Bytes,
+            nullifier: BytesN<32>,
+        ) -> Result<(), Error> {
+            log!(&env, "ShieldedPool: withdraw called");
+            //to.require_auth();
+
+            // VALIDATE NULLIFIER
+            let signal_nullifier = parse_nullifier_hash_from_signals(&env, &pub_signals_bytes)?;
+            if signal_nullifier != nullifier {
+                 log!(&env, "ShieldedPool: nullifier mismatch");
+                 return Err(Error::ProofFailed);
+            }
+
+            // PARSE AMOUNT (withdrawnValue)
+            let amount = parse_withdrawn_value_from_signals(&env, &pub_signals_bytes)?;
+
+            // Enforce that the proof's public stateRoot matches a root the pool has accepted.
+            let state_root = parse_state_root_from_pub_signals(&env, &pub_signals_bytes)?;
+            let roots: Vec<BytesN<32>> = env
+                .storage()
+                .instance()
+                .get(&ROOTS_KEY)
+                .unwrap_or_else(|| Vec::new(&env));
+            if !roots.contains(&state_root) {
+                log!(&env, "ShieldedPool: state root not found");
+                return Err(Error::ProofFailed);
+            }
+
+            // VERIFY PROOF
+            log!(&env, "ShieldedPool: verifying proof");
+            let verifier_address: Address = env.storage().instance().get(&VERIFIER_KEY).unwrap();
+            let vk_bytes: soroban_sdk::Bytes = env.storage().instance().get(&VK_KEY).unwrap();
+            let verified: bool = env
+                .invoke_contract::<bool>(
+                    &verifier_address,
+                    &symbol_short!("verify"),
+                    vec![
+                        &env,
+                        vk_bytes.into_val(&env),
+                        proof_bytes.into_val(&env),
+                        pub_signals_bytes.into_val(&env),
+                    ],
+                )
+                .try_into()
+                .map_err(|_| Error::ProofFailed)?;
+            if !verified {
+                return Err(Error::ProofFailed);
+            }
+
+            let token_address: Address = env.storage().instance().get(&TOKEN_KEY).unwrap();
+            let token_client = token::Client::new(&env, &token_address);
+            let balance = token_client.balance(&env.current_contract_address());
+            if balance < amount {
+                return Err(Error::InsufficientBalance);
+            }
+
+            let mut nullifiers: Vec<BytesN<32>> =
+                env.storage().instance().get(&NULL_KEY).unwrap_or_else(|| Vec::new(&env));
+            if nullifiers.contains(&nullifier) {
+                return Err(Error::NullifierUsed);
+            }
+
+            nullifiers.push_back(nullifier);
+            env.storage().instance().set(&NULL_KEY, &nullifiers);
+
+            token_client.transfer(&env.current_contract_address(), &to, &amount);
+
+            log!(&env, "Withdrawal successful");
+            Ok(())
+        }
 
     pub fn transfer(
         env: Env,
@@ -309,6 +331,7 @@ impl ShieldedPool {
                 commitment: new_commitment,
                 index,
                 new_root,
+                amount: 0,
             },
         );
 

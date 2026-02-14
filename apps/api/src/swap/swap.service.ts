@@ -14,8 +14,7 @@ import { Asset, Horizon, Keypair, Networks, TransactionBuilder, Operation } from
 @Injectable()
 export class SwapService {
   private server: Horizon.Server;
-  // Keep in sync with ShieldedPool FIXED_AMOUNT.
-  private static readonly SHIELDED_POOL_FIXED_AMOUNT = 10_000_000n; // 1 token (6 decimals)
+  // ShieldedPool transfers a variable amount per deposit/withdraw.
 
   constructor(
     @InjectModel(Swap.name) private swapModel: Model<Swap>,
@@ -145,9 +144,10 @@ export class SwapService {
     if (!isAlice && !isBob) return { ready: false, error: 'You are not a party to this swap' };
 
     const asset: 'USDC' | 'XLM' = isAlice ? 'USDC' : 'XLM';
-    // Shielded pool supports only fixed-amount notes/proofs.
-    // (Swap UI may show different amounts, but private execution requires fixed notes.)
-    const minValue = SwapService.SHIELDED_POOL_FIXED_AMOUNT;
+    const amountRequired = isAlice ? swap.amountOut : swap.amountIn;
+
+    // Scale amount to stroops for comparison
+    const minValue = BigInt(Math.round(amountRequired * 10_000_000));
     const poolAddress =
       asset === 'USDC'
         ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
@@ -174,7 +174,7 @@ export class SwapService {
     const { proofBytes, pubSignalsBytes, nullifierHash } = await this.proofService.generateProof(
       { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
       stateRoot,
-      SwapService.SHIELDED_POOL_FIXED_AMOUNT,
+      note.value, // Withdrawn value (Amount)
       { commitmentBytes, stateIndex, stateSiblings },
     );
 
@@ -262,13 +262,13 @@ export class SwapService {
     const amountXlm = String(Math.round(swap.amountIn * 1_000_000));
 
     // GENERATE OUTCOME NOTES (Private Transfer Logic)
-    // 1. Note for Bob (USDC) - Created by Alice's transfer
+    // 1. Note for Bob (USDC) - Created by Alice's transfer (amountOut)
     // We generate it here on behalf of Bob (since we have access)
     // In a real P2P system, Bob would generate this and give Alice the commitment/pubkey.
-    const { noteFields: bobNoteFields, commitmentBytes: bobCommitmentBytes } = await this.usersService.generateNote(bob._id.toString());
+    const { noteFields: bobNoteFields, commitmentBytes: bobCommitmentBytes } = await this.usersService.generateNote(bob._id.toString(), swap.amountOut);
 
-    // 2. Note for Alice (XLM) - Created by Bob's transfer
-    const { noteFields: aliceNoteFields, commitmentBytes: aliceCommitmentBytes } = await this.usersService.generateNote(alice._id.toString());
+    // 2. Note for Alice (XLM) - Created by Bob's transfer (amountIn)
+    const { noteFields: aliceNoteFields, commitmentBytes: aliceCommitmentBytes } = await this.usersService.generateNote(alice._id.toString(), swap.amountIn);
 
     // COMPUTE NEW ROOTS
     // 1. USDC Pool (for Bob's new note)

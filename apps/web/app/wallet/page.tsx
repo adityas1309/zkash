@@ -41,15 +41,20 @@ function ProcessWithdrawalsButton({ onDone }: { onDone: () => void }) {
 
 function UnshieldButton({ asset, onDone }: { asset: 'USDC' | 'XLM'; onDone: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [amount, setAmount] = useState('1');
+
   const handleUnshield = async () => {
-    if (!confirm(`Unshield 1 ${asset} from private balance?`)) return;
+    const numAmount = parseFloat(amount);
+    if (!numAmount || numAmount <= 0) return alert('Invalid amount');
+    if (!confirm(`Unshield ${amount} ${asset} from private balance?`)) return;
+
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/users/withdrawals/self`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ asset, amount: 10_000_000 }), // Fixed amount for now
+        body: JSON.stringify({ asset, amount: numAmount }),
       });
       const data = await res.json();
       if (data.success) {
@@ -66,13 +71,22 @@ function UnshieldButton({ asset, onDone }: { asset: 'USDC' | 'XLM'; onDone: () =
   };
 
   return (
-    <button
-      onClick={handleUnshield}
-      disabled={loading}
-      className="text-xs bg-red-900 hover:bg-red-800 text-red-100 px-2 py-1 rounded ml-2 disabled:opacity-50"
-    >
-      {loading ? '...' : `Unshield 1 ${asset}`}
-    </button>
+    <div className="flex items-center gap-2">
+      <input
+        type="number"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        className="w-20 px-2 py-1 text-sm bg-slate-900 border border-slate-700 rounded text-white"
+        placeholder="Amt"
+      />
+      <button
+        onClick={handleUnshield}
+        disabled={loading}
+        className="text-xs bg-red-900 hover:bg-red-800 text-red-100 px-2 py-1 rounded disabled:opacity-50"
+      >
+        {loading ? '...' : `Unshield ${asset}`}
+      </button>
+    </div>
   );
 }
 
@@ -83,6 +97,7 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true);
   const [faucetLoading, setFaucetLoading] = useState(false);
   const [depositLoading, setDepositLoading] = useState<'USDC' | 'XLM' | null>(null);
+  const [depositAmount, setDepositAmount] = useState('1');
 
   useEffect(() => {
     fetch(`${API_URL}/users/me`, { credentials: 'include' })
@@ -151,12 +166,19 @@ export default function WalletPage() {
 
   const handleDeposit = async (asset: 'USDC' | 'XLM') => {
     setDepositLoading(asset);
+    const numAmount = parseFloat(depositAmount);
+    if (!numAmount || numAmount <= 0) {
+      alert('Invalid amount');
+      setDepositLoading(null);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_URL}/users/deposit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ asset }),
+        body: JSON.stringify({ asset, amount: numAmount }),
       });
       const data = await res.json().catch(() => ({}));
       if (data.success) {
@@ -214,22 +236,29 @@ export default function WalletPage() {
       </div>
 
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
-        <p className="text-slate-400 text-sm mb-2">Deposit to private pool (1 unit)</p>
+        <p className="text-slate-400 text-sm mb-2">Deposit to private pool</p>
         <p className="text-slate-500 text-xs mb-3">Requires public balance. Creates a spendable note for private send/swap.</p>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            value={depositAmount}
+            onChange={(e) => setDepositAmount(e.target.value)}
+            className="w-24 px-3 py-2 bg-slate-900 border border-slate-700 rounded text-white"
+            placeholder="Amount"
+          />
           <button
             onClick={() => handleDeposit('USDC')}
             disabled={depositLoading !== null}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg disabled:opacity-50"
           >
-            {depositLoading === 'USDC' ? 'Depositing...' : 'Deposit 1 USDC'}
+            {depositLoading === 'USDC' ? 'Depositing...' : 'Deposit USDC'}
           </button>
           <button
             onClick={() => handleDeposit('XLM')}
             disabled={depositLoading !== null}
             className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg disabled:opacity-50"
           >
-            {depositLoading === 'XLM' ? 'Depositing...' : 'Deposit 1 XLM'}
+            {depositLoading === 'XLM' ? 'Depositing...' : 'Deposit XLM'}
           </button>
         </div>
       </div>

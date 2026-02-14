@@ -435,7 +435,7 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
                     throw new Error('SHIELDED_POOL_ADDRESS not configured in .env. Cannot flow test.');
                 }
 
-                const result = await usersService.deposit(alice._id.toString(), 'XLM');
+                const result = await usersService.deposit(alice._id.toString(), 'XLM', 10);
 
                 if (result.error) {
                     throw new Error(`Deposit failed: ${result.error}`);
@@ -722,14 +722,14 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
         it('should deposit funds to ShieldedPool for Swap', async () => {
             await runStep('10.0a Alice Deposits 1 XLM', async () => {
                 // Deposit fixed amount (1 token)
-                const res = await usersService.deposit(alice._id.toString(), 'XLM');
+                const res = await usersService.deposit(alice._id.toString(), 'XLM', 1);
                 if (res.error) throw new Error(`Alice deposit failed: ${res.error}`);
                 return `Deposited 1 XLM. Hash: ${res.txHash}`;
             });
 
             await runStep('10.0b Bob Deposits 1 USDC', async () => {
                 // Deposit fixed amount (1 token)
-                const res = await usersService.deposit(bob._id.toString(), 'USDC');
+                const res = await usersService.deposit(bob._id.toString(), 'USDC', 1);
                 if (res.error) throw new Error(`Bob deposit failed: ${res.error}`);
                 return `Deposited 1 USDC. Hash: ${res.txHash}`;
             });

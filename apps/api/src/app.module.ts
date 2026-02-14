@@ -12,13 +12,21 @@ import { join } from 'path';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, envFilePath: join(__dirname, '../../../.env') }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath: join(__dirname, '../../../../.env') }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI') ?? 'mongodb://localhost:27017/lop',
-      }),
+      useFactory: (configService: ConfigService) => {
+        const uri = configService.get<string>('MONGODB_URI') || configService.get<string>('MONGO_URI');
+        console.log('----------------------------------------------------------------');
+        console.log('DEBUG: __dirname:', __dirname);
+        console.log('DEBUG: .env path should be:', join(__dirname, '../../../../.env'));
+        console.log('DEBUG: MONGODB_URI:', uri);
+        console.log('----------------------------------------------------------------');
+        return {
+          uri: uri ?? 'mongodb://localhost:27017/lop',
+        };
+      },
     }),
     AuthModule,
     UsersModule,
