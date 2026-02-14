@@ -2,6 +2,7 @@ import { forwardRef, Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Swap, SwapSchema } from '../schemas/swap.schema';
 import { User, UserSchema } from '../schemas/user.schema';
+import { Offer, OfferSchema } from '../schemas/offer.schema';
 import { SwapService } from './swap.service';
 import { SwapController } from './swap.controller';
 import { AuthModule } from '../auth/auth.module';
@@ -14,6 +15,7 @@ import { UsersModule } from '../users/users.module';
     MongooseModule.forFeature([
       { name: Swap.name, schema: SwapSchema },
       { name: User.name, schema: UserSchema },
+      { name: Offer.name, schema: OfferSchema },
     ]),
     forwardRef(() => AuthModule),
     SorobanModule,

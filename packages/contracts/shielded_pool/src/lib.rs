@@ -224,6 +224,98 @@ impl ShieldedPool {
         Ok(())
     }
 
+    pub fn transfer(
+        env: Env,
+        proof_bytes: soroban_sdk::Bytes,
+        pub_signals_bytes: soroban_sdk::Bytes,
+        nullifier: BytesN<32>,
+        new_commitment: BytesN<32>,
+        new_root: BytesN<32>,
+    ) -> Result<u32, Error> {
+        log!(&env, "ShieldedPool: transfer called");
+
+        // VALIDATE NULLIFIER: Must match the proof's public signal (index 0)
+        let signal_nullifier = parse_nullifier_hash_from_signals(&env, &pub_signals_bytes)?;
+        if signal_nullifier != nullifier {
+             log!(&env, "ShieldedPool: nullifier mismatch");
+             return Err(Error::ProofFailed);
+        }
+
+        // Enforce that the proof's public stateRoot matches a root the pool has accepted.
+        // publicSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot]
+        let state_root = parse_state_root_from_pub_signals(&env, &pub_signals_bytes)?;
+        let roots: Vec<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&ROOTS_KEY)
+            .unwrap_or_else(|| Vec::new(&env));
+        if !roots.contains(&state_root) {
+            log!(&env, "ShieldedPool: state root not found");
+            return Err(Error::ProofFailed);
+        }
+
+        // VERIFY PROOF
+        log!(&env, "ShieldedPool: verifying proof");
+        let verifier_address: Address = env.storage().instance().get(&VERIFIER_KEY).unwrap();
+        let vk_bytes: soroban_sdk::Bytes = env.storage().instance().get(&VK_KEY).unwrap();
+        let verified: bool = env
+            .invoke_contract::<bool>(
+                &verifier_address,
+                &symbol_short!("verify"),
+                vec![
+                    &env,
+                    vk_bytes.into_val(&env),
+                    proof_bytes.into_val(&env),
+                    pub_signals_bytes.into_val(&env),
+                ],
+            )
+            .try_into()
+            .map_err(|_| Error::ProofFailed)?;
+        if !verified {
+            return Err(Error::ProofFailed);
+        }
+
+        // CHECK NULLIFIER UNUSED
+        let mut nullifiers: Vec<BytesN<32>> =
+            env.storage().instance().get(&NULL_KEY).unwrap_or_else(|| Vec::new(&env));
+        if nullifiers.contains(&nullifier) {
+            return Err(Error::NullifierUsed);
+        }
+        nullifiers.push_back(nullifier);
+        env.storage().instance().set(&NULL_KEY, &nullifiers);
+
+        // ADD NEW COMMITMENT (Note Minting)
+        let mut commitments: Vec<BytesN<32>> = env
+            .storage()
+            .instance()
+            .get(&COMMIT_KEY)
+            .unwrap_or_else(|| Vec::new(&env));
+        let index: u32 = commitments.len();
+        commitments.push_back(new_commitment.clone());
+        env.storage().instance().set(&COMMIT_KEY, &commitments);
+
+        env.storage().instance().set(&ROOT_KEY, &new_root);
+        push_root(&env, &new_root);
+        
+        // Emit DepositEvent for indexers
+        // The funds are technically "moved" within the pool by the contract itself.
+        // We use the contract address as the 'from' source to indicate an internal transfer/mint.
+        let pool_address = env.current_contract_address();
+        
+        env.events().publish(
+            (symbol_short!("transfer"),),
+            DepositEvent {
+                from: pool_address, 
+                commitment: new_commitment,
+                index,
+                new_root,
+            },
+        );
+
+        log!(&env, "Transfer successful");
+        Ok(index)
+    }
+
     pub fn get_merkle_root(env: Env) -> BytesN<32> {
         env.storage()
             .instance()

@@ -10,7 +10,7 @@ export class SwapController {
   @Post('request')
   @UseGuards(SessionAuthGuard)
   request(
-    @Body() body: { bobId: string; amountIn: number; amountOut: number },
+    @Body() body: { bobId: string; amountIn: number; amountOut: number; offerId?: string },
     @Req() req: { user: { _id: Types.ObjectId } },
   ) {
     return this.swapService.request(
@@ -18,6 +18,7 @@ export class SwapController {
       new Types.ObjectId(body.bobId),
       body.amountIn,
       body.amountOut,
+      body.offerId ? new Types.ObjectId(body.offerId) : undefined,
     );
   }
 
@@ -74,6 +75,7 @@ export class SwapController {
   @UseGuards(SessionAuthGuard)
   async executePrivate(
     @Param('id') id: string,
+    @Req() req: { user: { _id: Types.ObjectId } },
     @Body()
     body?: {
       aliceProof?: string;
@@ -115,6 +117,7 @@ export class SwapController {
       }
       return await this.swapService.executeSwapPrivate(
         id,
+        req.user._id,
         aliceProof,
         alicePubSignals,
         aliceNullifier,

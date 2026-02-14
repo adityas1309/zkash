@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Swap } from '../schemas/swap.schema';
 import { User } from '../schemas/user.schema';
+import { Offer } from '../schemas/offer.schema';
 import { AuthService } from '../auth/auth.service';
 import { UsersService } from '../users/users.service';
 import { SorobanService } from '../soroban/soroban.service';
@@ -19,6 +20,7 @@ export class SwapService {
   constructor(
     @InjectModel(Swap.name) private swapModel: Model<Swap>,
     @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Offer.name) private offerModel: Model<Offer>,
     @Inject(forwardRef(() => AuthService)) private authService: AuthService,
     @Inject(forwardRef(() => UsersService)) private usersService: UsersService,
     private sorobanService: SorobanService,
@@ -30,13 +32,14 @@ export class SwapService {
     this.server = new Horizon.Server(horizonUrl);
   }
 
-  async request(aliceId: Types.ObjectId, bobId: Types.ObjectId, amountIn: number, amountOut: number) {
+  async request(aliceId: Types.ObjectId, bobId: Types.ObjectId, amountIn: number, amountOut: number, offerId?: Types.ObjectId) {
     return this.swapModel.create({
       aliceId,
       bobId,
       status: 'requested',
       amountIn,
       amountOut,
+      offerId,
     });
   }
 
@@ -117,6 +120,11 @@ export class SwapService {
     swap.status = 'completed';
     swap.txHash = txHash;
     await swap.save();
+
+    // Deactivate Offer if linked
+    if (swap.offerId) {
+      await this.deactivateOffer(swap.offerId);
+    }
 
     console.log(`[SwapService] Swap ${swapId} completed with tx: ${txHash}`);
 
@@ -225,6 +233,7 @@ export class SwapService {
   /** Execute swap via ZKSwap contract (private). Uses proofs from body or stored on swap. */
   async executeSwapPrivate(
     swapId: string,
+    executorId: Types.ObjectId,
     aliceProof: Uint8Array,
     alicePubSignals: Uint8Array,
     aliceNullifier: Uint8Array,
@@ -252,12 +261,42 @@ export class SwapService {
     const amountUsdc = String(Math.round(swap.amountOut * 1_000_000));
     const amountXlm = String(Math.round(swap.amountIn * 1_000_000));
 
+    // GENERATE OUTCOME NOTES (Private Transfer Logic)
+    // 1. Note for Bob (USDC) - Created by Alice's transfer
+    // We generate it here on behalf of Bob (since we have access)
+    // In a real P2P system, Bob would generate this and give Alice the commitment/pubkey.
+    const { noteFields: bobNoteFields, commitmentBytes: bobCommitmentBytes } = await this.usersService.generateNote(bob._id.toString());
+
+    // 2. Note for Alice (XLM) - Created by Bob's transfer
+    const { noteFields: aliceNoteFields, commitmentBytes: aliceCommitmentBytes } = await this.usersService.generateNote(alice._id.toString());
+
+    // COMPUTE NEW ROOTS
+    // 1. USDC Pool (for Bob's new note)
+    const usdcLeaves = await this.sorobanService.getCommitments(usdcPool, alice.stellarPublicKey); // Query with anyone's key
+    const newUsdcLeaves = [...usdcLeaves, bobCommitmentBytes];
+    const bobOutputRoot = await this.merkleTree.computeRootFromLeaves(newUsdcLeaves, 20);
+
+    // 2. XLM Pool (for Alice's new note)
+    const xlmLeaves = await this.sorobanService.getCommitments(xlmPool, bob.stellarPublicKey);
+    const newXlmLeaves = [...xlmLeaves, aliceCommitmentBytes];
+    const aliceOutputRoot = await this.merkleTree.computeRootFromLeaves(newXlmLeaves, 20);
+
+    console.log(`[SwapService] Executing Anonymous Swap...`);
+    console.log(`[SwapService] Alice Output (XLM) Commitment: ${Buffer.from(aliceCommitmentBytes).toString('hex')}`);
+    console.log(`[SwapService] Bob Output (USDC) Commitment: ${Buffer.from(bobCommitmentBytes).toString('hex')}`);
+
+    // Determine who is signing (paying fee)
+    let submitterSecret = aliceSecret;
+    if (executorId.equals(bob._id)) {
+      submitterSecret = bobSecret;
+      console.log('[SwapService] Bob is executing (paying fee)');
+    } else {
+      console.log('[SwapService] Alice is executing (paying fee)');
+    }
+
     const hash = await this.sorobanService.invokeZkSwapExecute(
       zkSwapAddress,
-      aliceSecret,
-      bobSecret,
-      alice.stellarPublicKey,
-      bob.stellarPublicKey,
+      submitterSecret,
       usdcPool,
       xlmPool,
       amountUsdc,
@@ -265,10 +304,39 @@ export class SwapService {
       aliceProof,
       alicePubSignals,
       aliceNullifier,
+      aliceCommitmentBytes,
+      aliceOutputRoot,
       bobProof,
       bobPubSignals,
       bobNullifier,
+      bobCommitmentBytes,
+      bobOutputRoot,
     );
+
+    // PERSIST NEW NOTES
+    // Bob receives USDC
+    await this.usersService.saveNote(bob._id.toString(), 'USDC', usdcPool, bobNoteFields, bobCommitmentBytes, hash);
+    // Alice receives XLM
+    await this.usersService.saveNote(alice._id.toString(), 'XLM', xlmPool, aliceNoteFields, aliceCommitmentBytes, hash);
+
+    // DEACTIVATE OFFER
+    if (swap.offerId) {
+      await this.deactivateOffer(swap.offerId);
+    }
+
+    // MARK INPUT NOTES AS SPENT
+    // We use the Nullifier Hash (provided as args) to find and mark the notes in DB.
+    try {
+      const aliceNullifierHex = Buffer.from(aliceNullifier).toString('hex');
+      await this.usersService.markNoteSpent(alice._id.toString(), aliceNullifierHex);
+
+      const bobNullifierHex = Buffer.from(bobNullifier).toString('hex');
+      await this.usersService.markNoteSpent(bob._id.toString(), bobNullifierHex);
+    } catch (e) {
+      console.error('[SwapService] Failed to mark input notes as spent:', e);
+      // We don't throw here to avoid failing the whole request as the TX is already on-chain.
+      // But this ideally should be handled robustly (eventual consistency).
+    }
 
     swap.status = 'completed';
     swap.txHash = hash;
@@ -296,5 +364,14 @@ export class SwapService {
 
   async findById(swapId: string) {
     return this.swapModel.findById(swapId).exec();
+  }
+
+  private async deactivateOffer(offerId: Types.ObjectId) {
+    try {
+      console.log(`[SwapService] Deactivating offer ${offerId}`);
+      await this.offerModel.findByIdAndUpdate(offerId, { active: false }).exec();
+    } catch (e) {
+      console.error('Failed to deactivate offer:', e);
+    }
   }
 }

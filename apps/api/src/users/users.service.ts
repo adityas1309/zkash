@@ -604,6 +604,92 @@ export class UsersService {
     }
   }
 
+  /**
+   * Helper for SwapService: Generate a random note for a user without saving it yet.
+   * Returns the NoteFields and commitment.
+   */
+  async generateNote(userId: string): Promise<{ noteFields: NoteFields; commitmentBytes: Uint8Array }> {
+    const randomBigInt = (): bigint => {
+      const buf = Buffer.from(nacl.randomBytes(31));
+      return BigInt('0x' + buf.toString('hex'));
+    };
+
+    const noteFields: NoteFields = {
+      value: UsersService.SHIELDED_POOL_FIXED_AMOUNT,
+      label: randomBigInt(),
+      nullifier: randomBigInt(),
+      secret: randomBigInt(),
+    };
+
+    const { commitmentBytes } = await computeCommitment(noteFields);
+    return { noteFields, commitmentBytes };
+  }
+
+  /**
+   * Helper for SwapService: Save a note to DB after successful Swap execution.
+   */
+  async saveNote(
+    userId: string,
+    asset: 'USDC' | 'XLM',
+    poolAddress: string,
+    noteFields: NoteFields,
+    commitmentBytes: Uint8Array,
+    txHash: string
+  ): Promise<void> {
+    const user = await this.findById(userId);
+    if (!user || !user.googleId) throw new Error('User not found for saving note');
+
+    const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
+
+    // 1. Save SpendableNote
+    const notePayload = {
+      label: noteFields.label.toString(),
+      value: noteFields.value.toString(),
+      nullifier: noteFields.nullifier.toString(),
+      secret: noteFields.secret.toString(),
+      commitment: Buffer.from(commitmentBytes).toString('hex'),
+    };
+    const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+    const ciphertext = nacl.secretbox(
+      naclUtil.decodeUTF8(JSON.stringify(notePayload)),
+      nonce,
+      encKey,
+    );
+    const combined = Buffer.concat([Buffer.from(nonce), Buffer.from(ciphertext)]);
+
+    await this.spendableNoteModel.create({
+      userId: user._id,
+      ciphertext: combined.toString('base64'),
+      poolAddress,
+      asset,
+      spent: false,
+    });
+
+    // 2. Save EncryptedNote (for history/UI)
+    try {
+      const viewKeyHex = this.authService.decrypt(user.zkViewKeyEncrypted, encKey);
+      const viewKey = new Uint8Array(Buffer.from(viewKeyHex, 'hex'));
+      const payload = JSON.stringify({ value: 1, asset });
+      const noteNonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+      const noteCiphertext = nacl.secretbox(
+        naclUtil.decodeUTF8(payload),
+        noteNonce,
+        viewKey,
+      );
+      const noteCombined = Buffer.concat([Buffer.from(noteNonce), Buffer.from(noteCiphertext)]);
+      await this.encryptedNoteModel.create({
+        commitment: '',
+        ciphertext: Buffer.from(noteCombined).toString('base64'),
+        recipientId: user._id,
+        asset,
+        txHash: txHash,
+        poolAddress,
+      });
+    } catch (e) {
+      console.error('[UsersService] saveNote: failed to create EncryptedNote:', e);
+    }
+  }
+
   /** Get spendable notes for the user (decrypted). Used by proof generation. */
   async getSpendableNotes(
     userId: string,
@@ -659,11 +745,14 @@ export class UsersService {
     return out;
   }
 
-  /** Mark a spendable note as spent (by nullifier). */
+  /** Mark a spendable note as spent (by nullifier secret OR nullifier hash). */
   async markNoteSpent(userId: string, nullifierHex: string): Promise<void> {
     const notes = await this.spendableNoteModel
       .find({ userId, spent: false })
       .exec();
+
+    const targetHex = nullifierHex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
+
     for (const note of notes) {
       try {
         const combined = Buffer.from(note.ciphertext, 'base64');
@@ -678,16 +767,46 @@ export class UsersService {
           encKey,
         );
         if (!decrypted) continue;
-        const obj = JSON.parse(naclUtil.encodeUTF8(decrypted)) as { nullifier: string };
-        const noteNullifierHex = BigInt(obj.nullifier).toString(16).padStart(64, '0');
-        if (noteNullifierHex === nullifierHex.replace(/^0x/, '').toLowerCase().padStart(64, '0')) {
+
+        const obj = JSON.parse(naclUtil.encodeUTF8(decrypted)) as {
+          nullifier: string;
+          secret: string;
+          value: string;
+          label: string;
+        };
+
+        // 1. Check against Nullifier Secret (legacy/direct way)
+        const secretNullifier = BigInt(obj.nullifier);
+        const noteNullifierHex = secretNullifier.toString(16).padStart(64, '0');
+        if (noteNullifierHex === targetHex) {
+          console.log(`[markNoteSpent] Marked note ${note._id} as spent (matched secret)`);
           note.spent = true;
           await note.save();
           return;
         }
-      } catch {
-        // skip
+
+        // 2. Check against Nullifier Hash (public logic)
+        // Re-derive hash from the secret nullifier
+        const noteFields: NoteFields = {
+          value: BigInt(obj.value),
+          label: BigInt(obj.label),
+          nullifier: BigInt(obj.nullifier),
+          secret: BigInt(obj.secret),
+        };
+        const { nullifierHash } = await computeCommitment(noteFields);
+        const hashHex = nullifierHash.toString(16).padStart(64, '0');
+
+        if (hashHex === targetHex) {
+          console.log(`[markNoteSpent] Marked note ${note._id} as spent (matched hash)`);
+          note.spent = true;
+          await note.save();
+          return;
+        }
+
+      } catch (e) {
+        console.warn(`[markNoteSpent] Error processing note ${note._id}:`, e);
       }
     }
+    console.warn(`[markNoteSpent] No note found for nullifier ${nullifierHex}`);
   }
 }

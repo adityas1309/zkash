@@ -11,6 +11,9 @@ export class Swap extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   bobId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'Offer' })
+  offerId: Types.ObjectId;
+
   @Prop({ required: true, enum: ['requested', 'locked', 'completed', 'cancelled'] })
   status: SwapStatus;
 
