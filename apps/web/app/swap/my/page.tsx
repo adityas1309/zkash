@@ -24,10 +24,13 @@ function LockedSwapCard({
         <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-lg">
             <div className="mb-6">
                 <p className="font-medium text-slate-300 mb-1">
-                    Buyer: <span className="text-indigo-400">@{swap.aliceId?.username || 'Unknown'}</span>
+                    {isSeller ? 'Buyer' : 'Seller'}: <span className="text-indigo-400">@{isSeller ? swap.aliceId?.username : swap.bobId?.username || 'Unknown'}</span>
                 </p>
                 <div className="text-xl font-semibold text-white mb-2">
-                    Send {swap.amountOut} USDC → Receive {swap.amountIn} XLM
+                    {isSeller
+                        ? `Send ${swap.amountOut} USDC → Receive ${swap.amountIn} XLM`
+                        : `Send ${swap.amountIn} XLM → Receive ${swap.amountOut} USDC`
+                    }
                 </div>
                 <p className="text-slate-500 text-sm">
                     {new Date(swap.createdAt).toLocaleString()}
@@ -47,7 +50,15 @@ function LockedSwapCard({
                         disabled={actionLoading === swap._id}
                         className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors text-white"
                     >
-                        {actionLoading === swap._id ? 'Executing...' : 'Execute (public)'}
+                        {actionLoading === swap._id ? (
+                            <span className="flex justify-center items-center gap-2">
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Executing...
+                            </span>
+                        ) : 'Execute (public)'}
                     </button>
                 )}
 
@@ -57,7 +68,15 @@ function LockedSwapCard({
                         disabled={actionLoading === swap._id}
                         className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-slate-600 rounded-lg text-white font-medium transition-colors"
                     >
-                        Execute private swap
+                        {actionLoading === swap._id ? (
+                            <span className="flex justify-center items-center gap-2">
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Executing Private Swap...
+                            </span>
+                        ) : 'Execute private swap'}
                     </button>
                 ) : !swap.hasMyProof ? (
                     <button
@@ -65,7 +84,15 @@ function LockedSwapCard({
                         disabled={actionLoading === swap._id}
                         className="w-full py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-white font-medium transition-colors"
                     >
-                        {actionLoading === swap._id ? 'Preparing...' : 'Prepare private execution'}
+                        {actionLoading === swap._id ? (
+                            <span className="flex justify-center items-center gap-2">
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Preparing Proof...
+                            </span>
+                        ) : 'Prepare private execution'}
                     </button>
                 ) : (
                     <p className="text-slate-500 text-sm text-center">Your proof is submitted. Waiting for the other party.</p>
@@ -101,6 +128,7 @@ export default function MySwapsPage() {
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [needsSplit, setNeedsSplit] = useState<string | null>(null);
 
     const fetchData = async () => {
         try {
@@ -182,6 +210,7 @@ export default function MySwapsPage() {
         setActionLoading(swapId);
         setError('');
         setSuccess('');
+        setNeedsSplit(null);
         try {
             const res = await fetch(`${API_URL}/swap/${swapId}/prepare-my-proof`, {
                 method: 'POST',
@@ -192,7 +221,34 @@ export default function MySwapsPage() {
             setSuccess(data.ready ? 'Both proofs ready. You can execute the private swap.' : 'Your proof is ready. Waiting for the other party.');
             await fetchData();
         } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to prepare proof');
+            const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
+            setError(msg);
+            if (msg.includes('No private note with EXACT amount')) {
+                setNeedsSplit(swapId);
+            }
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleSplit = async (swapId: string, asset: 'USDC' | 'XLM', amount: number) => {
+        setActionLoading(swapId);
+        setError('');
+        setSuccess('');
+        try {
+            const res = await fetch(`${API_URL}/users/split`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ asset, amount }),
+            });
+            const data = await res.json();
+            if (!res.ok || !data.success) throw new Error(data.error || 'Split failed');
+
+            setSuccess('Note split successfully! Please wait a few seconds for confirmation, then try preparing proof again.');
+            setNeedsSplit(null);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : 'Split failed');
         } finally {
             setActionLoading(null);
         }
@@ -329,15 +385,31 @@ export default function MySwapsPage() {
 
                     <div className="space-y-4">
                         {swapsAsSeller.filter(s => s.status === 'locked').map((swap) => (
-                            <LockedSwapCard
-                                key={swap._id}
-                                swap={swap}
-                                isSeller
-                                actionLoading={actionLoading}
-                                onExecute={() => handleExecute(swap._id)}
-                                onPrepareProof={() => handlePrepareProof(swap._id)}
-                                onExecutePrivate={() => handleExecutePrivate(swap._id)}
-                            />
+                            <div key={swap._id}>
+                                <LockedSwapCard
+                                    swap={swap}
+                                    isSeller
+                                    actionLoading={actionLoading}
+                                    onExecute={() => handleExecute(swap._id)}
+                                    onPrepareProof={() => handlePrepareProof(swap._id)}
+                                    onExecutePrivate={() => handleExecutePrivate(swap._id)}
+                                />
+                                {needsSplit === swap._id && (
+                                    <div className="mt-2 p-4 bg-slate-800 border border-orange-500 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                        <p className="text-orange-300 text-sm mb-3">
+                                            You don&apos;t have a single note with the exact amount required ({swap.amountOut} USDC).
+                                            Would you like to automatically split your larger notes?
+                                        </p>
+                                        <button
+                                            onClick={() => handleSplit(swap._id, 'USDC', swap.amountOut)}
+                                            disabled={actionLoading === swap._id}
+                                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-600 rounded text-sm text-white font-medium"
+                                        >
+                                            {actionLoading === swap._id ? 'Splitting...' : `Split Note for ${swap.amountOut} USDC`}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </section>
@@ -349,15 +421,31 @@ export default function MySwapsPage() {
                     <h2 className="text-lg font-semibold mb-4">Locked (You&apos;re the Buyer)</h2>
                     <div className="space-y-4">
                         {swapsAsBuyer.filter(s => s.status === 'locked').map((swap) => (
-                            <LockedSwapCard
-                                key={swap._id}
-                                swap={swap}
-                                isSeller={false}
-                                actionLoading={actionLoading}
-                                onExecute={() => { }}
-                                onPrepareProof={() => handlePrepareProof(swap._id)}
-                                onExecutePrivate={() => handleExecutePrivate(swap._id)}
-                            />
+                            <div key={swap._id}>
+                                <LockedSwapCard
+                                    swap={swap}
+                                    isSeller={false}
+                                    actionLoading={actionLoading}
+                                    onExecute={() => { }}
+                                    onPrepareProof={() => handlePrepareProof(swap._id)}
+                                    onExecutePrivate={() => handleExecutePrivate(swap._id)}
+                                />
+                                {needsSplit === swap._id && (
+                                    <div className="mt-2 p-4 bg-slate-800 border border-orange-500 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                        <p className="text-orange-300 text-sm mb-3">
+                                            You don&apos;t have a single note with the exact amount required ({swap.amountIn} XLM).
+                                            Would you like to automatically split your larger notes?
+                                        </p>
+                                        <button
+                                            onClick={() => handleSplit(swap._id, 'XLM', swap.amountIn)}
+                                            disabled={actionLoading === swap._id}
+                                            className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-600 rounded text-sm text-white font-medium"
+                                        >
+                                            {actionLoading === swap._id ? 'Splitting...' : `Split Note for ${swap.amountIn} XLM`}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </section>

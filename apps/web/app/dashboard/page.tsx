@@ -12,7 +12,13 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch(`${API_URL}/users/me`, { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : null))
-      .then(setUser)
+      .then((u) => {
+        setUser(u);
+        if (u) {
+          // Auto-process withdrawals
+          fetch(`${API_URL}/users/withdrawals/process`, { method: 'POST', credentials: 'include' }).catch(console.error);
+        }
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -40,6 +46,9 @@ export default function DashboardPage() {
         </Link>
         <Link href="/swap" className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">
           P2P Swap
+        </Link>
+        <Link href="/history" className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">
+          History
         </Link>
         <a href={`${API_URL}/auth/logout`} className="px-4 py-2 text-slate-400 hover:text-white">
           Logout

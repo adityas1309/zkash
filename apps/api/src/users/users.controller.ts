@@ -114,4 +114,19 @@ export class UsersController {
       return { success: false, error: message };
     }
   }
+
+  @Post('split')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async splitNote(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM'; amount: number }) {
+    if (!body?.asset || !body?.amount) return { success: false, error: 'Missing asset or amount' };
+    return this.usersService.splitNote(req.user._id, body.asset, body.amount);
+  }
+
+  @Get('history')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getHistory(@Req() req: any) {
+    return this.usersService.getHistory(req.user._id);
+  }
 }

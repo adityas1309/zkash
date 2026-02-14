@@ -64,6 +64,7 @@ export default function SwapOfferPage() {
                     bobId: offer.merchantId._id,
                     amountIn: amount,
                     amountOut,
+                    offerId: offer._id,
                 }),
             });
 

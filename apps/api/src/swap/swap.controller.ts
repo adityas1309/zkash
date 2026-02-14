@@ -10,15 +10,16 @@ export class SwapController {
   @Post('request')
   @UseGuards(SessionAuthGuard)
   request(
-    @Body() body: { bobId: string; amountIn: number; amountOut: number; offerId?: string },
+    @Body() body: { bobId: string; amountIn: number; amountOut: number; offerId: string },
     @Req() req: { user: { _id: Types.ObjectId } },
   ) {
+    if (!body.offerId) throw new Error('OfferId is required');
     return this.swapService.request(
       req.user._id,
       new Types.ObjectId(body.bobId),
       body.amountIn,
       body.amountOut,
-      body.offerId ? new Types.ObjectId(body.offerId) : undefined,
+      new Types.ObjectId(body.offerId),
     );
   }
 

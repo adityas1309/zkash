@@ -397,14 +397,47 @@ export class UsersService {
     }
 
     // 2. Generate Proof targeting USER'S own public key
-    const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);
-    const leaves = await this.sorobanService.getCommitments(poolAddress, user.stellarPublicKey);
-    const commitmentBytes = new Uint8Array(Buffer.from(note.commitment, 'hex'));
-    const stateIndex = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(commitmentBytes)));
+    // Retry loop to ensure Merkle root and leaves are consistent
+    let stateRoot: Uint8Array | undefined;
+    let commitmentBytes: Uint8Array | undefined;
+    let stateIndex: number | undefined;
+    let stateSiblings: Uint8Array[] | undefined;
 
-    if (stateIndex < 0) return { success: false, error: 'Note commitment not found on-chain' };
+    let retries = 20;
+    while (retries > 0) {
+      try {
+        const root = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);
+        const leaves = await this.sorobanService.getCommitments(poolAddress, user.stellarPublicKey);
 
-    const stateSiblings = await this.merkleTree.computeSiblingsForIndex(leaves, stateIndex, 20);
+        // Sanity check: Compute root from leaves to ensure consistency
+        const computedRoot = await this.merkleTree.computeRootFromLeaves(leaves, 20);
+        if (!Buffer.from(computedRoot).equals(Buffer.from(root))) {
+          console.warn(`[withdrawSelf] Root mismatch (OnChain vs Computed). Retrying (${retries} left)...`);
+          await new Promise(r => setTimeout(r, 2000));
+          retries--;
+          continue;
+        }
+
+        const comm = new Uint8Array(Buffer.from(note.commitment, 'hex'));
+        const idx = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(comm)));
+
+        if (idx < 0) return { success: false, error: 'Note commitment not found on-chain' };
+
+        stateRoot = root;
+        commitmentBytes = comm;
+        stateIndex = idx;
+        stateSiblings = await this.merkleTree.computeSiblingsForIndex(leaves, idx, 20);
+        break; // Consistent!
+      } catch (e) {
+        console.warn(`[withdrawSelf] Error fetching state (${retries} left):`, e);
+        retries--;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    if (!stateRoot || !commitmentBytes || stateIndex === undefined || !stateSiblings) {
+      return { success: false, error: 'Failed to fetch consistent Merkle state after retries' };
+    }
 
     try {
       const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
@@ -434,7 +467,28 @@ export class UsersService {
 
     } catch (e: any) {
       console.error('[withdrawSelf] error:', e);
-      return { success: false, error: e.message || String(e) };
+      const msg = e.message || String(e);
+
+      // Handle Contract Error #1: NullifierUsed
+      // This means the note was already spent on-chain. We should mark it as spent locally.
+      if (msg.includes('Error(Contract, #1)')) {
+        console.warn(`[withdrawSelf] Note ${note.label} already spent on-chain (NullifierUsed). Marking as spent.`);
+        try {
+          // We can't use nullifierSecret here easily as it's not in scope if we didn't get return
+          // But we have 'note' object from step 1
+          await this.markNoteSpent(userId, note.nullifier.toString(16));
+          return { success: false, error: 'Note was already spent. Local state updated.' };
+        } catch (markErr) {
+          console.error('[withdrawSelf] Failed to mark spent note:', markErr);
+        }
+      }
+
+      // Handle Contract Error #3: InsufficientBalance
+      if (msg.includes('Error(Contract, #3)')) {
+        return { success: false, error: `Pool Underfunded: Contract balance is lower than withdrawal amount ${amount}. This may be due to storage rent or state mismatch.` };
+      }
+
+      return { success: false, error: msg };
     }
   }
 
@@ -762,8 +816,9 @@ export class UsersService {
 
   /** Mark a spendable note as spent (by nullifier secret OR nullifier hash). */
   async markNoteSpent(userId: string, nullifierHex: string): Promise<void> {
+    // Fix: Ensure userId is an ObjectId
     const notes = await this.spendableNoteModel
-      .find({ userId, spent: false })
+      .find({ userId: new Types.ObjectId(userId), spent: false })
       .exec();
 
     const targetHex = nullifierHex.replace(/^0x/, '').toLowerCase().padStart(64, '0');
@@ -811,17 +866,111 @@ export class UsersService {
         const { nullifierHash } = await computeCommitment(noteFields);
         const hashHex = nullifierHash.toString(16).padStart(64, '0');
 
+        // Debug logging
+        console.log(`[markNoteSpent] Checking note ${note._id}: ComputedHash=${hashHex} vs Target=${targetHex}`);
+
         if (hashHex === targetHex) {
           console.log(`[markNoteSpent] Marked note ${note._id} as spent (matched hash)`);
           note.spent = true;
           await note.save();
           return;
         }
-
       } catch (e) {
         console.warn(`[markNoteSpent] Error processing note ${note._id}:`, e);
       }
     }
-    console.warn(`[markNoteSpent] No note found for nullifier ${nullifierHex}`);
+    console.warn(`[markNoteSpent] No note found for nullifier ${nullifierHex}. Checked ${notes.length} notes.`);
+  }
+
+  /**
+   * Split a note by withdrawing it to public and re-depositing the exact required amount.
+   * The change remains in the public balance.
+   */
+  async splitNote(userId: string, asset: 'USDC' | 'XLM', amount: number): Promise<{ success: boolean; error?: string }> {
+    const user = await this.findById(userId);
+    if (!user || !user.googleId) return { success: false, error: 'User not found' };
+
+    const targetAmount = BigInt(Math.round(amount * Number(UsersService.SCALE_FACTOR)));
+
+    // 1. Find a note larger than amount
+    const notes = await this.getSpendableNotes(user._id.toString(), asset);
+    const largerNote = notes.find(n => n.value > targetAmount);
+
+    if (!largerNote) {
+      // Try merging: check if total balance is enough
+      const total = notes.reduce((sum, n) => sum + n.value, 0n);
+      if (total < targetAmount) {
+        return { success: false, error: `Insufficient private balance. Total: ${Number(total) / Number(UsersService.SCALE_FACTOR)}` };
+      }
+
+      // Merge strategy: Withdraw ALL notes, then deposit target amount.
+      // For simplicity/speed, we just withdraw the first few notes that sum up to > target.
+      let currentSum = 0n;
+      const notesToWithdraw: typeof notes = [];
+      for (const n of notes) {
+        notesToWithdraw.push(n);
+        currentSum += n.value;
+        if (currentSum >= targetAmount) break;
+      }
+
+      console.log(`[splitNote] Merging ${notesToWithdraw.length} notes to get ${amount}`);
+      for (const n of notesToWithdraw) {
+        const floatVal = Number(n.value) / Number(UsersService.SCALE_FACTOR);
+        const wRes = await this.withdrawSelf(userId, asset, floatVal);
+        if (!wRes.success) return { success: false, error: `Failed to withdraw note during merge: ${wRes.error}` };
+      }
+    } else {
+      // 2. Withdraw the larger note
+      console.log(`[splitNote] Found larger note ${largerNote.value}, withdrawing to split...`);
+      const floatVal = Number(largerNote.value) / Number(UsersService.SCALE_FACTOR);
+      const wRes = await this.withdrawSelf(userId, asset, floatVal);
+      if (!wRes.success) return { success: false, error: `Withdraw failed: ${wRes.error}` };
+    }
+
+    // 3. Wait a bit for ledger confirmation (simple delay for now, ideally watch event)
+    await new Promise(r => setTimeout(r, 6000));
+
+    // 4. Deposit the EXACT amount
+    console.log(`[splitNote] Re-depositing exact amount ${amount}...`);
+    const dRes = await this.deposit(userId, asset, amount);
+    if (dRes.error) return { success: false, error: `Deposit failed: ${dRes.error}` };
+
+    return { success: true };
+  }
+
+  async getHistory(userId: string) {
+    const encNotes = await this.encryptedNoteModel.find({ recipientId: userId }).sort({ createdAt: -1 }).exec();
+    const withdrawals = await this.pendingWithdrawalModel.find({ recipientId: userId }).sort({ createdAt: -1 }).exec();
+
+    const history: any[] = [];
+
+    // Incoming Transfers / Deposits
+    for (const n of encNotes) {
+      history.push({
+        type: n.txHash === 'pending' ? 'pending_transfer' : 'deposit_or_transfer',
+        asset: n.asset,
+        amount: '?', // Encrypted
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        date: (n as any).createdAt,
+        txHash: n.txHash,
+        id: n._id
+      });
+    }
+
+    // Withdrawals
+    for (const w of withdrawals) {
+      history.push({
+        type: 'withdrawal',
+        asset: w.asset,
+        amount: w.amount,
+        status: w.processed ? 'completed' : 'pending',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        date: (w as any).createdAt,
+        txHash: w.txHash,
+        id: w._id
+      });
+    }
+
+    return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 }

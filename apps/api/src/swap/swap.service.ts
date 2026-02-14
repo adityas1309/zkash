@@ -136,15 +136,23 @@ export class SwapService {
 
   /** Generate and store my proof for a locked swap (caller is alice or bob). */
   async prepareMyProof(swapId: string, userId: Types.ObjectId): Promise<{ ready: boolean; error?: string }> {
-    const swap = await this.swapModel.findById(swapId).exec();
+    const swap = await this.swapModel.findById(swapId).populate('offerId').exec();
     if (!swap || swap.status !== 'locked') return { ready: false, error: 'Swap not found or not locked' };
 
-    const isAlice = swap.aliceId.toString() === userId.toString();
-    const isBob = swap.bobId.toString() === userId.toString();
-    if (!isAlice && !isBob) return { ready: false, error: 'You are not a party to this swap' };
+    const offer = swap.offerId as unknown as Offer; // Offer is populated
+    if (!offer) return { ready: false, error: 'Offer not found for swap' };
 
-    const asset: 'USDC' | 'XLM' = isAlice ? 'USDC' : 'XLM';
-    const amountRequired = isAlice ? swap.amountOut : swap.amountIn;
+    const isDbAlice = swap.aliceId.toString() === userId.toString();
+    const isDbBob = swap.bobId.toString() === userId.toString();
+    if (!isDbAlice && !isDbBob) return { ready: false, error: 'You are not a party to this swap' };
+
+    // DYNAMIC MAPPING:
+    // Offer: Buyer gives assetIn, Seller gives assetOut.
+    // DB Alice (Buyer) -> Must prove she has assetIn.
+    // DB Bob (Seller) -> Must prove he has assetOut.
+
+    const asset: 'USDC' | 'XLM' = isDbAlice ? offer.assetIn : offer.assetOut;
+    const amountRequired = isDbAlice ? swap.amountIn : swap.amountOut;
 
     // Scale amount to stroops for comparison
     const minValue = BigInt(Math.round(amountRequired * 10_000_000));
@@ -155,21 +163,67 @@ export class SwapService {
     if (!poolAddress) return { ready: false, error: 'Pool not configured' };
 
     const notes = await this.usersService.getSpendableNotes(userId.toString(), asset, minValue);
-    if (notes.length === 0) return { ready: false, error: 'No spendable private balance for this asset. Deposit first.' };
+
+    // For ZK Swap, we must use an EXACT matching note because the contract 
+    // does not support "change" outputs. If we use a larger note, the difference is lost.
+    // NOTE: minValue is the scaled amount (stroops)
+    const note = notes.find(n => n.value === minValue);
+
+    if (!note) {
+      return {
+        ready: false,
+        error: `No private note with EXACT amount ${amountRequired} ${asset} found. Please use "Send to Self" to split your notes first.`
+      };
+    }
 
     // Get user's public key for the contract call
     const user = await this.userModel.findById(userId).exec();
     if (!user) return { ready: false, error: 'User not found' };
 
-    const note = notes[0];
-    const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);
+    let stateRoot: Uint8Array | undefined;
+    let leaves: Uint8Array[] | undefined;
+    let stateIndex: number | undefined;
+    let stateSiblings: Uint8Array[] | undefined;
+    let commitmentBytes: Uint8Array | undefined;
 
-    // Fetch on-chain commitments and compute a real Merkle path for this note commitment.
-    const leaves = await this.sorobanService.getCommitments(poolAddress, user.stellarPublicKey);
-    const commitmentBytes = new Uint8Array(Buffer.from(note.commitment, 'hex'));
-    const stateIndex = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(commitmentBytes)));
-    if (stateIndex < 0) return { ready: false, error: 'Deposit not indexed on-chain yet for this pool. Wait and retry.' };
-    const stateSiblings = await this.merkleTree.computeSiblingsForIndex(leaves, stateIndex, 20);
+    let retries = 20;
+    while (retries > 0) {
+      try {
+        const root = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);
+        const lvs = await this.sorobanService.getCommitments(poolAddress, user.stellarPublicKey);
+
+        const computed = await this.merkleTree.computeRootFromLeaves(lvs, 20);
+        if (!Buffer.from(computed).equals(Buffer.from(root))) {
+          console.warn(`[prepareMyProof] Root mismatch. Retrying (${retries} left)...`);
+          console.warn(`  On-chain Root: ${Buffer.from(root).toString('hex')}`);
+          console.warn(`  Computed Root: ${Buffer.from(computed).toString('hex')}`);
+          console.warn(`  Leaves Count:  ${lvs.length}`);
+
+          await new Promise(r => setTimeout(r, 2000));
+          retries--;
+          continue;
+        }
+
+        const comm = new Uint8Array(Buffer.from(note.commitment, 'hex'));
+        const idx = lvs.findIndex((l) => Buffer.from(l).equals(Buffer.from(comm)));
+        if (idx < 0) return { ready: false, error: 'Deposit not indexed on-chain yet. Wait and retry.' };
+
+        stateRoot = root;
+        leaves = lvs;
+        stateIndex = idx;
+        commitmentBytes = comm;
+        stateSiblings = await this.merkleTree.computeSiblingsForIndex(lvs, idx, 20);
+        break;
+      } catch (e) {
+        console.warn(`[prepareMyProof] Error fetching state:`, e);
+        retries--;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    if (!stateRoot || !stateSiblings || stateIndex === undefined || !commitmentBytes) {
+      return { ready: false, error: 'Failed to fetch consistent Merkle state after retries' };
+    }
 
     const { proofBytes, pubSignalsBytes, nullifierHash } = await this.proofService.generateProof(
       { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
@@ -241,17 +295,20 @@ export class SwapService {
     bobPubSignals: Uint8Array,
     bobNullifier: Uint8Array,
   ): Promise<{ txHash: string }> {
-    const swap = await this.swapModel.findById(swapId).exec();
+    const swap = await this.swapModel.findById(swapId).populate('offerId').exec();
     if (!swap || swap.status !== 'locked') throw new Error('Swap not found or not locked');
 
-    const alice = await this.userModel.findById(swap.aliceId).exec();
-    const bob = await this.userModel.findById(swap.bobId).exec();
-    if (!alice || !bob || !alice.googleId || !bob.googleId) throw new Error('Users not found');
+    const offer = swap.offerId as unknown as Offer;
+    if (!offer) throw new Error('Offer not found for swap');
 
-    const aliceEncKey = this.authService.getDecryptionKeyForUser(alice, alice.googleId, alice.email);
-    const bobEncKey = this.authService.getDecryptionKeyForUser(bob, bob.googleId, bob.email);
-    const aliceSecret = this.authService.decrypt(alice.stellarSecretKeyEncrypted, aliceEncKey);
-    const bobSecret = this.authService.decrypt(bob.stellarSecretKeyEncrypted, bobEncKey);
+    const dbAlice = await this.userModel.findById(swap.aliceId).exec(); // Buyer
+    const dbBob = await this.userModel.findById(swap.bobId).exec();     // Seller
+    if (!dbAlice || !dbBob || !dbAlice.googleId || !dbBob.googleId) throw new Error('Users not found');
+
+    const aliceEncKey = this.authService.getDecryptionKeyForUser(dbAlice, dbAlice.googleId, dbAlice.email);
+    const bobEncKey = this.authService.getDecryptionKeyForUser(dbBob, dbBob.googleId, dbBob.email);
+    const aliceSecret = this.authService.decrypt(dbAlice.stellarSecretKeyEncrypted, aliceEncKey);
+    const bobSecret = this.authService.decrypt(dbBob.stellarSecretKeyEncrypted, bobEncKey);
 
     const zkSwapAddress = process.env.ZK_SWAP_ADDRESS;
     const usdcPool = process.env.SHIELDED_POOL_ADDRESS;
@@ -261,37 +318,117 @@ export class SwapService {
     const amountUsdc = String(Math.round(swap.amountOut * 1_000_000));
     const amountXlm = String(Math.round(swap.amountIn * 1_000_000));
 
-    // GENERATE OUTCOME NOTES (Private Transfer Logic)
-    // 1. Note for Bob (USDC) - Created by Alice's transfer (amountOut)
-    // We generate it here on behalf of Bob (since we have access)
-    // In a real P2P system, Bob would generate this and give Alice the commitment/pubkey.
-    const { noteFields: bobNoteFields, commitmentBytes: bobCommitmentBytes } = await this.usersService.generateNote(bob._id.toString(), swap.amountOut);
+    // DYNAMIC ROLE MAPPING
+    // Offer: Sell AssetOut for AssetIn.
+    // DB Alice (Buyer) gives AssetIn.
+    // DB Bob (Seller) gives AssetOut.
 
-    // 2. Note for Alice (XLM) - Created by Bob's transfer (amountIn)
-    const { noteFields: aliceNoteFields, commitmentBytes: aliceCommitmentBytes } = await this.usersService.generateNote(alice._id.toString(), swap.amountIn);
+    // Contract Roles:
+    // Contract Alice: Always input USDC.
+    // Contract Bob: Always input XLM.
 
-    // COMPUTE NEW ROOTS
-    // 1. USDC Pool (for Bob's new note)
-    const usdcLeaves = await this.sorobanService.getCommitments(usdcPool, alice.stellarPublicKey); // Query with anyone's key
-    const newUsdcLeaves = [...usdcLeaves, bobCommitmentBytes];
-    const bobOutputRoot = await this.merkleTree.computeRootFromLeaves(newUsdcLeaves, 20);
+    let contractAliceProof, contractAlicePubSignals, contractAliceNullifier;
+    let contractAliceOutputCommitment, contractAliceOutputRoot; // New XLM Note (for whomever gave USDC)
 
-    // 2. XLM Pool (for Alice's new note)
-    const xlmLeaves = await this.sorobanService.getCommitments(xlmPool, bob.stellarPublicKey);
-    const newXlmLeaves = [...xlmLeaves, aliceCommitmentBytes];
-    const aliceOutputRoot = await this.merkleTree.computeRootFromLeaves(newXlmLeaves, 20);
+    let contractBobProof, contractBobPubSignals, contractBobNullifier;
+    let contractBobOutputCommitment, contractBobOutputRoot; // New USDC Note (for whomever gave XLM)
+
+    // Outcome Notes (To be saved):
+    let dbAliceNewNote, dbAliceNewCommitment;
+    let dbBobNewNote, dbBobNewCommitment;
+    let dbAliceNewAsset: 'USDC' | 'XLM', dbBobNewAsset: 'USDC' | 'XLM';
+
+    // Case 1: Buyer (Alice) gives USDC. Seller (Bob) gives XLM.
+    if (offer.assetIn === 'USDC' && offer.assetOut === 'XLM') {
+      console.log('[SwapService] Mapping: Buyer (Alice) -> USDC Giver, Seller (Bob) -> XLM Giver');
+
+      // DB Alice gives USDC -> Should Map to Contract Alice
+      contractAliceProof = aliceProof; // Proving USDC
+      contractAlicePubSignals = alicePubSignals;
+      contractAliceNullifier = aliceNullifier;
+
+      // DB Bob gives XLM -> Should Map to Contract Bob
+      contractBobProof = bobProof; // Proving XLM
+      contractBobPubSignals = bobPubSignals;
+      contractBobNullifier = bobNullifier;
+
+      // OUTPUTS
+      // Who gets USDC? (Who gave XLM?) -> DB Bob gave XLM. Contract Bob gives XLM.
+      // Contract: Bob Input XLM -> Output USDC (bob_output) to Bob.
+      // So DB Bob should get the new USDC note.
+      const bobRes = await this.usersService.generateNote(dbBob._id.toString(), swap.amountIn); // Getting amountIn (USDC)
+      dbBobNewNote = bobRes.noteFields;
+      dbBobNewCommitment = bobRes.commitmentBytes;
+      dbBobNewAsset = 'USDC';
+
+      contractBobOutputCommitment = dbBobNewCommitment;
+      const usdcLeaves = await this.sorobanService.getCommitments(usdcPool, dbBob.stellarPublicKey);
+      contractBobOutputRoot = await this.merkleTree.computeRootFromLeaves([...usdcLeaves, dbBobNewCommitment], 20);
+
+      // Who gets XLM? (Who gave USDC?) -> DB Alice gave USDC. Contract Alice gives USDC.
+      // Contract: Alice Input USDC -> Output XLM (alice_output) to Alice.
+      // So DB Alice should get the new XLM note.
+      const aliceRes = await this.usersService.generateNote(dbAlice._id.toString(), swap.amountOut); // Getting amountOut (XLM)
+      dbAliceNewNote = aliceRes.noteFields;
+      dbAliceNewCommitment = aliceRes.commitmentBytes;
+      dbAliceNewAsset = 'XLM';
+
+      contractAliceOutputCommitment = dbAliceNewCommitment;
+      const xlmLeaves = await this.sorobanService.getCommitments(xlmPool, dbAlice.stellarPublicKey);
+      contractAliceOutputRoot = await this.merkleTree.computeRootFromLeaves([...xlmLeaves, dbAliceNewCommitment], 20);
+    }
+    // Case 2: Buyer (Alice) gives XLM. Seller (Bob) gives USDC.
+    else if (offer.assetIn === 'XLM' && offer.assetOut === 'USDC') {
+      console.log('[SwapService] Mapping: Buyer (Alice) -> XLM Giver, Seller (Bob) -> USDC Giver');
+
+      // DB Alice gives XLM -> Should Map to Contract Bob
+      contractBobProof = aliceProof; // Proving XLM
+      contractBobPubSignals = alicePubSignals;
+      contractBobNullifier = aliceNullifier;
+
+      // DB Bob gives USDC -> Should Map to Contract Alice
+      contractAliceProof = bobProof; // Proving USDC
+      contractAlicePubSignals = bobPubSignals;
+      contractAliceNullifier = bobNullifier;
+
+      // OUTPUTS
+      // Who gets USDC? (Who gave XLM?) -> DB Alice gave XLM.
+      // Contract Bob Output (USDC).
+      // So DB Alice should get the new USDC note.
+      const aliceRes = await this.usersService.generateNote(dbAlice._id.toString(), swap.amountOut); // Getting amountOut (USDC)
+      dbAliceNewNote = aliceRes.noteFields;
+      dbAliceNewCommitment = aliceRes.commitmentBytes;
+      dbAliceNewAsset = 'USDC';
+
+      contractBobOutputCommitment = dbAliceNewCommitment;
+      // Compute root using Alice's view of USDC Pool (or any view, pool is global)
+      const usdcLeaves = await this.sorobanService.getCommitments(usdcPool, dbAlice.stellarPublicKey);
+      contractBobOutputRoot = await this.merkleTree.computeRootFromLeaves([...usdcLeaves, dbAliceNewCommitment], 20);
+
+      // Who gets XLM? (Who gave USDC?) -> DB Bob gave USDC.
+      // Contract Alice Output (XLM).
+      // So DB Bob should get the new XLM note.
+      const bobRes = await this.usersService.generateNote(dbBob._id.toString(), swap.amountIn); // Getting amountIn (XLM)
+      dbBobNewNote = bobRes.noteFields;
+      dbBobNewCommitment = bobRes.commitmentBytes;
+      dbBobNewAsset = 'XLM';
+
+      contractAliceOutputCommitment = dbBobNewCommitment;
+      const xlmLeaves = await this.sorobanService.getCommitments(xlmPool, dbBob.stellarPublicKey);
+      contractAliceOutputRoot = await this.merkleTree.computeRootFromLeaves([...xlmLeaves, dbBobNewCommitment], 20);
+    } else {
+      throw new Error(`Unsupported asset pair: ${offer.assetIn}/${offer.assetOut}`);
+    }
 
     console.log(`[SwapService] Executing Anonymous Swap...`);
-    console.log(`[SwapService] Alice Output (XLM) Commitment: ${Buffer.from(aliceCommitmentBytes).toString('hex')}`);
-    console.log(`[SwapService] Bob Output (USDC) Commitment: ${Buffer.from(bobCommitmentBytes).toString('hex')}`);
 
     // Determine who is signing (paying fee)
     let submitterSecret = aliceSecret;
-    if (executorId.equals(bob._id)) {
+    if (executorId.equals(dbBob._id)) {
       submitterSecret = bobSecret;
-      console.log('[SwapService] Bob is executing (paying fee)');
+      console.log('[SwapService] DB Bob is executing');
     } else {
-      console.log('[SwapService] Alice is executing (paying fee)');
+      console.log('[SwapService] DB Alice is executing');
     }
 
     const hash = await this.sorobanService.invokeZkSwapExecute(
@@ -301,23 +438,24 @@ export class SwapService {
       xlmPool,
       amountUsdc,
       amountXlm,
-      aliceProof,
-      alicePubSignals,
-      aliceNullifier,
-      aliceCommitmentBytes,
-      aliceOutputRoot,
-      bobProof,
-      bobPubSignals,
-      bobNullifier,
-      bobCommitmentBytes,
-      bobOutputRoot,
+      contractAliceProof,
+      contractAlicePubSignals,
+      contractAliceNullifier,
+      contractAliceOutputCommitment,
+      contractAliceOutputRoot,
+      contractBobProof,
+      contractBobPubSignals,
+      contractBobNullifier,
+      contractBobOutputCommitment,
+      contractBobOutputRoot,
     );
 
     // PERSIST NEW NOTES
-    // Bob receives USDC
-    await this.usersService.saveNote(bob._id.toString(), 'USDC', usdcPool, bobNoteFields, bobCommitmentBytes, hash);
-    // Alice receives XLM
-    await this.usersService.saveNote(alice._id.toString(), 'XLM', xlmPool, aliceNoteFields, aliceCommitmentBytes, hash);
+    await this.usersService.saveNote(dbAlice._id.toString(), dbAliceNewAsset,
+      dbAliceNewAsset === 'USDC' ? usdcPool : xlmPool, dbAliceNewNote, dbAliceNewCommitment, hash);
+
+    await this.usersService.saveNote(dbBob._id.toString(), dbBobNewAsset,
+      dbBobNewAsset === 'USDC' ? usdcPool : xlmPool, dbBobNewNote, dbBobNewCommitment, hash);
 
     // DEACTIVATE OFFER
     if (swap.offerId) {
@@ -325,17 +463,14 @@ export class SwapService {
     }
 
     // MARK INPUT NOTES AS SPENT
-    // We use the Nullifier Hash (provided as args) to find and mark the notes in DB.
     try {
       const aliceNullifierHex = Buffer.from(aliceNullifier).toString('hex');
-      await this.usersService.markNoteSpent(alice._id.toString(), aliceNullifierHex);
+      await this.usersService.markNoteSpent(dbAlice._id.toString(), aliceNullifierHex);
 
       const bobNullifierHex = Buffer.from(bobNullifier).toString('hex');
-      await this.usersService.markNoteSpent(bob._id.toString(), bobNullifierHex);
+      await this.usersService.markNoteSpent(dbBob._id.toString(), bobNullifierHex);
     } catch (e) {
       console.error('[SwapService] Failed to mark input notes as spent:', e);
-      // We don't throw here to avoid failing the whole request as the TX is already on-chain.
-      // But this ideally should be handled robustly (eventual consistency).
     }
 
     swap.status = 'completed';
