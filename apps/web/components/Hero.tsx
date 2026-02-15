@@ -26,10 +26,10 @@ export function Hero() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="flex flex-col gap-4"
         >
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white drop-shadow-lg">
+          <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white drop-shadow-2xl">
             Private <span className="text-indigo-500">P2P</span>
           </h1>
-          <p className="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto font-secondary font-light leading-relaxed">
             Privacy-first P2P payments and swaps on Stellar testnet.
             <br className="hidden md:block" />
             Send USDC and XLM privately without improved security.
@@ -45,7 +45,7 @@ export function Hero() {
           >
             <Button
               size="lg"
-              className="rounded-full px-12 py-8 text-lg shadow-indigo-500/20 shadow-2xl transition-transform hover:scale-105"
+              className="rounded-full px-12 py-8 text-xl font-bold shadow-indigo-500/20 shadow-2xl transition-transform hover:scale-105 tracking-wide"
             >
               Sign in with Google
             </Button>
