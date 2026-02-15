@@ -8,65 +8,15 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 
 
-function UnshieldButton({ asset, onDone }: { asset: 'USDC' | 'XLM'; onDone: () => void }) {
-  const [loading, setLoading] = useState(false);
-  const [amount, setAmount] = useState('1');
 
-  const handleUnshield = async () => {
-    const numAmount = parseFloat(amount);
-    if (!numAmount || numAmount <= 0) return alert('Invalid amount');
-    if (!confirm(`Unshield ${amount} ${asset} from private balance?`)) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/users/withdrawals/self`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ asset, amount: numAmount }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Unshielding initiated! TX: ${data.txHash}`);
-        onDone();
-      } else {
-        alert(`Failed: ${data.error}`);
-      }
-    } catch (e) {
-      alert('Error unshielding funds');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        type="number"
-        value={amount}
-        onChange={(e) => setAmount(e.target.value)}
-        className="w-20 px-2 py-1 text-sm bg-slate-900 border border-slate-700 rounded text-white"
-        placeholder="Amt"
-      />
-      <button
-        onClick={handleUnshield}
-        disabled={loading}
-        className="text-xs bg-red-900 hover:bg-red-800 text-red-100 px-2 py-1 rounded disabled:opacity-50"
-      >
-        {loading ? '...' : `Unshield ${asset}`}
-      </button>
-    </div>
-  );
-}
 
 export default function WalletPage() {
   const [user, setUser] = useState<{ username?: string; stellarPublicKey?: string } | null>(null);
   const [balance, setBalance] = useState<{ usdc: string; xlm: string }>({ usdc: '0', xlm: '0' });
-  const [privateBalance, setPrivateBalance] = useState<{ usdc: string; xlm: string }>({ usdc: '0', xlm: '0' });
+
   const [loading, setLoading] = useState(true);
   const [faucetLoading, setFaucetLoading] = useState(false);
-  const [depositLoading, setDepositLoading] = useState<'USDC' | 'XLM' | null>(null);
-  const [depositAmount, setDepositAmount] = useState('1');
+
 
   useEffect(() => {
     fetch(`${API_URL}/users/me`, { credentials: 'include' })
@@ -75,7 +25,7 @@ export default function WalletPage() {
         setUser(u);
         if (u) {
           fetchBalance();
-          fetchPrivateBalance();
+
         }
       })
       .finally(() => setLoading(false));
@@ -88,12 +38,14 @@ export default function WalletPage() {
       .catch(console.error);
   };
 
-  const fetchPrivateBalance = () => {
-    fetch(`${API_URL}/users/balance/private`, { credentials: 'include' })
-      .then(r => r.json())
-      .then((data) => setPrivateBalance(data))
-      .catch(console.error);
-  };
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(fetchBalance, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+
+
 
   // Auto-process withdrawals
   useEffect(() => {
@@ -109,7 +61,7 @@ export default function WalletPage() {
         if (data.processed > 0) {
           console.log(`Auto-processed ${data.processed} withdrawals. TX: ${data.txHashes?.join(', ')}`);
           fetchBalance();
-          fetchPrivateBalance();
+
         }
       } catch (e) {
         console.error('Auto-process error:', e);
@@ -161,36 +113,7 @@ export default function WalletPage() {
     }
   };
 
-  const handleDeposit = async (asset: 'USDC' | 'XLM') => {
-    setDepositLoading(asset);
-    const numAmount = parseFloat(depositAmount);
-    if (!numAmount || numAmount <= 0) {
-      alert('Invalid amount');
-      setDepositLoading(null);
-      return;
-    }
 
-    try {
-      const res = await fetch(`${API_URL}/users/deposit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ asset, amount: numAmount }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data.success) {
-        alert(`Deposit submitted! TX: ${data.txHash}`);
-        setTimeout(() => { fetchBalance(); fetchPrivateBalance(); }, 4000);
-      } else {
-        alert(data.error || 'Deposit failed');
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      alert(msg.includes('fetch') || msg.includes('Failed') ? 'Deposit request failed. The operation may be slow—try again in a moment.' : `Deposit failed: ${msg}`);
-    } finally {
-      setDepositLoading(null);
-    }
-  };
 
   if (loading) return <div className="p-8">Loading...</div>;
   if (!user) {
@@ -207,24 +130,7 @@ export default function WalletPage() {
     <main className="p-8 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">Wallet</h1>
 
-      <div className="bg-slate-800 rounded-lg p-6 mb-6">
-        <p className="text-slate-400 text-sm mb-2">Private Balance (from notes)</p>
-        <div className="flex items-center justify-between">
-          <p className="text-2xl font-mono">USDC: {privateBalance.usdc}</p>
-          <UnshieldButton asset="USDC" onDone={() => { fetchPrivateBalance(); fetchBalance(); }} />
-        </div>
-        <div className="flex items-center justify-between mt-2">
-          <p className="text-2xl font-mono">XLM: {privateBalance.xlm}</p>
-          <UnshieldButton asset="XLM" onDone={() => { fetchPrivateBalance(); fetchBalance(); }} />
-        </div>
 
-        <button
-          onClick={() => { fetchBalance(); fetchPrivateBalance(); }}
-          className="text-xs text-indigo-400 hover:text-indigo-300 mt-4 block"
-        >
-          Refresh Balance
-        </button>
-      </div>
 
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
         <p className="text-slate-400 text-sm mb-2">Public Balance (on-chain)</p>
@@ -232,33 +138,7 @@ export default function WalletPage() {
         <p className="text-2xl font-mono mt-2">XLM: {balance.xlm}</p>
       </div>
 
-      <div className="bg-slate-800 rounded-lg p-6 mb-6">
-        <p className="text-slate-400 text-sm mb-2">Deposit to private pool</p>
-        <p className="text-slate-500 text-xs mb-3">Requires public balance. Creates a spendable note for private send/swap.</p>
-        <div className="flex gap-2 items-center">
-          <input
-            type="number"
-            value={depositAmount}
-            onChange={(e) => setDepositAmount(e.target.value)}
-            className="w-24 px-3 py-2 bg-slate-900 border border-slate-700 rounded text-white"
-            placeholder="Amount"
-          />
-          <button
-            onClick={() => handleDeposit('USDC')}
-            disabled={depositLoading !== null}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg disabled:opacity-50"
-          >
-            {depositLoading === 'USDC' ? 'Depositing...' : 'Deposit USDC'}
-          </button>
-          <button
-            onClick={() => handleDeposit('XLM')}
-            disabled={depositLoading !== null}
-            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg disabled:opacity-50"
-          >
-            {depositLoading === 'XLM' ? 'Depositing...' : 'Deposit XLM'}
-          </button>
-        </div>
-      </div>
+
 
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
         <p className="text-slate-400 mb-4">Receive (QR)</p>

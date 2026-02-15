@@ -421,7 +421,12 @@ export class UsersService {
         const comm = new Uint8Array(Buffer.from(note.commitment, 'hex'));
         const idx = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(comm)));
 
-        if (idx < 0) return { success: false, error: 'Note commitment not found on-chain' };
+        if (idx < 0) {
+          console.warn(`[withdrawSelf] Note commitment not found on-chain. Retrying (${retries} left)...`);
+          await new Promise(r => setTimeout(r, 1000));
+          retries--;
+          continue;
+        }
 
         stateRoot = root;
         commitmentBytes = comm;

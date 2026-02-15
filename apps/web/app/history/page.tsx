@@ -13,7 +13,18 @@ export default function HistoryPage() {
     useEffect(() => {
         fetch(`${API_URL}/users/history`, { credentials: 'include' })
             .then((r) => r.ok ? r.json() : [])
-            .then(setHistory)
+            .then((data) => {
+                if (Array.isArray(data)) {
+                    setHistory(data);
+                } else {
+                    console.error('[HistoryPage] Expected array but got:', data);
+                    setHistory([]);
+                }
+            })
+            .catch((e) => {
+                console.error('[HistoryPage] Fetch error:', e);
+                setHistory([]);
+            })
             .finally(() => setLoading(false));
     }, []);
 
@@ -56,8 +67,8 @@ export default function HistoryPage() {
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-2 py-1 rounded text-xs ${item.status === 'completed' ? 'bg-green-500/20 text-green-400' :
-                                                    item.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                                                        'bg-slate-600 text-slate-300'
+                                                item.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                    'bg-slate-600 text-slate-300'
                                                 }`}>
                                                 {item.status || (item.txHash === 'pending' ? 'Pending' : 'Completed')}
                                             </span>
