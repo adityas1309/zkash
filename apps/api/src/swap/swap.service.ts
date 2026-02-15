@@ -476,7 +476,41 @@ export class SwapService {
     swap.status = 'completed';
     swap.txHash = hash;
     await swap.save();
+
+    // AUTO-WITHDRAWAL
+    // Attempt to withdraw funds to public account immediately for better UX.
+    // This is a "best effort" operation. If it fails, funds remain in Shielded Pool (private balance).
+    console.log(`[SwapService] Initiating Auto-Withdrawal for ${dbAlice.username} and ${dbBob.username}...`);
+
+    // 1. Withdraw for Alice (Received dbAliceNewAsset)
+    this.autoWithdrawSafe(dbAlice._id.toString(), dbAlice.username, dbAliceNewAsset,
+      dbAliceNewAsset === 'USDC' ? swap.amountIn : swap.amountOut);
+
+    // 2. Withdraw for Bob (Received dbBobNewAsset)
+    this.autoWithdrawSafe(dbBob._id.toString(), dbBob.username, dbBobNewAsset,
+      dbBobNewAsset === 'USDC' ? swap.amountIn : swap.amountOut);
+
     return { txHash: hash };
+  }
+
+  /**
+   * Helper to perform auto-withdrawal without throwing error to the main flow.
+   */
+  private async autoWithdrawSafe(userId: string, username: string, asset: 'USDC' | 'XLM', amount: number) {
+    try {
+      console.log(`[SwapService] Auto-withdrawing ${amount} ${asset} for ${username}...`);
+      // Add a small delay to ensure the Swap TX is fully ingested by Soroban/RPC
+      await new Promise(r => setTimeout(r, 2000));
+
+      const res = await this.usersService.withdrawSelf(userId, asset, amount);
+      if (res.success) {
+        console.log(`[SwapService] Auto-withdraw success for ${username}: ${res.txHash}`);
+      } else {
+        console.warn(`[SwapService] Auto-withdraw failed for ${username}: ${res.error}`);
+      }
+    } catch (e) {
+      console.error(`[SwapService] Auto-withdraw exception for ${username}:`, e);
+    }
   }
 
   async findByUser(userId: Types.ObjectId) {
