@@ -58,7 +58,7 @@ export function Globe({ className }: { className?: string }) {
       className={className}
       style={{
         width: "100%",
-        maxWidth: 600,
+        maxWidth: 1400,
         aspectRatio: 1,
         margin: "auto",
         position: "relative",

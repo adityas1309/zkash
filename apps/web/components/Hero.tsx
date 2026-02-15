@@ -9,15 +9,15 @@ export function Hero() {
   return (
     <div className="relative w-full h-screen overflow-hidden bg-slate-950 flex flex-col items-center justify-center text-center">
       {/* Background Globe - positioned mostly below the fold or behind content */}
-      <div className="absolute inset-x-0 bottom-[-40%] sm:bottom-[-20%] md:bottom-[-40%] lg:bottom-[-10%] z-0 pointer-events-none sm:pointer-events-auto opacity-60 sm:opacity-100 transition-opacity duration-1000">
-        <Globe className="w-full h-full max-w-[1000px] mx-auto" />
+      <div className="absolute inset-x-0 bottom-[-40%] sm:bottom-[-25%] md:bottom-[-30%] lg:bottom-[-15%] xl:bottom-[-10%] z-0 pointer-events-none sm:pointer-events-auto opacity-60 sm:opacity-100 transition-opacity duration-1000">
+        <Globe className="w-full h-full max-w-[1400px] mx-auto" />
       </div>
 
       {/* Optional Gradient Overlay for better text readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-transparent to-slate-950/80 z-0 pointer-events-none" />
 
       {/* Main Content */}
-      <div className="relative z-10 px-4 max-w-4xl mx-auto flex flex-col items-center gap-8 mt-[-10vh]">
+      <div className="relative z-10 px-4 max-w-5xl mx-auto flex flex-col items-center gap-8 mt-[-15vh]">
         {" "}
         {/* Adjust top margin to optical center */}
         <motion.div
