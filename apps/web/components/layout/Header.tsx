@@ -6,7 +6,7 @@ import { PrivacyToggle } from '@/components/ui/PrivacyToggle';
 import { motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Home, Wallet, Repeat, History, LogOut } from 'lucide-react';
+import { Home, Wallet, Repeat, History, LogOut, Banknote } from 'lucide-react';
 
 export function Header() {
     const { isPrivate, togglePrivacy } = usePrivacy();
@@ -16,6 +16,7 @@ export function Header() {
         { name: 'Dashboard', href: '/dashboard', icon: Home },
         { name: 'Wallet', href: '/wallet', icon: Wallet },
         { name: 'Swap', href: '/swap', icon: Repeat },
+        { name: 'Fiat (INR)', href: '/fiat', icon: Banknote },
         { name: 'History', href: '/history', icon: History },
     ];
 

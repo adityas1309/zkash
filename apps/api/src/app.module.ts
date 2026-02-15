@@ -8,6 +8,7 @@ import { SwapModule } from './swap/swap.module';
 import { FaucetModule } from './faucet/faucet.module';
 import { SorobanModule } from './soroban/soroban.module';
 import { IndexerModule } from './indexer/indexer.module';
+import { FiatModule } from './fiat/fiat.module';
 import { join } from 'path';
 
 @Module({
@@ -35,6 +36,7 @@ import { join } from 'path';
     FaucetModule,
     SorobanModule,
     IndexerModule,
+    FiatModule,
   ],
 })
 export class AppModule { }
