@@ -315,8 +315,8 @@ export class SwapService {
     if (!zkSwapAddress || !usdcPool) throw new Error('ZK_SWAP_ADDRESS and SHIELDED_POOL_ADDRESS required');
     const xlmPool = process.env.SHIELDED_POOL_XLM_ADDRESS ?? usdcPool;
 
-    const amountUsdc = String(Math.round(swap.amountOut * 1_000_000));
-    const amountXlm = String(Math.round(swap.amountIn * 1_000_000));
+    const amountUsdc = String(Math.round(swap.amountOut * 10_000_000));
+    const amountXlm = String(Math.round(swap.amountIn * 10_000_000));
 
     // DYNAMIC ROLE MAPPING
     // Offer: Sell AssetOut for AssetIn.
@@ -482,13 +482,11 @@ export class SwapService {
     // This is a "best effort" operation. If it fails, funds remain in Shielded Pool (private balance).
     console.log(`[SwapService] Initiating Auto-Withdrawal for ${dbAlice.username} and ${dbBob.username}...`);
 
-    // 1. Withdraw for Alice (Received dbAliceNewAsset)
-    this.autoWithdrawSafe(dbAlice._id.toString(), dbAlice.username, dbAliceNewAsset,
-      dbAliceNewAsset === 'USDC' ? swap.amountIn : swap.amountOut);
+    // 1. Withdraw for Alice (Received dbAliceNewAsset -> Always amountOut)
+    this.autoWithdrawSafe(dbAlice._id.toString(), dbAlice.username, dbAliceNewAsset, swap.amountOut);
 
-    // 2. Withdraw for Bob (Received dbBobNewAsset)
-    this.autoWithdrawSafe(dbBob._id.toString(), dbBob.username, dbBobNewAsset,
-      dbBobNewAsset === 'USDC' ? swap.amountIn : swap.amountOut);
+    // 2. Withdraw for Bob (Received dbBobNewAsset -> Always amountIn)
+    this.autoWithdrawSafe(dbBob._id.toString(), dbBob.username, dbBobNewAsset, swap.amountIn);
 
     return { txHash: hash };
   }
@@ -496,21 +494,53 @@ export class SwapService {
   /**
    * Helper to perform auto-withdrawal without throwing error to the main flow.
    */
+  /**
+   * Helper to perform auto-withdrawal with robust retries.
+   * Retries for up to 10 minutes to handle slow indexing or network issues.
+   */
   private async autoWithdrawSafe(userId: string, username: string, asset: 'USDC' | 'XLM', amount: number) {
-    try {
-      console.log(`[SwapService] Auto-withdrawing ${amount} ${asset} for ${username}...`);
-      // Add a small delay to ensure the Swap TX is fully ingested by Soroban/RPC
-      await new Promise(r => setTimeout(r, 2000));
+    const MAX_RETRIES = 20; // 20 attempts
+    const RETRY_DELAY_MS = 30_000; // 30 seconds between attempts
+    // Total duration: ~10 minutes coverage
 
-      const res = await this.usersService.withdrawSelf(userId, asset, amount);
-      if (res.success) {
-        console.log(`[SwapService] Auto-withdraw success for ${username}: ${res.txHash}`);
-      } else {
-        console.warn(`[SwapService] Auto-withdraw failed for ${username}: ${res.error}`);
+    // Initial delay for propagation
+    console.log(`[SwapService] delaying auto-withdraw for 10s...`);
+    await new Promise(r => setTimeout(r, 10000));
+
+    let attempt = 1;
+    while (attempt <= MAX_RETRIES) {
+      try {
+        console.log(`[SwapService] Auto-withdraw attempt ${attempt}/${MAX_RETRIES} for ${username} (${amount} ${asset})...`);
+        const res = await this.usersService.withdrawSelf(userId, asset, amount);
+
+        if (res.success) {
+          console.log(`[SwapService] Auto-withdraw SUCCESS for ${username}: ${res.txHash}`);
+          return; // Done!
+        }
+
+        // If failed, log and wait
+        console.warn(`[SwapService] Auto-withdraw attempt ${attempt} failed: ${res.error}`);
+
+        // If error is "Note not found", it implies indexing lag.
+        // If error is "InsufficientBalance", maybe note not found yet?
+        // If error is "User not found", abort.
+        if (typeof res.error === 'string' && res.error.includes('User not found')) {
+          console.error('[SwapService] Aborting auto-withdraw: User not found');
+          return;
+        }
+
+      } catch (e) {
+        console.error(`[SwapService] Auto-withdraw exception attempt ${attempt}:`, e);
       }
-    } catch (e) {
-      console.error(`[SwapService] Auto-withdraw exception for ${username}:`, e);
+
+      // Wait before next retry
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      }
+      attempt++;
     }
+
+    console.error(`[SwapService] Auto-withdraw GAVE UP for ${username} after ${MAX_RETRIES} attempts. manual withdrawal required.`);
   }
 
   async findByUser(userId: Types.ObjectId) {

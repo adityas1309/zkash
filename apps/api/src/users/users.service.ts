@@ -403,7 +403,7 @@ export class UsersService {
     let stateIndex: number | undefined;
     let stateSiblings: Uint8Array[] | undefined;
 
-    let retries = 20;
+    let retries = 60; // Increased from 20 to 60 to allow more time for indexing
     while (retries > 0) {
       try {
         const root = await this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey);

@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePrivacy } from '@/context/PrivacyContext';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { ArrowLeft, RefreshCw, Shield, Globe, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
@@ -20,85 +25,96 @@ function LockedSwapCard({
     onPrepareProof: () => void;
     onExecutePrivate: () => void;
 }) {
+    const { isPrivate } = usePrivacy();
+
     return (
-        <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 shadow-lg">
-            <div className="mb-6">
-                <p className="font-medium text-slate-300 mb-1">
-                    {isSeller ? 'Buyer' : 'Seller'}: <span className="text-indigo-400">@{isSeller ? swap.aliceId?.username : swap.bobId?.username || 'Unknown'}</span>
-                </p>
-                <div className="text-xl font-semibold text-white mb-2">
+        <Card variant="neon" className="mb-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Lock size={100} />
+            </div>
+
+            <div className="mb-6 relative z-10">
+                <div className="flex justify-between items-start mb-2">
+                    <p className="font-medium text-slate-300">
+                        {isSeller ? 'Buyer' : 'Seller'}: <span className="text-indigo-400">@{isSeller ? swap.aliceId?.username : swap.bobId?.username || 'Unknown'}</span>
+                    </p>
+                    <Badge variant="default" className="bg-blue-500/20 text-blue-300 border-blue-500/30">LOCKED</Badge>
+                </div>
+
+                <div className="text-xl font-semibold text-white mb-2 flex items-center gap-2">
                     {isSeller
-                        ? `Send ${swap.amountOut} USDC → Receive ${swap.amountIn} XLM`
-                        : `Send ${swap.amountIn} XLM → Receive ${swap.amountOut} USDC`
+                        ? <>{swap.amountOut} USDC <ArrowLeft className="w-4 h-4 text-slate-500" /> {swap.amountIn} XLM</>
+                        : <>{swap.amountIn} XLM <ArrowLeft className="w-4 h-4 text-slate-500" /> {swap.amountOut} USDC</>
                     }
                 </div>
-                <p className="text-slate-500 text-sm">
+                <p className="text-slate-500 text-xs flex items-center gap-1">
+                    <Clock size={12} />
                     {new Date(swap.createdAt).toLocaleString()}
                 </p>
             </div>
 
-            <div className="mb-6">
-                <span className="text-blue-400 font-bold tracking-widest text-sm uppercase">
-                    LOCKED
-                </span>
-            </div>
-
-            <div className="space-y-4">
+            <div className="space-y-3 relative z-10">
                 {isSeller && (
-                    <button
-                        onClick={onExecute}
-                        disabled={actionLoading === swap._id}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg font-medium transition-colors text-white"
-                    >
-                        {actionLoading === swap._id ? (
-                            <span className="flex justify-center items-center gap-2">
-                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Executing...
-                            </span>
-                        ) : 'Execute (public)'}
-                    </button>
+                    !isPrivate ? (
+                        <Button
+                            onClick={onExecute}
+                            isLoading={actionLoading === swap._id}
+                            className="w-full"
+                            variant="primary"
+                        >
+                            Execute Publicly
+                        </Button>
+                    ) : (
+                        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 text-center">
+                            <p className="text-sm text-slate-400 mb-2">Switch to Public mode to execute on-chain</p>
+                            <Button disabled variant="secondary" className="w-full opacity-50 cursor-not-allowed">
+                                Execute Publicly (Disabled in Private Mode)
+                            </Button>
+                        </div>
+                    )
                 )}
 
-                {swap.proofReady ? (
-                    <button
-                        onClick={onExecutePrivate}
-                        disabled={actionLoading === swap._id}
-                        className="w-full py-3 bg-green-600 hover:bg-green-500 disabled:bg-slate-600 rounded-lg text-white font-medium transition-colors"
-                    >
-                        {actionLoading === swap._id ? (
-                            <span className="flex justify-center items-center gap-2">
-                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Executing Private Swap...
-                            </span>
-                        ) : 'Execute private swap'}
-                    </button>
-                ) : !swap.hasMyProof ? (
-                    <button
-                        onClick={onPrepareProof}
-                        disabled={actionLoading === swap._id}
-                        className="w-full py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-lg text-white font-medium transition-colors"
-                    >
-                        {actionLoading === swap._id ? (
-                            <span className="flex justify-center items-center gap-2">
-                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Preparing Proof...
-                            </span>
-                        ) : 'Prepare private execution'}
-                    </button>
+                {isPrivate ? (
+                    swap.proofReady ? (
+                        <Button
+                            onClick={onExecutePrivate}
+                            isLoading={actionLoading === swap._id}
+                            className="w-full"
+                            variant="primary" // Greenish via custom class or just primary
+                        >
+                            <Shield className="w-4 h-4 mr-2" />
+                            Execute Private Swap
+                        </Button>
+                    ) : !swap.hasMyProof ? (
+                        <Button
+                            onClick={onPrepareProof}
+                            isLoading={actionLoading === swap._id}
+                            className="w-full"
+                            variant="primary"
+                        >
+                            <Shield className="w-4 h-4 mr-2" />
+                            Prepare Private Execution
+                        </Button>
+                    ) : (
+                        <div className="p-3 bg-slate-800/50 rounded-lg text-center border border-slate-700">
+                            <p className="text-slate-400 text-sm">Your proof is submitted. Waiting for counterparty.</p>
+                        </div>
+                    )
                 ) : (
-                    <p className="text-slate-500 text-sm text-center">Your proof is submitted. Waiting for the other party.</p>
+                    // In Public mode, show Private option but maybe less prominent or disabled/hinted?
+                    // The requirement says "if public is selected then all send p2p swap will be publicly exuted"
+                    // "if private is on then all things will be privatelt executed through zk flow"
+                    // So we should hide the other option or disable it to enforce the toggle.
+                    <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 text-center">
+                        <p className="text-sm text-slate-400 mb-2">Switch to Private mode for ZK Swap</p>
+                        <Button disabled variant="secondary" className="w-full opacity-50 cursor-not-allowed">
+                            <Shield className="w-4 h-4 mr-2" />
+                            Private Swap (Disabled in Public Mode)
+                        </Button>
+                    </div>
                 )}
             </div>
-        </div>
+        </Card>
     );
 }
 
@@ -121,6 +137,7 @@ interface Swap {
 }
 
 export default function MySwapsPage() {
+    const { isPrivate } = usePrivacy();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [pendingSwaps, setPendingSwaps] = useState<Swap[]>([]);
     const [allSwaps, setAllSwaps] = useState<Swap[]>([]);
@@ -128,6 +145,8 @@ export default function MySwapsPage() {
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [needsSplit, setNeedsSplit] = useState<string | null>(null);
 
     const fetchData = async () => {
@@ -192,6 +211,7 @@ export default function MySwapsPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
+                body: JSON.stringify({}),
             });
             if (!res.ok) {
                 const data = await res.json();
@@ -326,7 +346,6 @@ export default function MySwapsPage() {
                 await handleSuccess(data);
             } catch (err: unknown) {
                 const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
-
                 if (msg.includes('No private note with EXACT amount')) {
                     // Auto-split logic
                     console.log('Exact note missing, attempting auto-split...');
@@ -336,22 +355,15 @@ export default function MySwapsPage() {
                         const splitMsg = splitErr instanceof Error ? splitErr.message : String(splitErr);
                         if (splitMsg.includes('Insufficient private balance')) {
                             await runDepositFlow();
-                            // Retry preparation after deposit (deposit creates the note we need, or gives us balance to split)
-                            // Ideally deposit creates a spendable note.
-                            // However, if we needed to split, and we just deposited, we might have a NEW note.
-                            // It's safest to retry the whole flow (which will check exact note again).
                         } else {
                             throw splitErr;
                         }
                     }
-
-                    // Retry preparation
                     setProcessStep('Retrying proof preparation...');
                     const retryData = await attemptPrepare();
                     await handleSuccess(retryData);
 
                 } else if (msg.includes('Insufficient private balance')) {
-                    // Direct insufficient balance error (if backend throws it directly)
                     await runDepositFlow();
                     setProcessStep('Retrying proof preparation after deposit...');
                     const retryData = await attemptPrepare();
@@ -362,7 +374,6 @@ export default function MySwapsPage() {
             }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
-            // Only set error if it's not a cancellation
             if (msg !== 'Cancelled by user.') {
                 setError(msg);
             }
@@ -377,16 +388,16 @@ export default function MySwapsPage() {
 
 
     const getStatusBadge = (status: string) => {
-        const colors: Record<string, string> = {
-            requested: 'bg-yellow-500/20 text-yellow-300',
-            locked: 'bg-blue-500/20 text-blue-300',
-            completed: 'bg-green-500/20 text-green-300',
-            cancelled: 'bg-red-500/20 text-red-300',
+        const variants: Record<string, "warning" | "default" | "success" | "error"> = {
+            requested: 'warning',
+            locked: 'default', // blue-ish
+            completed: 'success',
+            cancelled: 'error',
         };
         return (
-            <span className={`px-2 py-1 rounded text-xs font-medium ${colors[status] || 'bg-slate-500/20 text-slate-300'}`}>
+            <Badge variant={variants[status] || 'default'}>
                 {status.toUpperCase()}
-            </span>
+            </Badge>
         );
     };
 
@@ -399,69 +410,94 @@ export default function MySwapsPage() {
 
     if (loading) {
         return (
-            <main className="p-8 max-w-2xl mx-auto">
-                <div className="text-slate-400">Loading swaps...</div>
-            </main>
+            <div className="flex items-center justify-center min-h-[50vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+            </div>
         );
     }
 
     return (
-        <main className="p-8 max-w-2xl mx-auto">
-            <h1 className="text-2xl font-bold mb-2">My Swaps</h1>
-            <p className="text-slate-400 text-sm mb-6">
-                Logged in as: <span className="text-indigo-400">@{currentUser?.username || 'Unknown'}</span>
-            </p>
+        <main className="p-4 md:p-8 max-w-4xl mx-auto">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">My Swaps</h1>
+                    <p className="text-slate-400 text-sm mt-1">
+                        Logged in as: <span className="text-indigo-400">@{currentUser?.username || 'Unknown'}</span>
+                    </p>
+                </div>
+                <Badge variant={isPrivate ? 'success' : 'warning'} className="px-3 py-1">
+                    {isPrivate ? (
+                        <span className="flex items-center gap-1"><Shield size={14} /> Private Mode Active</span>
+                    ) : (
+                        <span className="flex items-center gap-1"><Globe size={14} /> Public Mode Active</span>
+                    )}
+                </Badge>
+            </div>
 
             {error && (
-                <div className="bg-red-900/50 border border-red-500 text-red-300 p-3 rounded-lg mb-6">
-                    {error}
-                </div>
+                <Card variant="default" className="bg-red-900/20 border-red-500/50 mb-6 flex items-start gap-4">
+                    <XCircle className="text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-red-200">{error}</p>
+                </Card>
             )}
 
             {success && (
-                <div className="bg-green-900/50 border border-green-500 text-green-300 p-3 rounded-lg mb-6">
-                    {success}
-                </div>
+                <Card variant="default" className="bg-green-900/20 border-green-500/50 mb-6 flex items-start gap-4">
+                    <CheckCircle className="text-green-400 shrink-0 mt-0.5" />
+                    <p className="text-green-200">{success}</p>
+                </Card>
+            )}
+
+            {autoProcessing && (
+                <Card variant="neon" className="mb-6 flex items-center justify-center gap-3 p-4">
+                    <RefreshCw className="animate-spin text-indigo-400" />
+                    <span className="text-indigo-200 animate-pulse">{processStep || 'Processing...'}</span>
+                </Card>
             )}
 
             {/* Pending Swaps to Accept (as Seller) */}
             <section className="mb-8">
-                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <span className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></span>
-                    Pending Requests (You&apos;re the Seller)
+                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
+                    <div className="p-1.5 bg-yellow-500/20 rounded-lg">
+                        <Clock size={16} className="text-yellow-400" />
+                    </div>
+                    Pending Requests <span className="text-sm font-normal text-slate-500">(You are Seller)</span>
                 </h2>
 
                 {pendingSwaps.length === 0 ? (
-                    <p className="text-slate-400 bg-slate-800/50 rounded-lg p-4">
-                        No pending swap requests.
-                    </p>
+                    <Card variant="glass" className="text-center py-8">
+                        <p className="text-slate-500">No pending swap requests.</p>
+                    </Card>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="grid gap-4">
                         {pendingSwaps.map((swap) => (
-                            <div key={swap._id} className="bg-slate-800 rounded-lg p-4 border border-yellow-500/30">
-                                <div className="flex justify-between items-start mb-3">
+                            <Card key={swap._id} variant="default" className="border-l-4 border-l-yellow-500">
+                                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                                     <div>
-                                        <p className="font-medium">
-                                            Buyer: <span className="text-indigo-400">@{swap.aliceId?.username || 'Unknown'}</span>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="font-semibold text-white">@{swap.aliceId?.username || 'Unknown'}</span>
+                                            <Badge variant="warning">Wants to Buy</Badge>
+                                        </div>
+                                        <p className="text-slate-300 text-lg">
+                                            {swap.amountIn} XLM <span className="text-slate-500">→</span> {swap.amountOut} USDC
                                         </p>
-                                        <p className="text-slate-400 text-sm">
-                                            Wants: {swap.amountIn} XLM → {swap.amountOut} USDC
-                                        </p>
-                                        <p className="text-slate-500 text-xs mt-1">
+                                        <p className="text-slate-500 text-xs mt-2">
                                             {new Date(swap.createdAt).toLocaleString()}
                                         </p>
                                     </div>
-                                    {getStatusBadge(swap.status)}
+                                    <div className="flex flex-col items-end gap-2 text-right">
+                                        {getStatusBadge(swap.status)}
+                                        <Button
+                                            onClick={() => handleAccept(swap._id)}
+                                            isLoading={actionLoading === swap._id}
+                                            variant="primary"
+                                            size="sm"
+                                        >
+                                            Accept Swap
+                                        </Button>
+                                    </div>
                                 </div>
-
-                                <button
-                                    onClick={() => handleAccept(swap._id)}
-                                    disabled={actionLoading === swap._id}
-                                    className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-slate-600 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-                                >
-                                    {actionLoading === swap._id ? 'Accepting...' : 'Accept Swap'}
-                                </button>
-                            </div>
+                            </Card>
                         ))}
                     </div>
                 )}
@@ -470,28 +506,24 @@ export default function MySwapsPage() {
             {/* Locked Swaps to Execute (as Seller) */}
             {swapsAsSeller.filter(s => s.status === 'locked').length > 0 && (
                 <section className="mb-8">
-                    <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                        <span className="w-3 h-3 bg-blue-400 rounded-full"></span>
-                        Ready to Execute (You&apos;re the Seller)
+                    <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
+                        <div className="p-1.5 bg-blue-500/20 rounded-lg">
+                            <Lock size={16} className="text-blue-400" />
+                        </div>
+                        Ready to Execute <span className="text-sm font-normal text-slate-500">(You are Seller)</span>
                     </h2>
 
-                    <div className="space-y-4">
+                    <div className="grid gap-4">
                         {swapsAsSeller.filter(s => s.status === 'locked').map((swap) => (
-                            <div key={swap._id}>
-                                <LockedSwapCard
-                                    swap={swap}
-                                    isSeller
-                                    actionLoading={actionLoading}
-                                    onExecute={() => handleExecute(swap._id)}
-                                    onPrepareProof={() => handlePrepareProof(swap._id, true, swap.amountOut, 'USDC')}
-                                    onExecutePrivate={() => handleExecutePrivate(swap._id)}
-                                />
-                                {autoProcessing === swap._id && (
-                                    <div className="mt-2 text-center text-indigo-300 text-sm animate-pulse">
-                                        {processStep}
-                                    </div>
-                                )}
-                            </div>
+                            <LockedSwapCard
+                                key={swap._id}
+                                swap={swap}
+                                isSeller
+                                actionLoading={actionLoading}
+                                onExecute={() => handleExecute(swap._id)}
+                                onPrepareProof={() => handlePrepareProof(swap._id, true, swap.amountOut, 'USDC')}
+                                onExecutePrivate={() => handleExecutePrivate(swap._id)}
+                            />
                         ))}
                     </div>
                 </section>
@@ -500,24 +532,23 @@ export default function MySwapsPage() {
             {/* Locked Swaps (as Buyer) - submit proof */}
             {swapsAsBuyer.filter(s => s.status === 'locked').length > 0 && (
                 <section className="mb-8">
-                    <h2 className="text-lg font-semibold mb-4">Locked (You&apos;re the Buyer)</h2>
-                    <div className="space-y-4">
+                    <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
+                        <div className="p-1.5 bg-blue-500/20 rounded-lg">
+                            <Lock size={16} className="text-blue-400" />
+                        </div>
+                        Locked Swaps <span className="text-sm font-normal text-slate-500">(You are Buyer)</span>
+                    </h2>
+                    <div className="grid gap-4">
                         {swapsAsBuyer.filter(s => s.status === 'locked').map((swap) => (
-                            <div key={swap._id}>
-                                <LockedSwapCard
-                                    swap={swap}
-                                    isSeller={false}
-                                    actionLoading={actionLoading}
-                                    onExecute={() => { }}
-                                    onPrepareProof={() => handlePrepareProof(swap._id, false, swap.amountIn, 'XLM')}
-                                    onExecutePrivate={() => handleExecutePrivate(swap._id)}
-                                />
-                                {autoProcessing === swap._id && (
-                                    <div className="mt-2 text-center text-indigo-300 text-sm animate-pulse">
-                                        {processStep}
-                                    </div>
-                                )}
-                            </div>
+                            <LockedSwapCard
+                                key={swap._id}
+                                swap={swap}
+                                isSeller={false}
+                                actionLoading={actionLoading}
+                                onExecute={() => { }}
+                                onPrepareProof={() => handlePrepareProof(swap._id, false, swap.amountIn, 'XLM')}
+                                onExecutePrivate={() => handleExecutePrivate(swap._id)}
+                            />
                         ))}
                     </div>
                 </section>
@@ -525,25 +556,28 @@ export default function MySwapsPage() {
 
             {/* My Swaps as Buyer */}
             <section className="mb-8">
-                <h2 className="text-lg font-semibold mb-4">My Swap Requests (You&apos;re the Buyer)</h2>
+                <h2 className="text-xl font-semibold mb-4 text-white">Requested Swaps</h2>
 
                 {swapsAsBuyer.length === 0 ? (
-                    <p className="text-slate-400 bg-slate-800/50 rounded-lg p-4">
-                        You haven&apos;t initiated any swaps yet.
-                    </p>
+                    <Card variant="glass" className="text-center py-8">
+                        <p className="text-slate-500">You haven&apos;t initiated any swaps yet.</p>
+                        <Link href="/swap" className="mt-4 inline-block">
+                            <Button variant="outline">Browse Offers</Button>
+                        </Link>
+                    </Card>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="grid gap-4">
                         {swapsAsBuyer.map((swap) => (
-                            <div key={swap._id} className="bg-slate-800 rounded-lg p-4">
+                            <Card key={swap._id} variant="glass">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-medium">
+                                        <p className="font-medium text-slate-300">
                                             Seller: <span className="text-indigo-400">@{swap.bobId?.username || 'Unknown'}</span>
                                         </p>
-                                        <p className="text-slate-400 text-sm">
-                                            {swap.amountIn} XLM → {swap.amountOut} USDC
+                                        <p className="text-white mt-1">
+                                            {swap.amountIn} XLM <span className="text-slate-500">→</span> {swap.amountOut} USDC
                                         </p>
-                                        <p className="text-slate-500 text-xs mt-1">
+                                        <p className="text-slate-500 text-xs mt-2">
                                             {new Date(swap.createdAt).toLocaleString()}
                                         </p>
                                         {swap.txHash && swap.txHash !== 'pending' && (
@@ -551,15 +585,15 @@ export default function MySwapsPage() {
                                                 href={`https://stellar.expert/explorer/testnet/tx/${swap.txHash}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-green-400 text-xs hover:underline"
+                                                className="text-green-400 text-xs hover:underline mt-2 inline-flex items-center gap-1"
                                             >
-                                                View Transaction ↗
+                                                View Transaction <Globe size={10} />
                                             </a>
                                         )}
                                     </div>
                                     {getStatusBadge(swap.status)}
                                 </div>
-                            </div>
+                            </Card>
                         ))}
                     </div>
                 )}
@@ -568,17 +602,17 @@ export default function MySwapsPage() {
             {/* Completed Swaps as Seller */}
             {swapsAsSeller.filter(s => s.status === 'completed').length > 0 && (
                 <section className="mb-8">
-                    <h2 className="text-lg font-semibold mb-4">Completed Sales (You&apos;re the Seller)</h2>
+                    <h2 className="text-xl font-semibold mb-4 text-white">Completed Sales</h2>
 
-                    <div className="space-y-4">
+                    <div className="grid gap-4">
                         {swapsAsSeller.filter(s => s.status === 'completed').map((swap) => (
-                            <div key={swap._id} className="bg-slate-800 rounded-lg p-4">
+                            <Card key={swap._id} variant="glass" className="opacity-75 hover:opacity-100 transition-opacity">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="font-medium">
+                                        <p className="font-medium text-slate-300">
                                             Buyer: <span className="text-indigo-400">@{swap.aliceId?.username || 'Unknown'}</span>
                                         </p>
-                                        <p className="text-slate-400 text-sm">
+                                        <p className="text-white mt-1">
                                             Sold {swap.amountOut} USDC for {swap.amountIn} XLM
                                         </p>
                                         {swap.txHash && swap.txHash !== 'pending' && (
@@ -586,26 +620,31 @@ export default function MySwapsPage() {
                                                 href={`https://stellar.expert/explorer/testnet/tx/${swap.txHash}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="text-green-400 text-xs hover:underline"
+                                                className="text-green-400 text-xs hover:underline mt-2 inline-flex items-center gap-1"
                                             >
-                                                View Transaction ↗
+                                                View Transaction <Globe size={10} />
                                             </a>
                                         )}
                                     </div>
                                     {getStatusBadge(swap.status)}
                                 </div>
-                            </div>
+                            </Card>
                         ))}
                     </div>
                 </section>
             )}
 
             <div className="mt-8 flex gap-4">
-                <Link href="/swap" className="text-indigo-400 hover:text-indigo-300">
-                    ← Browse Offers
+                <Link href="/swap">
+                    <Button variant="ghost">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Browse Offers
+                    </Button>
                 </Link>
-                <Link href="/dashboard" className="text-slate-400 hover:text-white">
-                    Dashboard
+                <Link href="/dashboard">
+                    <Button variant="ghost">
+                        Dashboard
+                    </Button>
                 </Link>
             </div>
         </main>
