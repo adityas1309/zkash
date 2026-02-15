@@ -26,10 +26,10 @@ export function Hero() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="flex flex-col gap-4"
         >
-          <h1 className="text-6xl md:text-8xl font-bold tracking-tighter text-white drop-shadow-2xl">
-            Private <span className="text-indigo-500">P2P</span>
+          <h1 className="text-6xl md:text-7xl font-bold tracking-tighter text-white drop-shadow-2xl font-secondary">
+            Transfer <span className="text-indigo-500">. Convert .</span> Instantly
           </h1>
-          <p className="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto font-secondary font-light leading-relaxed">
+          <p className="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto  font-light leading-relaxed">
             Privacy-first P2P payments and swaps on Stellar testnet.
             <br className="hidden md:block" />
             Send USDC and XLM privately without improved security.
