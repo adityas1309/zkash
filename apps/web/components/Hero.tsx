@@ -45,7 +45,7 @@ export function Hero() {
           >
             <Button
               size="lg"
-              className="rounded-full px-12 py-8 text-xl font-bold shadow-indigo-500/20 shadow-2xl transition-transform hover:scale-105 tracking-wide"
+              className="rounded-full px-12 py-8 text-xl font-bold shadow-indigo-500/20  transition-transform hover:scale-105 tracking-wide "
             >
               Sign in with Google
             </Button>
