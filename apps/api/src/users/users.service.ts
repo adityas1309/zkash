@@ -167,6 +167,46 @@ export class UsersService {
     }
   }
 
+  async sendPublic(userId: string, destination: string, amount: string, assetCode: string = 'XLM'): Promise<string> {
+    const user = await this.findById(userId);
+    if (!user) throw new Error('User not found');
+    if (!user.googleId) throw new Error('Google ID required for decryption');
+
+    const encryptionKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
+    const secretKey = this.authService.decrypt(user.stellarSecretKeyEncrypted, encryptionKey);
+    const keypair = Keypair.fromSecret(secretKey);
+
+    try {
+      const account = await this.server.loadAccount(user.stellarPublicKey);
+      let asset = Asset.native();
+      if (assetCode !== 'XLM' && assetCode !== 'native') {
+        // Assume USDC for now if not native
+        const usdcIssuer = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+        asset = new Asset('USDC', usdcIssuer);
+      }
+
+      const tx = new TransactionBuilder(account, {
+        fee: '100',
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(Operation.payment({
+          destination: destination,
+          asset: asset,
+          amount: amount,
+        }))
+        .setTimeout(30)
+        .build();
+
+      tx.sign(keypair);
+      const res = await this.server.submitTransaction(tx);
+      return res.hash;
+    } catch (e: any) {
+      console.error('[UsersService] sendPublic Error:', e);
+      const msg = e?.response?.data?.extras?.result_codes?.operations?.[0] || e.message;
+      throw new Error(`Public Transfer failed: ${msg}`);
+    }
+  }
+
   /**
    * Private balance calculation:
    * 1. Sum of all UNSPENT SpendableNotes (funds currently held in private notes).

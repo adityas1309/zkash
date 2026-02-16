@@ -9,6 +9,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isPrivate } = usePrivacy();
 
+    // LANDING PAGE: Full view, no header/sidebar
+    if (pathname === '/') {
+        return <>{children}</>;
+    }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-indigo-500/30">
       {/* Background glow effects */}
