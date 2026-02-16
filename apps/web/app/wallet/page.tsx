@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
+import { Send, Droplet, ShieldCheck, Landmark } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -176,8 +177,8 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white selection:bg-indigo-500/30">
-      <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
+    <div className="min-h-screen  text-white selection:bg-indigo-500/30">
+      {/* <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
             Wallet
@@ -189,7 +190,7 @@ export default function WalletPage() {
             Dashboard
           </Link>
         </div>
-      </nav>
+      </nav> */}
 
       <main className="max-w-5xl mx-auto p-6 space-y-8">
         {/* Balance Cards */}
@@ -209,14 +210,14 @@ export default function WalletPage() {
 
             <div className="space-y-4">
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold font-mono tracking-tight">
+                <span className="text-2xl font-bold font-secondary tracking-tight">
                   {balance.usdc}
                 </span>
                 <span className="text-sm font-medium text-slate-400">USDC</span>
               </div>
               <div className="h-px bg-slate-700/50" />
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold font-mono tracking-tight">
+                <span className="text-2xl font-bold font-secondary tracking-tight">
                   {balance.xlm}
                 </span>
                 <span className="text-sm font-medium text-slate-400">XLM</span>
@@ -249,7 +250,7 @@ export default function WalletPage() {
             <div className="space-y-4 relative z-10">
               <div className="group">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-indigo-300/70">
+                  <span className="text-xs text-indigo-300/70 ">
                     Encrypted USDC
                   </span>
                   {Number(privateBalance.usdc) > 0 && (
@@ -263,7 +264,7 @@ export default function WalletPage() {
                   )}
                 </div>
                 <div className="flex items-baseline justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20">
-                  <span className="text-xl font-bold font-mono text-white">
+                  <span className="text-xl font-bold font-secondary text-white">
                     {privateBalance.usdc}
                   </span>
                   <span className="text-xs font-bold text-indigo-400">
@@ -288,7 +289,7 @@ export default function WalletPage() {
                   )}
                 </div>
                 <div className="flex items-baseline justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20">
-                  <span className="text-xl font-bold font-mono text-white">
+                  <span className="text-xl font-bold font-secondary text-white">
                     {privateBalance.xlm}
                   </span>
                   <span className="text-xs font-bold text-indigo-400">XLM</span>
@@ -309,9 +310,7 @@ export default function WalletPage() {
                 href="/wallet/send"
                 className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-indigo-600 hover:text-white border border-slate-700 hover:border-indigo-500 transition-all group gap-2"
               >
-                <span className="text-2xl group-hover:scale-110 transition-transform">
-                  💸
-                </span>
+                <Send className="w-6 h-6 text-white group-hover:text-white transition-colors" />
                 <span className="text-xs font-medium">Send Funds</span>
               </Link>
 
@@ -320,9 +319,7 @@ export default function WalletPage() {
                 disabled={faucetLoading}
                 className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-cyan-600 hover:text-white border border-slate-700 hover:border-cyan-500 transition-all group gap-2 disabled:opacity-50"
               >
-                <span className="text-2xl group-hover:scale-110 transition-transform">
-                  💧
-                </span>
+                <Droplet className="w-6 h-6 text-white group-hover:text-white transition-colors" />
                 <span className="text-xs font-medium">
                   {faucetLoading ? "Loading..." : "XLM Faucet"}
                 </span>
@@ -332,9 +329,7 @@ export default function WalletPage() {
                 onClick={handleTrustline}
                 className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-emerald-600 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all group gap-2"
               >
-                <span className="text-2xl group-hover:scale-110 transition-transform">
-                  🛡️
-                </span>
+                <ShieldCheck className="w-6 h-6 text-white group-hover:text-white transition-colors" />
                 <span className="text-xs font-medium">Add Trustline</span>
               </button>
 
@@ -344,9 +339,7 @@ export default function WalletPage() {
                 rel="noopener noreferrer"
                 className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-blue-600 hover:text-white border border-slate-700 hover:border-blue-500 transition-all group gap-2"
               >
-                <span className="text-2xl group-hover:scale-110 transition-transform">
-                  🏦
-                </span>
+                <Landmark className="w-6 h-6 text-white group-hover:text-white transition-colors" />
                 <span className="text-xs font-medium">Circle Faucet</span>
               </a>
             </div>
