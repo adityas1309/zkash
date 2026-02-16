@@ -13,6 +13,7 @@ export default function DashboardPage() {
     stellarPublicKey?: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [usernameCopied, setUsernameCopied] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,14 @@ export default function DashboardPage() {
       await navigator.clipboard.writeText(user.stellarPublicKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const copyUsername = async () => {
+    if (user?.username) {
+      await navigator.clipboard.writeText(user.username);
+      setUsernameCopied(true);
+      setTimeout(() => setUsernameCopied(false), 2000);
     }
   };
 
@@ -72,7 +81,7 @@ export default function DashboardPage() {
         <p className="text-slate-400">Welcome back, {user.username}</p>
       </div>
 
-      <div className=" mx-auto">
+      <div className="max-w-5xl mx-auto">
         {/* User Details Card */}
         <div className="rounded-2xl bg-slate-800/50 border border-white/5 p-6 space-y-6 backdrop-blur-sm">
           <h2 className="text-slate-300 font-medium flex items-center gap-2">
@@ -80,40 +89,64 @@ export default function DashboardPage() {
             Account Details
           </h2>
 
-          <div className="space-y-4">
-            <div className="space-y-1">
+          <div className="grid grid-cols-1 gap-6">
+            {/* Username Section */}
+            <div className="space-y-2">
               <p className="text-xs text-slate-500 uppercase tracking-wider">
                 Username
               </p>
-              <div className="bg-indigo-500/10 rounded-lg p-3 border border-indigo-500/20">
-                <p className="font-mono text-lg text-indigo-300 font-medium">
-                  {user.username}
-                </p>
+              <div className="group relative bg-slate-900/50 rounded-xl p-4 border border-white/10 hover:border-indigo-500/50 transition-all duration-300">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-mono text-lg text-indigo-400 font-medium">
+                      {user.username}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Share to receive funds
+                    </p>
+                  </div>
+                  <button
+                    onClick={copyUsername}
+                    className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                    title="Copy username"
+                  >
+                    {usernameCopied ? (
+                      <Check size={18} className="text-emerald-400" />
+                    ) : (
+                      <Copy size={18} />
+                    )}
+                  </button>
+                </div>
               </div>
-              <p className="text-[10px] text-slate-500">
-                Users can send money to this username directly.
-              </p>
             </div>
 
-            <div className="space-y-1">
+            {/* Stellar Address Section */}
+            <div className="space-y-2">
               <p className="text-xs text-slate-500 uppercase tracking-wider">
                 Stellar Address
               </p>
-              <div className="group relative bg-black/20 rounded-lg p-3 border border-white/5 hover:border-white/10 transition-colors">
-                <p className="font-mono text-sm text-slate-300 break-all pr-8">
-                  {user.stellarPublicKey}
-                </p>
-                <button
-                  onClick={copyToClipboard}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-white transition-colors"
-                  title="Copy address"
-                >
-                  {copied ? (
-                    <Check size={16} className="text-emerald-400" />
-                  ) : (
-                    <Copy size={16} />
-                  )}
-                </button>
+              <div className="group relative bg-slate-900/50 rounded-xl p-4 border border-white/10 hover:border-indigo-500/50 transition-all duration-300">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-sm text-slate-300 break-all">
+                      {user.stellarPublicKey}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Only for Stellar network
+                    </p>
+                  </div>
+                  <button
+                    onClick={copyToClipboard}
+                    className="p-2 rounded-lg bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                    title="Copy address"
+                  >
+                    {copied ? (
+                      <Check size={18} className="text-emerald-400" />
+                    ) : (
+                      <Copy size={18} />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
