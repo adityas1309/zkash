@@ -4,8 +4,10 @@ import { motion } from "framer-motion";
 import { Globe } from "./ui/Globe";
 import { Button } from "./ui/Button";
 import Link from "next/link";
+import { useUser } from "../hooks/useUser";
 
 export function Hero() {
+  const { user, loading } = useUser();
   return (
     <div className="relative w-full h-screen overflow-hidden bg-slate-950 flex flex-col items-center justify-center text-center">
       {/* Background Globe - positioned mostly below the fold or behind content */}
@@ -27,7 +29,8 @@ export function Hero() {
           className="flex flex-col gap-4"
         >
           <h1 className="text-6xl md:text-7xl font-bold tracking-tighter text-white drop-shadow-2xl font-secondary">
-            Transfer <span className="text-indigo-500">. Convert .</span> Instantly
+            Transfer <span className="text-indigo-500">. Convert .</span>{" "}
+            Instantly
           </h1>
           <p className="text-xl md:text-2xl text-slate-300 max-w-2xl mx-auto  font-light leading-relaxed">
             Privacy-first P2P payments and swaps on Stellar testnet.
@@ -40,16 +43,29 @@ export function Hero() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.4, ease: "backOut" }}
         >
-          <Link
-            href={(process.env.NEXT_PUBLIC_API_URL ?? "/api") + "/auth/google"}
-          >
-            <Button
-              size="lg"
-              className="rounded-full px-12 py-8 text-xl font-bold shadow-indigo-500/20  transition-transform hover:scale-105 tracking-wide "
+          {user ? (
+            <Link href="/dashboard">
+              <Button
+                size="lg"
+                className="rounded-full px-12 py-8 text-xl font-bold shadow-indigo-500/20  transition-transform hover:scale-105 tracking-wide "
+              >
+                Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <Link
+              href={
+                (process.env.NEXT_PUBLIC_API_URL ?? "/api") + "/auth/google"
+              }
             >
-              Sign in with Google
-            </Button>
-          </Link>
+              <Button
+                size="lg"
+                className="rounded-full px-12 py-8 text-xl font-bold shadow-indigo-500/20  transition-transform hover:scale-105 tracking-wide "
+              >
+                Sign in with Google
+              </Button>
+            </Link>
+          )}
         </motion.div>
       </div>
     </div>
