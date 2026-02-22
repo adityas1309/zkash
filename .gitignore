@@ -24,3 +24,6 @@ shielded_pool_address.txt
 verifier_address.txt
 zk_swap_address.txt
 verification_key.json
+CIRCUIT_FILES.md
+.gitignore
+DEPLOYMENT.md
