@@ -26,7 +26,7 @@ Privacy-first P2P payments and crypto swap app on Stellar testnet. Send and trad
 MONGODB_URI=mongodb://localhost:27017/lop
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
+GOOGLE_CALLBACK_URL=https://lop-main.onrender.com/auth/google/callback
 FRONTEND_URL=http://localhost:3000
 SESSION_SECRET=your-secret
 CORS_ORIGIN=http://localhost:3000
@@ -44,7 +44,7 @@ ADMIN_SECRET_KEY=...
 # CIRCUIT_ZKEY_PATH=...
 
 # apps/web/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_API_URL=https://lop-main.onrender.com
 ```
 
 ### Install

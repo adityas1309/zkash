@@ -1765,7 +1765,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     super({
       clientID: process.env.GOOGLE_CLIENT_ID ?? '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-      callbackURL: process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:3001/auth/google/callback',
+      callbackURL: process.env.GOOGLE_CALLBACK_URL ?? 'https://lop-main.onrender.com/auth/google/callback',
       scope: ['email', 'profile'],
     });
   }
@@ -2617,7 +2617,7 @@ export default function Home() {
 
 import { useEffect } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
 
 export default function AuthGooglePage() {
   useEffect(() => {
@@ -2638,7 +2638,7 @@ export default function AuthGooglePage() {
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
 
 export default function DashboardPage() {
   const [user, setUser] = useState<{ username?: string; stellarPublicKey?: string } | null>(null);
@@ -2765,7 +2765,7 @@ export class AuthController {
   old_string: <Link
         href="/auth/google"
   new_string: <Link
-        href={(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '/auth/google'}
+        href={(process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com') + '/auth/google'}
 
 [Tool result] StrReplace
 
@@ -3858,7 +3858,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
 
 export default function WalletPage() {
   const [user, setUser] = useState<{ username?: string; stellarPublicKey?: string } | null>(null);
@@ -3952,7 +3952,7 @@ export default function WalletPage() {
 import { useState } from 'react';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
 
 export default function SendPage() {
   const [recipient, setRecipient] = useState('');
@@ -4026,7 +4026,7 @@ export default function SendPage() {
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
 
 export default function SwapPage() {
   const [offers, setOffers] = useState<Array<{ _id: string; assetIn: string; assetOut: string; rate: number; min: number; max: number }>>([]);
@@ -4084,7 +4084,7 @@ export default function SwapPage() {
 import { useState } from 'react';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
 
 export default function CreateOfferPage() {
   const [assetIn, setAssetIn] = useState('XLM');
@@ -4410,13 +4410,13 @@ Privacy-first P2P payments and crypto swap app on Stellar testnet. Send and trad
 MONGODB_URI=mongodb://localhost:27017/lop
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
+GOOGLE_CALLBACK_URL=https://lop-main.onrender.com/auth/google/callback
 FRONTEND_URL=http://localhost:3000
 SESSION_SECRET=your-secret
 CORS_ORIGIN=http://localhost:3000
 
 # apps/web/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:3001
+NEXT_PUBLIC_API_URL=https://lop-main.onrender.com
 ```
 
 ### Install
@@ -4473,7 +4473,7 @@ circom main.circom --r1cs --wasm --sym -o build
 MONGODB_URI=mongodb://localhost:27017/lop
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
+GOOGLE_CALLBACK_URL=https://lop-main.onrender.com/auth/google/callback
 FRONTEND_URL=http://localhost:3000
 SESSION_SECRET=change-this-in-production
 CORS_ORIGIN=http://localhost:3000
@@ -4576,13 +4576,13 @@ export default function ReputationBadge({ score }: { score: number }) {
 [Tool call] StrReplace
   path: c:\Users\singh\Downloads\lop\apps\web\app\page.tsx
   old_string: <Link
-        href={(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '/auth/google'}
+        href={(process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com') + '/auth/google'}
         className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium transition"
       >
         Sign in with Google
       </Link>
   new_string: <a
-        href={(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '/auth/google'}
+        href={(process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com') + '/auth/google'}
         className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-lg font-medium transition inline-block"
       >
         Sign in with Google
