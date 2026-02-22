@@ -8,7 +8,7 @@
 const BACKEND_URL =
   process.env.API_BACKEND_URL ??
   (process.env.NEXT_PUBLIC_API_URL?.startsWith('http') ? process.env.NEXT_PUBLIC_API_URL : null) ??
-  'https://lop-main.onrender.com';
+  'http://localhost:3001';
 
 const TIMEOUT_MS = 300_000; // 5 min
 

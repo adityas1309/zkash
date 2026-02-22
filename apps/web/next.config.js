@@ -12,7 +12,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'https://lop-main.onrender.com/:path*',
+        destination: 'http://localhost:3001/:path*',
       },
     ];
   },

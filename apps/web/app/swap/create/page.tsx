@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ArrowLeft, CheckCircle, AlertCircle, Plus } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'https://lop-main.onrender.com';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function CreateOfferPage() {
   const router = useRouter();
