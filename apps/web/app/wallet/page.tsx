@@ -5,8 +5,7 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { Send, Droplet, ShieldCheck, Landmark } from "lucide-react";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "https://lop-main.onrender.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function WalletPage() {
   const [user, setUser] = useState<{

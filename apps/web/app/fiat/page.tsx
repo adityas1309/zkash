@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ArrowRight, Wallet, Shield, Building, Info } from "lucide-react";
 import RazorpayLoader from "@/components/RazorpayLoader";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "https://lop-main.onrender.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function FiatPage() {
   const [activeTab, setActiveTab] = useState<"buy" | "sell">("buy");

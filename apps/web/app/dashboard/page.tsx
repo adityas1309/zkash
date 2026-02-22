@@ -5,8 +5,7 @@ import Link from "next/link";
 import { Wallet, Repeat, History, LogOut, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "https://lop-main.onrender.com";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function DashboardPage() {
   const [user, setUser] = useState<{
