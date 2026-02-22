@@ -1,13 +1,14 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { ArrowRight, Plus, RefreshCw, Star, Wallet, Globe } from 'lucide-react';
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { ArrowRight, Plus, RefreshCw, Star, Wallet, Globe } from "lucide-react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? "https://lop-main.onrender.com";
 
 interface Offer {
   _id: string;
@@ -87,25 +88,40 @@ export default function SwapPage() {
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {offers.map((o) => (
-              <Card key={o._id} variant="glass" className="hover:bg-slate-800/50 transition-colors group">
+              <Card
+                key={o._id}
+                variant="glass"
+                className="hover:bg-slate-800/50 transition-colors group"
+              >
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-white text-lg">@{o.merchantId?.username || 'Unknown'}</span>
+                      <span className="font-semibold text-white text-lg">
+                        @{o.merchantId?.username || "Unknown"}
+                      </span>
                       {o.merchantId?.reputation !== undefined && (
-                        <Badge variant="warning" className="text-xs px-1.5 py-0.5">
+                        <Badge
+                          variant="warning"
+                          className="text-xs px-1.5 py-0.5"
+                        >
                           <Star size={10} className="mr-1 fill-current" />
                           {o.merchantId.reputation}
                         </Badge>
                       )}
                     </div>
-                    <Badge variant="default" className="bg-slate-700/50 text-slate-300 border-slate-600/50">
+                    <Badge
+                      variant="default"
+                      className="bg-slate-700/50 text-slate-300 border-slate-600/50"
+                    >
                       SELLER
                     </Badge>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-white tracking-tight">
-                      {o.rate} <span className="text-sm font-normal text-slate-400">USDC/XLM</span>
+                      {o.rate}{" "}
+                      <span className="text-sm font-normal text-slate-400">
+                        USDC/XLM
+                      </span>
                     </div>
                     <p className="text-xs text-slate-500 mt-1">Exchange Rate</p>
                   </div>
@@ -131,7 +147,8 @@ export default function SwapPage() {
 
                 <Link href={`/swap/${o._id}`} className="block">
                   <Button className="w-full group-hover:bg-indigo-500 transition-colors">
-                    Swap Now <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                    Swap Now{" "}
+                    <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                   </Button>
                 </Link>
               </Card>

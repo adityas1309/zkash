@@ -78,7 +78,10 @@ export function Header() {
 
                 {/* Mobile Menu Button would go here, omitting for brevity/focus on toggle */}
                 <Link
-                  href="/api/auth/logout"
+                  href={
+                    (process.env.NEXT_PUBLIC_API_URL ??
+                      "https://lop-main.onrender.com") + "/auth/logout"
+                  }
                   className="p-2 text-slate-400 hover:text-red-400 transition-colors"
                 >
                   <LogOut size={20} />
@@ -87,7 +90,8 @@ export function Header() {
             ) : (
               <Link
                 href={
-                  (process.env.NEXT_PUBLIC_API_URL ?? "/api") + "/auth/google"
+                  (process.env.NEXT_PUBLIC_API_URL ??
+                    "https://lop-main.onrender.com") + "/auth/google"
                 }
               >
                 <Button

@@ -59,7 +59,8 @@ export function Hero() {
           ) : (
             <Link
               href={
-                (process.env.NEXT_PUBLIC_API_URL ?? "/api") + "/auth/google"
+                (process.env.NEXT_PUBLIC_API_URL ??
+                  "https://lop-main.onrender.com") + "/auth/google"
               }
             >
               <Button
