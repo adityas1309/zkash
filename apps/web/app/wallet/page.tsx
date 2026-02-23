@@ -5,9 +5,14 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { Send, Droplet, ShieldCheck, Landmark } from "lucide-react";
 
+import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
+import { usePrivacy } from "@/context/PrivacyContext";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function WalletPage() {
+  const { isPrivate, togglePrivacy } = usePrivacy();
+
   const [user, setUser] = useState<{
     username?: string;
     stellarPublicKey?: string;
@@ -177,22 +182,16 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="min-h-screen  text-white selection:bg-indigo-500/30">
-      {/* <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-          <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
-            Wallet
-          </h1>
-          <Link
-            href="/dashboard"
-            className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </nav> */}
+    <div className="w-full relative overflow-hidden bg-slate-900/30 rounded-[32px] border border-white/5 text-white selection:bg-indigo-500/30 font-sans flex flex-col p-8 lg:p-12 mb-8 items-center max-w-[1400px] mx-auto min-h-[50vh]">
+      {/* Top Controls */}
+      <div className="absolute top-6 right-8 z-20">
+        <PrivacyToggle checked={isPrivate} onCheckedChange={togglePrivacy} />
+      </div>
 
-      <main className="max-w-5xl mx-auto p-6 space-y-8">
+      <main className="w-full max-w-5xl mx-auto space-y-8 relative z-10 pt-4">
+        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 mb-8">
+          Advanced Wallet
+        </h1>
         {/* Balance Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Public Balance */}
@@ -307,7 +306,7 @@ export default function WalletPage() {
             </div>
             <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Link
-                href="/wallet/send"
+                href="/dashboard"
                 className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-indigo-600 hover:text-white border border-slate-700 hover:border-indigo-500 transition-all group gap-2"
               >
                 <Send className="w-6 h-6 text-white group-hover:text-white transition-colors" />
