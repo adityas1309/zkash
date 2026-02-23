@@ -1,6 +1,7 @@
 "use client";
 
 import { Header } from "./Header";
+import { FloatingBottomNav } from "./FloatingBottomNav";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { usePrivacy } from "@/context/PrivacyContext";
@@ -9,10 +10,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isPrivate } = usePrivacy();
 
-    // LANDING PAGE: Full view, no header/sidebar
-    // if (pathname === '/') {
-    //     return <>{children}</>;
-    // }
+  // Determine if it is the landing page
+  const isLandingPage = pathname === "/";
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-indigo-500/30">
@@ -26,7 +25,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      <Header />
+      {isLandingPage && <Header />}
 
       <motion.main
         key={pathname}
@@ -34,10 +33,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.3 }}
-        className={`relative z-10 ${pathname === "/" ? "w-full" : "container mx-auto px-4 py-8"}`}
+        className={`relative z-10 ${isLandingPage ? "w-full" : "w-full min-h-screen pt-4 pb-28 px-4 sm:px-8 flex flex-col justify-center"}`}
       >
         <AnimatePresence mode="wait">{children}</AnimatePresence>
       </motion.main>
+
+      {/* Floating Bottom Navigation for Authenticated Pages */}
+      <FloatingBottomNav />
     </div>
   );
 }
