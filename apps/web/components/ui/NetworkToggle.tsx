@@ -1,45 +1,56 @@
 "use client";
 
+import * as React from "react";
 import { useNetwork } from "@/context/NetworkContext";
-import { Globe, Activity } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-export function NetworkToggle() {
-    const { network, setNetwork } = useNetwork();
-    const isMainnet = network === "mainnet";
+export function NetworkToggle({ className }: { className?: string }) {
+  const { network, setNetwork } = useNetwork();
+  const isMainnet = network === "mainnet";
 
-    const toggleNetwork = () => {
-        setNetwork(isMainnet ? "testnet" : "mainnet");
-    };
+  const toggleNetwork = () => {
+    setNetwork(isMainnet ? "testnet" : "mainnet");
+  };
 
-    return (
-        <button
-            onClick={toggleNetwork}
-            className="relative flex items-center gap-2 p-1 rounded-full bg-slate-900/50 border border-white/5 transition-all hover:bg-slate-800/80"
-            title={`Switch to ${isMainnet ? 'Testnet' : 'Mainnet'}`}
-        >
-            <div
-                className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-300",
-                    !isMainnet
-                        ? "bg-indigo-500/20 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.2)]"
-                        : "text-slate-400"
-                )}
-            >
-                <Activity size={14} />
-                <span className="hidden sm:inline">Testnet</span>
-            </div>
-            <div
-                className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-300",
-                    isMainnet
-                        ? "bg-emerald-500/20 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)]"
-                        : "text-slate-400"
-                )}
-            >
-                <Globe size={14} />
-                <span className="hidden sm:inline">Mainnet</span>
-            </div>
-        </button>
-    );
+  return (
+    <div
+      className={cn("flex items-center gap-3 cursor-pointer", className)}
+      onClick={toggleNetwork}
+    >
+      <span
+        className={cn(
+          "text-sm font-medium transition-colors",
+          !isMainnet ? "text-white" : "text-slate-500",
+        )}
+      >
+        Testnet
+      </span>
+
+      <div
+        className={cn(
+          "w-14 h-8 rounded-full p-1 transition-colors duration-300 relative",
+          isMainnet
+            ? "bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+            : "bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.5)]",
+        )}
+      >
+        <motion.div
+          className="w-6 h-6 bg-white rounded-full shadow-md"
+          layout
+          transition={{ type: "spring", stiffness: 700, damping: 30 }}
+          animate={{ x: isMainnet ? 24 : 0 }}
+        />
+      </div>
+
+      <span
+        className={cn(
+          "text-sm font-medium transition-colors",
+          isMainnet ? "text-white" : "text-slate-500",
+        )}
+      >
+        Mainnet
+      </span>
+    </div>
+  );
 }

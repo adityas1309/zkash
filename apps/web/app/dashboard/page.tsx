@@ -21,7 +21,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePrivacy } from "@/context/PrivacyContext";
+import { useNetwork } from "@/context/NetworkContext";
 import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
+import { NetworkToggle } from "@/components/ui/NetworkToggle";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import Prism from "@/components/ui/Prism";
@@ -30,6 +32,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function DashboardPage() {
   const { isPrivate, togglePrivacy } = usePrivacy();
+  const { network } = useNetwork();
 
   // --- User & Balances State ---
   const [user, setUser] = useState<{
@@ -46,6 +49,7 @@ export default function DashboardPage() {
     xlm: string;
   }>({ usdc: "0", xlm: "0" });
   const [loading, setLoading] = useState(true);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(true);
   const [usernameCopied, setUsernameCopied] = useState(false);
 
   // --- Widget State ---
@@ -60,14 +64,14 @@ export default function DashboardPage() {
   const [processStep, setProcessStep] = useState("");
 
   const fetchBalance = () => {
-    fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
+    return fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
       .then((r) => r.json())
       .then((data) => setBalance(data))
       .catch(console.error);
   };
 
   const fetchPrivateBalance = () => {
-    fetch(`${API_URL}/users/balance/private`, { credentials: "include" })
+    return fetch(`${API_URL}/users/balance/private`, { credentials: "include" })
       .then((r) => r.json())
       .then((data) => setPrivateBalance(data))
       .catch(console.error);
@@ -79,8 +83,6 @@ export default function DashboardPage() {
       .then((u) => {
         setUser(u);
         if (u) {
-          fetchBalance();
-          fetchPrivateBalance();
           // Auto-process withdrawals
           fetch(`${API_URL}/users/withdrawals/process`, {
             method: "POST",
@@ -93,12 +95,19 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!user) return;
+
+    setIsBalanceLoading(true);
+
+    Promise.all([fetchBalance(), fetchPrivateBalance()]).finally(() => {
+      setIsBalanceLoading(false);
+    });
+
     const interval = setInterval(() => {
       fetchBalance();
       fetchPrivateBalance();
     }, 5000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, network]);
 
   const copyToClipboard = async () => {
     if (user?.stellarPublicKey) {
@@ -341,6 +350,9 @@ export default function DashboardPage() {
   return (
     <div className="w-full relative overflow-hidden bg-slate-900/30 rounded-[32px] border border-white/5 text-slate-200 font-sans flex flex-col justify-center p-8 lg:p-12">
       {/* Top Controls */}
+      <div className="absolute top-6 left-8 z-20">
+        <NetworkToggle />
+      </div>
       <div className="absolute top-6 right-8 z-20">
         <PrivacyToggle checked={isPrivate} onCheckedChange={togglePrivacy} />
       </div>
@@ -373,11 +385,15 @@ export default function DashboardPage() {
               <div className="flex-1 flex flex-col animate-in fade-in zoom-in-95 duration-300">
                 {/* Total Balance */}
                 <div className="text-center mb-8">
-                  <p className="text-4xl font-secondary font-bold tracking-tight bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">
-                    {totalDisplay}
-                  </p>
-                  <p className="text-sm text-slate-500 mt-2 font-mono flex items-center justify-center gap-2">
-                    {user.stellarPublicKey && (
+                  {isBalanceLoading ? (
+                    <div className="h-10 w-32 bg-slate-700/50 animate-pulse rounded-full mx-auto mb-2" />
+                  ) : (
+                    <p className="text-4xl font-secondary font-bold tracking-tight bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">
+                      {totalDisplay}
+                    </p>
+                  )}
+                  <p className="text-sm text-slate-500 mt-2 font-mono flex items-center justify-center gap-2 h-5">
+                    {user.stellarPublicKey && !isBalanceLoading && (
                       <>
                         <span className="w-4 h-4 rounded-full bg-indigo-500/20 flex items-center justify-center">
                           <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
@@ -400,9 +416,15 @@ export default function DashboardPage() {
                         />
                       </div>
                       <div>
-                        <p className="text-xl font-bold font-secondary text-white">
-                          {isPrivate ? "******" : balance.usdc}
-                        </p>
+                        <div className="h-7 flex items-center">
+                          {isBalanceLoading ? (
+                            <div className="h-5 w-16 bg-slate-700/50 animate-pulse rounded" />
+                          ) : (
+                            <p className="text-xl font-bold font-secondary text-white leading-none">
+                              {isPrivate ? "******" : balance.usdc}
+                            </p>
+                          )}
+                        </div>
                         <p className="text-slate-400 text-sm font-medium">
                           USDC
                         </p>
@@ -410,9 +432,15 @@ export default function DashboardPage() {
                     </div>
                     {isPrivate && (
                       <div className="text-right">
-                        <p className="text-base font-bold text-indigo-400">
-                          {privateBalance.usdc}
-                        </p>
+                        <div className="h-6 flex items-center justify-end">
+                          {isBalanceLoading ? (
+                            <div className="h-4 w-12 bg-slate-700/50 animate-pulse rounded" />
+                          ) : (
+                            <p className="text-base font-bold text-indigo-400 leading-none">
+                              {privateBalance.usdc}
+                            </p>
+                          )}
+                        </div>
                         <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">
                           Private
                         </p>
@@ -430,9 +458,15 @@ export default function DashboardPage() {
                         />
                       </div>
                       <div>
-                        <p className="text-xl font-bold font-secondary text-white">
-                          {isPrivate ? "******" : balance.xlm}
-                        </p>
+                        <div className="h-7 flex items-center">
+                          {isBalanceLoading ? (
+                            <div className="h-5 w-16 bg-slate-700/50 animate-pulse rounded" />
+                          ) : (
+                            <p className="text-xl font-bold font-secondary text-white leading-none">
+                              {isPrivate ? "******" : balance.xlm}
+                            </p>
+                          )}
+                        </div>
                         <p className="text-slate-400 text-sm font-medium">
                           XLM
                         </p>
@@ -440,9 +474,15 @@ export default function DashboardPage() {
                     </div>
                     {isPrivate && (
                       <div className="text-right">
-                        <p className="text-base font-bold text-indigo-400">
-                          {privateBalance.xlm}
-                        </p>
+                        <div className="h-6 flex items-center justify-end">
+                          {isBalanceLoading ? (
+                            <div className="h-4 w-12 bg-slate-700/50 animate-pulse rounded" />
+                          ) : (
+                            <p className="text-base font-bold text-indigo-400 leading-none">
+                              {privateBalance.xlm}
+                            </p>
+                          )}
+                        </div>
                         <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">
                           Private
                         </p>
