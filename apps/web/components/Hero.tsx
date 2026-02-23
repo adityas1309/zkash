@@ -16,7 +16,11 @@ export function Hero() {
       </div>
 
       {/* Optional Gradient Overlay for better text readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-transparent to-slate-950/80 z-0 pointer-events-none" />
+      {/* Optional Gradient Overlay for better text readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-transparent to-slate-950 z-0 pointer-events-none" />
+
+      {/* Bottom fade for seamless transition */}
+      <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-slate-950 to-transparent z-[5] pointer-events-none" />
 
       {/* Main Content */}
       <div className="relative z-10 px-4 max-w-5xl mx-auto flex flex-col items-center gap-8 mt-[-15vh]">

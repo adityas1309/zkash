@@ -30,14 +30,14 @@ export function Header() {
         <Link href="/dashboard" className="flex items-center gap-3 group">
           <div className="relative w-10 h-10 group-hover:scale-105 transition-transform duration-300">
             <Image
-              src="/logo/52ac1c71-ffe0-4b8b-a4d1-917df63f8609.png"
+              src="/logo/ZKash-logo.webp"
               alt="Zellar Logo"
               fill
               className="object-contain"
             />
           </div>
           <span className="font-bold text-2xl tracking-tight hidden sm:block text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-100 to-indigo-200">
-            Zellar
+            ZKash
           </span>
         </Link>
 
