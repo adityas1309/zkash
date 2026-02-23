@@ -8,13 +8,14 @@ import * as fs from 'fs';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { getContractAddress } from './network.context';
 
 const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
 const RPC_URL = process.env.RPC_URL || (isMainnet ? 'https://mainnet.sorobanrpc.com' : 'https://soroban-testnet.stellar.org');
 const NETWORK = isMainnet ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
-const USDC_POOL = process.env.SHIELDED_POOL_ADDRESS || '';
+const USDC_POOL = getContractAddress('SHIELDED_POOL_ADDRESS') || '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY || '';
-const VERIFIER_ADDR = process.env.GROTH16_VERIFIER_ADDRESS || '';
+const VERIFIER_ADDR = getContractAddress('GROTH16_VERIFIER_ADDRESS') || '';
 
 // If network is mainnet, use CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75
 // Otherwise use testnet CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA

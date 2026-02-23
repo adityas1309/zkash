@@ -4,11 +4,11 @@ import { Model } from 'mongoose';
 import { Keypair } from '@stellar/stellar-sdk';
 import { SorobanService } from '../soroban/soroban.service';
 import { PoolCommitment } from '../schemas/pool-commitment.schema';
+import { getContractAddress, networkStorage } from '../network.context';
 
 @Injectable()
 export class PoolIndexerService implements OnModuleInit {
   private readonly signerPublicKey: string | null;
-  private readonly pools: string[];
 
   constructor(
     @InjectModel(PoolCommitment.name) private poolCommitmentModel: Model<PoolCommitment>,
@@ -16,10 +16,6 @@ export class PoolIndexerService implements OnModuleInit {
   ) {
     const secret = process.env.INDEXER_SIGNER_SECRET_KEY ?? process.env.ADMIN_SECRET_KEY ?? process.env.DEPLOYER_SECRET_KEY;
     this.signerPublicKey = secret ? Keypair.fromSecret(secret).publicKey() : null;
-
-    const usdcPool = process.env.SHIELDED_POOL_ADDRESS ?? '';
-    const xlmPool = process.env.SHIELDED_POOL_XLM_ADDRESS ?? '';
-    this.pools = [usdcPool, xlmPool].filter((x) => !!x);
   }
 
   onModuleInit() {
@@ -30,10 +26,6 @@ export class PoolIndexerService implements OnModuleInit {
   private async start() {
     if (!this.signerPublicKey) {
       console.warn('[PoolIndexer] No INDEXER_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY/DEPLOYER_SECRET_KEY configured; skipping pool sync.');
-      return;
-    }
-    if (this.pools.length === 0) {
-      console.warn('[PoolIndexer] No SHIELDED_POOL_ADDRESS configured; skipping pool sync.');
       return;
     }
 
@@ -47,9 +39,25 @@ export class PoolIndexerService implements OnModuleInit {
   }
 
   private async syncAllOnce() {
-    for (const poolAddress of this.pools) {
-      await this.syncPool(poolAddress);
-    }
+    // Run for Mainnet
+    await networkStorage.run({ isMainnet: true }, async () => {
+      const usdcPool = getContractAddress('SHIELDED_POOL_ADDRESS');
+      const xlmPool = getContractAddress('SHIELDED_POOL_XLM_ADDRESS');
+      const mainnetPools = [usdcPool, xlmPool].filter((x) => !!x);
+      for (const poolAddress of mainnetPools) {
+        await this.syncPool(poolAddress);
+      }
+    });
+
+    // Run for Testnet
+    await networkStorage.run({ isMainnet: false }, async () => {
+      const usdcPool = getContractAddress('SHIELDED_POOL_ADDRESS');
+      const xlmPool = getContractAddress('SHIELDED_POOL_XLM_ADDRESS');
+      const testnetPools = [usdcPool, xlmPool].filter((x) => !!x);
+      for (const poolAddress of testnetPools) {
+        await this.syncPool(poolAddress);
+      }
+    });
   }
 
   private async syncPool(poolAddress: string) {

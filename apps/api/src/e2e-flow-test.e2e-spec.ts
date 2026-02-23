@@ -38,6 +38,7 @@ import { SpendableNote } from './schemas/spendable-note.schema';
 import { EncryptedNote } from './schemas/encrypted-note.schema';
 import { PendingWithdrawal } from './schemas/pending-withdrawal.schema';
 import { Asset, Operation, TransactionBuilder, Networks, Keypair } from '@stellar/stellar-sdk';
+import { getContractAddress } from './network.context';
 
 // ────────────────────────────────────────────────────────────────
 // Helpers
@@ -430,7 +431,7 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
     describe('Flow 5: Deposit to ShieldedPool (XLM)', () => {
         it('should deposit XLM to shielded pool for Alice', async () => {
             await runStep('5.1 Deposit XLM → ShieldedPool (Alice)', async () => {
-                const poolAddress = process.env.SHIELDED_POOL_XLM_ADDRESS || process.env.SHIELDED_POOL_ADDRESS;
+                const poolAddress = getContractAddress('SHIELDED_POOL_XLM_ADDRESS') || getContractAddress('SHIELDED_POOL_ADDRESS');
                 if (!poolAddress) {
                     throw new Error('SHIELDED_POOL_ADDRESS not configured in .env. Cannot flow test.');
                 }
@@ -853,7 +854,7 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
 
         it('should verify Merkle root is accessible on ShieldedPool', async () => {
             await runStep('9.3 Verify ShieldedPool Merkle root readable', async () => {
-                const poolAddress = process.env.SHIELDED_POOL_XLM_ADDRESS || process.env.SHIELDED_POOL_ADDRESS;
+                const poolAddress = getContractAddress('SHIELDED_POOL_XLM_ADDRESS') || getContractAddress('SHIELDED_POOL_ADDRESS');
                 if (!poolAddress) {
                     throw new Error('SHIELDED_POOL_ADDRESS not set');
                 }
@@ -869,7 +870,7 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
 
         it('should verify commitments list is accessible', async () => {
             await runStep('9.4 Verify ShieldedPool commitments readable', async () => {
-                const poolAddress = process.env.SHIELDED_POOL_XLM_ADDRESS || process.env.SHIELDED_POOL_ADDRESS;
+                const poolAddress = getContractAddress('SHIELDED_POOL_XLM_ADDRESS') || getContractAddress('SHIELDED_POOL_ADDRESS');
                 if (!poolAddress) {
                     throw new Error('SHIELDED_POOL_ADDRESS not set');
                 }

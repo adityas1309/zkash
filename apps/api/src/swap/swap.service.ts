@@ -11,14 +11,12 @@ import { SorobanService } from '../soroban/soroban.service';
 import { ProofService } from '../zk/proof.service';
 import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { Asset, Horizon, Keypair, Networks, TransactionBuilder, Operation } from '@stellar/stellar-sdk';
+import { getContractAddress, getHorizonUrl } from '../network.context';
 
 @Injectable()
 export class SwapService {
   get server(): Horizon.Server {
-    const isMainnet = isMainnetContext();
-    const rpcUrl = process.env.RPC_URL || '';
-    const defaultHorizon = isMainnet ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org';
-    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : defaultHorizon;
+    const horizonUrl = getHorizonUrl();
     return new Horizon.Server(horizonUrl);
   }
   // ShieldedPool transfers a variable amount per deposit/withdraw.
@@ -114,12 +112,25 @@ export class SwapService {
       .build();
 
     // Both parties sign the transaction
-    tx.sign(sellerKeypair);
-    tx.sign(buyerKeypair);
+    const signers = [sellerKeypair];
+    if (sellerKeypair.publicKey() !== buyerKeypair.publicKey()) {
+      signers.push(buyerKeypair);
+    }
 
-    // Submit the transaction
-    const result = await this.server.submitTransaction(tx);
-    const txHash = result.hash;
+    signers.forEach(signer => tx.sign(signer));
+
+    let txHash: string;
+    try {
+      // Submit the transaction
+      const result = await this.server.submitTransaction(tx);
+      txHash = result.hash;
+    } catch (e: any) {
+      console.error('[SwapService] executeSwap Error:', e?.response?.data || e);
+      const msg = e?.response?.data?.extras?.result_codes?.operations?.join(', ') ||
+        e?.response?.data?.extras?.result_codes?.transaction ||
+        e.message;
+      throw new Error(`Swap Execution failed: ${msg}`);
+    }
 
     // Update swap status
     swap.status = 'completed';
@@ -164,8 +175,8 @@ export class SwapService {
     const minValue = BigInt(Math.round(amountRequired * 10_000_000));
     const poolAddress =
       asset === 'USDC'
-        ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
-        : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
+        ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
     if (!poolAddress) return { ready: false, error: 'Pool not configured' };
 
     const notes = await this.usersService.getSpendableNotes(userId.toString(), asset, minValue);
@@ -316,10 +327,10 @@ export class SwapService {
     const aliceSecret = this.authService.decrypt(dbAlice.stellarSecretKeyEncrypted, aliceEncKey);
     const bobSecret = this.authService.decrypt(dbBob.stellarSecretKeyEncrypted, bobEncKey);
 
-    const zkSwapAddress = process.env.ZK_SWAP_ADDRESS;
-    const usdcPool = process.env.SHIELDED_POOL_ADDRESS;
+    const zkSwapAddress = getContractAddress('ZK_SWAP_ADDRESS');
+    const usdcPool = getContractAddress('SHIELDED_POOL_ADDRESS');
     if (!zkSwapAddress || !usdcPool) throw new Error('ZK_SWAP_ADDRESS and SHIELDED_POOL_ADDRESS required');
-    const xlmPool = process.env.SHIELDED_POOL_XLM_ADDRESS ?? usdcPool;
+    const xlmPool = getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? usdcPool;
 
     const amountUsdc = String(Math.round(swap.amountOut * 10_000_000));
     const amountXlm = String(Math.round(swap.amountIn * 10_000_000));

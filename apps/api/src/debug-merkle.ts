@@ -5,6 +5,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { MerkleTreeService } from './zk/merkle-tree.service';
+import { getContractAddress } from './network.context';
 
 // Minimal SorobanService for getting root/leaves
 class SimpleSorobanService {
@@ -108,7 +109,7 @@ class SimpleSorobanService {
 }
 
 async function main() {
-    const poolAddress = process.env.SHIELDED_POOL_ADDRESS;
+    const poolAddress = getContractAddress('SHIELDED_POOL_ADDRESS');
     const adminSecret = process.env.ADMIN_SECRET_KEY;
 
     if (!poolAddress || !adminSecret) {

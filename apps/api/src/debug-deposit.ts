@@ -8,13 +8,14 @@ import * as fs from 'fs';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { getContractAddress } from './network.context';
 
 const RPC_URL = process.env.RPC_URL || 'https://soroban-testnet.stellar.org';
 const NETWORK = StellarSdk.Networks.TESTNET;
-const USDC_POOL = process.env.SHIELDED_POOL_ADDRESS || '';
-const XLM_POOL = process.env.SHIELDED_POOL_XLM_ADDRESS || '';
+const USDC_POOL = getContractAddress('SHIELDED_POOL_ADDRESS') || '';
+const XLM_POOL = getContractAddress('SHIELDED_POOL_XLM_ADDRESS') || '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY || '';
-const VERIFIER_ADDR = process.env.GROTH16_VERIFIER_ADDRESS || '';
+const VERIFIER_ADDR = getContractAddress('GROTH16_VERIFIER_ADDRESS') || '';
 const XLM_TOKEN = process.env.XLM_TOKEN_ADDRESS || '';
 const USDC_TOKEN = process.env.USDC_TOKEN_ADDRESS || '';
 

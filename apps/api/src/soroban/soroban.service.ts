@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { isMainnetContext } from '../network.context';
+import { isMainnetContext, getSorobanRpcUrl } from '../network.context';
 
 @Injectable()
 export class SorobanService {
@@ -9,10 +9,7 @@ export class SorobanService {
   }
 
   get server(): StellarSdk.rpc.Server {
-    const isMainnet = isMainnetContext();
-    const defaultRpc = isMainnet ? 'https://mainnet.sorobanrpc.com' : 'https://soroban-testnet.stellar.org';
-    const rpcUrl = process.env.RPC_URL || defaultRpc;
-    return new StellarSdk.rpc.Server(rpcUrl);
+    return new StellarSdk.rpc.Server(getSorobanRpcUrl());
   }
 
   /**

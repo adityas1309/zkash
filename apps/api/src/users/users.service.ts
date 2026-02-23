@@ -1,5 +1,5 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
-import { isMainnetContext } from '../network.context';
+
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User } from '../schemas/user.schema';
@@ -14,14 +14,12 @@ import * as naclUtil from 'tweetnacl-util';
 import { computeCommitment, type NoteFields } from '../zk/commitment';
 import { ProofService } from '../zk/proof.service';
 import { MerkleTreeService } from '../zk/merkle-tree.service';
+import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.context';
 
 @Injectable()
 export class UsersService {
   get server(): Horizon.Server {
-    const isMainnet = isMainnetContext();
-    const rpcUrl = process.env.RPC_URL || '';
-    const defaultHorizon = isMainnet ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org';
-    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : defaultHorizon;
+    const horizonUrl = getHorizonUrl();
     return new Horizon.Server(horizonUrl);
   }
   // ShieldedPool transfers a variable amount per deposit/withdraw.
@@ -183,14 +181,14 @@ export class UsersService {
       const account = await this.server.loadAccount(user.stellarPublicKey);
       let asset = Asset.native();
       if (assetCode !== 'XLM' && assetCode !== 'native') {
-        const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
+        const isMainnet = isMainnetContext();
         const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
           ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
           : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
         asset = new Asset('USDC', usdcIssuer);
       }
 
-      const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
+      const isMainnet = isMainnetContext();
       const tx = new TransactionBuilder(account, {
         fee: '100',
         networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
@@ -314,8 +312,8 @@ export class UsersService {
 
     const poolAddress =
       asset === 'USDC'
-        ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
-        : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
+        ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
     if (!poolAddress) {
       console.log('[sendPrivate] FAIL: Pool not configured');
       return { success: false, error: 'Pool not configured for this asset' };
@@ -423,8 +421,8 @@ export class UsersService {
 
     const poolAddress =
       asset === 'USDC'
-        ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
-        : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
+        ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
     if (!poolAddress) return { success: false, error: 'Pool not configured' };
 
     // 1. Pick notes to spend.
@@ -559,8 +557,8 @@ export class UsersService {
         const poolAddressForPending =
           p.poolAddress ||
           (p.asset === 'USDC'
-            ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
-            : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? ''));
+            ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
+            : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? ''));
         if (!poolAddressForPending) {
           throw new Error('Pool address not configured for pending withdrawal asset');
         }
@@ -624,8 +622,8 @@ export class UsersService {
 
       const poolAddress =
         asset === 'USDC'
-          ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
-          : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
+          ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
+          : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
       if (!poolAddress) return { txHash: '', error: 'Pool not configured for this asset' };
 
       const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
@@ -821,8 +819,8 @@ export class UsersService {
 
     const poolAddress =
       asset === 'USDC'
-        ? (process.env.SHIELDED_POOL_ADDRESS ?? '')
-        : (process.env.SHIELDED_POOL_XLM_ADDRESS ?? process.env.SHIELDED_POOL_ADDRESS ?? '');
+        ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
     if (!poolAddress) return [];
 
     const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
