@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { ArrowRight, Wallet, Shield, Building, Info } from "lucide-react";
+import { useState } from "react";
+import { Wallet, Shield, Building, Info } from "lucide-react";
 import RazorpayLoader from "@/components/RazorpayLoader";
 
 import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
 import { usePrivacy } from "@/context/PrivacyContext";
+import Prism from "@/components/ui/Prism";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -153,44 +154,58 @@ export default function FiatPage() {
   };
 
   return (
-    <div className="w-full relative overflow-hidden bg-slate-900/30 rounded-[32px] border border-white/5 text-white selection:bg-indigo-500/30 font-sans flex flex-col p-8 lg:p-12 mb-8 items-center max-w-[1400px] mx-auto min-h-[50vh]">
+    <div className="w-full relative overflow-hidden bg-slate-900/30 rounded-[32px] border border-white/5 text-slate-200 font-sans flex flex-col justify-center p-8 lg:p-12">
       {/* Top Controls */}
       <div className="absolute top-6 right-8 z-20">
         <PrivacyToggle checked={isPrivate} onCheckedChange={togglePrivacy} />
       </div>
 
-      <main className="w-full max-w-5xl mx-auto space-y-12 relative z-10 pt-4">
+      {/* Background glowing effects & Prism */}
+      <div className="absolute inset-0 z-0 opacity-40">
+        <Prism
+          animationType="rotate"
+          timeScale={0.5}
+          height={3.5}
+          baseWidth={5.5}
+          scale={3.6}
+          hueShift={-0.3} // shift toward website's indigo
+          colorFrequency={1}
+          noise={0.1}
+          glow={1}
+        />
+      </div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 h-2/3 bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 w-full max-w-4xl h-32 bg-indigo-500/10 blur-[60px] pointer-events-none z-0" />
+
+      <div className="w-full max-w-[1400px] mx-auto flex flex-col justify-center items-center relative z-10">
         <RazorpayLoader onLoad={() => setRazorpayLoaded(true)} />
 
-        {/* Header & Intro */}
-        <div className="text-center space-y-4 max-w-2xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-bold text-white">
-            Fiat Ramp
-          </h1>
-          <p className="text-slate-400 text-lg">
-            Buy and Sell XLM directly with INR using Razorpay.
-          </p>
-        </div>
+        {/* Center Widget */}
+        <div className="flex justify-center relative w-full">
+          <div className="w-full max-w-[360px] bg-slate-900/80 backdrop-blur-2xl border border-slate-800 shadow-2xl rounded-[40px] p-6 pb-8 relative overflow-hidden transition-all duration-500 min-h-[620px] flex flex-col">
+            {/* Top Indicator */}
+            <div className="w-12 h-1.5 bg-slate-800 rounded-full mx-auto mb-8" />
 
-        {/* Main Action Card */}
-        <div className="max-w-5xl mx-auto w-full relative group">
-          <div className="absolute -inset-1 bg-indigo-500/20 rounded-2xl blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
+            <div className="flex items-center mb-6">
+              <h3 className="text-lg font-bold font-secondary mx-auto">
+                Fiat Ramp
+              </h3>
+            </div>
 
-          <Card
-            variant="glass"
-            className="relative p-6 md:p-8 border-white/10 shadow-2xl backdrop-blur-xl"
-          >
-            <div className="flex gap-4 mb-8 border-b border-slate-700/50 pb-4 justify-center">
+            {/* Tabs for Buy/Sell */}
+            <div className="flex gap-2 mb-6 p-1 rounded-xl bg-slate-800/30 border border-slate-700/50 mix-blend-screen text-center">
               <button
                 onClick={() => {
                   setActiveTab("buy");
                   setStatus("");
+                  setAmount("");
                 }}
-                className={`w-full sm:w-auto text-lg font-semibold px-8 py-2.5 rounded-lg transition-all transform hover:scale-105 ${
+                className={cn(
+                  "flex-1 py-2.5 text-xs font-semibold rounded-lg transition-all",
                   activeTab === "buy"
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
+                    ? "bg-slate-700 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white",
+                )}
               >
                 Buy XLM
               </button>
@@ -198,250 +213,243 @@ export default function FiatPage() {
                 onClick={() => {
                   setActiveTab("sell");
                   setStatus("");
+                  setAmount("");
                 }}
-                className={`w-full sm:w-auto text-lg font-semibold px-8 py-2.5 rounded-lg transition-all transform hover:scale-105 ${
+                className={cn(
+                  "flex-1 py-2.5 text-xs font-semibold rounded-lg transition-all",
                   activeTab === "sell"
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
+                    ? "bg-slate-700 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white",
+                )}
               >
                 Sell XLM
               </button>
             </div>
 
             {activeTab === "buy" ? (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-slate-400 text-sm mb-2 font-medium">
-                    Amount (INR)
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                      ₹
-                    </span>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl pl-8 pr-4 py-4 text-white text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                      placeholder="Enter amount (e.g. 100)"
+              <div className="flex-1 flex flex-col animate-in fade-in duration-300">
+                <div className="space-y-5 flex-1 pl-1">
+                  <div className="p-3 rounded-xl bg-slate-800/30 border border-slate-700/50 flex items-start gap-2">
+                    <Info
+                      className="text-slate-400 shrink-0 mt-0.5"
+                      size={14}
                     />
+                    <p className="text-[11px] text-slate-300 leading-tight">
+                      Pay with UPI or Card (Test Mode). XLM is instantly
+                      transferred to your selected wallet mode.
+                    </p>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-slate-400 text-sm mb-3 font-medium">
-                    Receive Mode
-                  </label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div
-                      onClick={() => setMode("public")}
-                      className={`cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all ${
-                        mode === "public"
-                          ? "bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500/50"
-                          : "bg-slate-900/20 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600"
-                      }`}
-                    >
+                  <div>
+                    <label className="block text-slate-400 text-xs font-medium mb-1.5 ml-1">
+                      Amount (INR)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-[14px] text-slate-500 text-sm font-medium z-10 transition-colors pointer-events-none">
+                        ₹
+                      </span>
+                      <Input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        disabled={loading}
+                        className="bg-slate-900/50 rounded-xl border-slate-700/50 font-mono h-12 text-sm pl-8 relative"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-400 text-xs font-medium mb-1.5 ml-1">
+                      Receive Mode
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
                       <div
-                        className={`p-2 rounded-full ${mode === "public" ? "bg-indigo-500/20" : "bg-slate-800"}`}
+                        onClick={() => setMode("public")}
+                        className={cn(
+                          "cursor-pointer rounded-xl p-3 flex flex-col items-center gap-2 transition-all border",
+                          mode === "public"
+                            ? "bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50"
+                            : "bg-slate-900/50 border-slate-700/50 hover:bg-slate-800",
+                        )}
                       >
                         <Wallet
                           className={
                             mode === "public"
                               ? "text-indigo-400"
-                              : "text-slate-400"
+                              : "text-slate-500"
                           }
-                          size={20}
+                          size={18}
                         />
+                        <div className="text-center">
+                          <span className="block text-xs font-semibold text-slate-200">
+                            Public
+                          </span>
+                          <span className="block text-[10px] text-slate-500 mt-0.5">
+                            Standard
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-center">
-                        <span className="block text-sm font-semibold text-white">
-                          Public Wallet
-                        </span>
-                        <span className="block text-xs text-slate-500 mt-1">
-                          Standard Account
-                        </span>
-                      </div>
-                    </div>
-                    <div
-                      onClick={() => setMode("zk")}
-                      className={`cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-3 transition-all ${
-                        mode === "zk"
-                          ? "bg-indigo-900/20 border-indigo-500 ring-1 ring-indigo-500/50"
-                          : "bg-slate-900/20 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600"
-                      }`}
-                    >
+
                       <div
-                        className={`p-2 rounded-full ${mode === "zk" ? "bg-indigo-500/20" : "bg-slate-800"}`}
+                        onClick={() => setMode("zk")}
+                        className={cn(
+                          "cursor-pointer rounded-xl p-3 flex flex-col items-center gap-2 transition-all border",
+                          mode === "zk"
+                            ? "bg-indigo-500/10 border-indigo-500 ring-1 ring-indigo-500/50"
+                            : "bg-slate-900/50 border-slate-700/50 hover:bg-slate-800",
+                        )}
                       >
                         <Shield
                           className={
-                            mode === "zk" ? "text-indigo-400" : "text-slate-400"
+                            mode === "zk" ? "text-indigo-400" : "text-slate-500"
                           }
-                          size={20}
+                          size={18}
                         />
-                      </div>
-                      <div className="text-center">
-                        <span className="block text-sm font-semibold text-white">
-                          Shielded (ZK)
-                        </span>
-                        <span className="block text-xs text-slate-500 mt-1">
-                          Private Balance
-                        </span>
+                        <div className="text-center">
+                          <span className="block text-xs font-semibold text-slate-200">
+                            Shielded
+                          </span>
+                          <span className="block text-[10px] text-slate-500 mt-0.5">
+                            Private
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {status && (
-                  <div
-                    className={`p-4 rounded-xl text-sm flex items-center gap-2 ${status.includes("Success") ? "bg-indigo-900/20 text-indigo-400 border border-indigo-900/50" : "bg-slate-800 text-slate-300 border border-slate-700"}`}
-                  >
+                  {status && (
                     <div
-                      className={`w-2 h-2 rounded-full ${status.includes("Success") ? "bg-indigo-500" : "bg-slate-500"}`}
-                    ></div>
-                    {status}
+                      className={cn(
+                        "p-3 rounded-xl border-l-4 text-xs font-medium mt-4",
+                        status.toLowerCase().includes("success") ||
+                          status.toLowerCase().includes("verifying") ||
+                          status.toLowerCase().includes("waiting") ||
+                          status.toLowerCase().includes("initializing")
+                          ? "bg-indigo-500/10 border-indigo-500 text-indigo-200"
+                          : "bg-red-500/10 border-red-500 text-red-200",
+                      )}
+                    >
+                      <p className="break-words">{status}</p>
+                    </div>
+                  )}
+
+                  <div className="mt-auto pt-6">
+                    <Button
+                      onClick={handleBuy}
+                      isLoading={loading}
+                      disabled={loading || !amount || parseFloat(amount) <= 0}
+                      className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-none hover:shadow-none"
+                    >
+                      {loading
+                        ? "Processing..."
+                        : `Pay ₹${amount || "0"} & Get XLM`}
+                    </Button>
                   </div>
-                )}
-
-                <Button
-                  variant="primary"
-                  className="w-full py-4 text-lg font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all"
-                  onClick={handleBuy}
-                  disabled={loading || !amount || parseFloat(amount) <= 0}
-                >
-                  {loading
-                    ? "Processing Payment..."
-                    : `Pay ₹${amount || "0"} & Get XLM`}
-                </Button>
-
-                <p className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
-                  <Shield size={12} /> Secured by Razorpay • Test Mode Encrypted
-                </p>
+                </div>
               </div>
             ) : (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-slate-400 text-sm mb-2 font-medium">
-                    Sell Amount (XLM)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-4 text-white text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                      placeholder="Enter XLM to sell"
+              <div className="flex-1 flex flex-col animate-in fade-in duration-300">
+                <div className="space-y-5 flex-1 pl-1">
+                  <div className="p-3 rounded-xl bg-slate-800/30 border border-slate-700/50 flex items-start gap-2">
+                    <Building
+                      className="text-slate-400 shrink-0 mt-0.5"
+                      size={14}
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">
-                      XLM
-                    </span>
+                    <p className="text-[11px] text-slate-300 leading-tight">
+                      Enter bank details to receive your payout. Funds are
+                      typically deposited within minutes.
+                    </p>
                   </div>
-                </div>
 
-                <div className="bg-slate-900/30 p-5 rounded-xl border border-slate-700/30">
-                  <h3 className="text-white font-medium mb-4 flex items-center gap-2 pb-3 border-b border-slate-800/50">
-                    <Building size={16} className="text-indigo-400" /> Bank
-                    Details
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-slate-500 text-xs mb-1.5 uppercase tracking-wide">
-                        Account Number
-                      </label>
-                      <input
-                        type="text"
-                        value={accountNo}
-                        onChange={(e) => setAccountNo(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                        placeholder="Enter Account Number"
+                  <div>
+                    <label className="block text-slate-400 text-xs font-medium mb-1.5 ml-1">
+                      Sell Amount (XLM)
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        disabled={loading}
+                        className="bg-slate-900/50 rounded-xl border-slate-700/50 font-mono h-12 text-sm pr-12"
                       />
-                    </div>
-                    <div>
-                      <label className="block text-slate-500 text-xs mb-1.5 uppercase tracking-wide">
-                        IFSC Code
-                      </label>
-                      <input
-                        type="text"
-                        value={ifsc}
-                        onChange={(e) => setIfsc(e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                        placeholder="Enter IFSC Code"
-                      />
+                      <span className="absolute right-4 top-[14px] text-slate-500 text-xs font-medium z-10 pointer-events-none">
+                        XLM
+                      </span>
                     </div>
                   </div>
-                </div>
 
-                {status && (
-                  <div
-                    className={`p-4 rounded-xl text-sm ${status.includes("Success") ? "bg-indigo-900/20 text-indigo-400 border border-indigo-900/50" : "bg-slate-800 text-slate-300 border border-slate-700"}`}
-                  >
-                    {status}
+                  <div>
+                    <label className="block text-slate-400 text-xs font-medium mb-1.5 ml-1">
+                      Account Number
+                    </label>
+                    <Input
+                      type="text"
+                      value={accountNo}
+                      onChange={(e) => setAccountNo(e.target.value)}
+                      placeholder="Enter Account No."
+                      disabled={loading}
+                      className="bg-slate-900/50 rounded-xl border-slate-700/50 text-sm h-12"
+                    />
                   </div>
-                )}
 
-                <Button
-                  variant="primary"
-                  className="w-full py-4 text-lg font-bold shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40"
-                  onClick={handleSell}
-                  disabled={
-                    loading || !amount || parseFloat(amount) <= 0 || !accountNo
-                  }
-                >
-                  {loading ? "Processing..." : "Initiate Payout"}
-                </Button>
+                  <div>
+                    <label className="block text-slate-400 text-xs font-medium mb-1.5 ml-1">
+                      IFSC Code
+                    </label>
+                    <Input
+                      type="text"
+                      value={ifsc}
+                      onChange={(e) => setIfsc(e.target.value)}
+                      placeholder="Enter IFSC Code"
+                      disabled={loading}
+                      className="bg-slate-900/50 rounded-xl border-slate-700/50 text-sm h-12 uppercase"
+                    />
+                  </div>
+
+                  {status && (
+                    <div
+                      className={cn(
+                        "p-3 rounded-xl border-l-4 text-xs font-medium mt-4",
+                        status.toLowerCase().includes("success") ||
+                          status.toLowerCase().includes("initiating")
+                          ? "bg-indigo-500/10 border-indigo-500 text-indigo-200"
+                          : "bg-red-500/10 border-red-500 text-red-200",
+                      )}
+                    >
+                      <p className="break-words">{status}</p>
+                    </div>
+                  )}
+
+                  <div className="mt-auto pt-6">
+                    <Button
+                      onClick={handleSell}
+                      isLoading={loading}
+                      disabled={
+                        loading ||
+                        !amount ||
+                        parseFloat(amount) <= 0 ||
+                        !accountNo
+                      }
+                      className="w-full h-12 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-none hover:shadow-none"
+                    >
+                      {loading ? "Processing..." : "Initiate Payout"}
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
-          </Card>
-        </div>
 
-        {/* How it Works Section - Moved to Bottom */}
-        <div className="pt-8 border-t border-slate-800/50">
-          <h3 className="text-xl font-semibold text-white mb-6 text-center">
-            How it works
-          </h3>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800/50 hover:border-indigo-500/30 transition-all hover:bg-slate-900/60 group">
-              <div className="bg-indigo-500/10 w-12 h-12 rounded-xl flex items-center justify-center text-indigo-400 mb-4 group-hover:scale-110 transition-transform">
-                <Wallet size={24} />
-              </div>
-              <h4 className="text-white font-semibold text-lg mb-2">
-                Buying XLM
-              </h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                Pay with UPI or Card using Razorpay (Test Mode). We instantly
-                transfer XLM directly to your public wallet address.
-              </p>
-            </div>
-
-            <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800/50 hover:border-indigo-500/30 transition-all hover:bg-slate-900/60 group">
-              <div className="bg-indigo-500/10 w-12 h-12 rounded-xl flex items-center justify-center text-indigo-400 mb-4 group-hover:scale-110 transition-transform">
-                <Shield size={24} />
-              </div>
-              <h4 className="text-white font-semibold text-lg mb-2">
-                Shielded Mode (ZK)
-              </h4>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                For enhanced privacy, choose Shielded Mode. XLM is sent to your
-                public wallet first, then you can "Deposit" to shield it.
-              </p>
-            </div>
-
-            <div className="bg-slate-900/40 p-6 rounded-2xl border border-slate-800/50 hover:border-indigo-500/30 transition-all hover:bg-slate-900/60 group relative overflow-hidden">
-              <div className="bg-indigo-500/10 w-12 h-12 rounded-xl flex items-center justify-center text-indigo-400 mb-4 group-hover:scale-110 transition-transform relative z-10">
-                <Info size={24} />
-              </div>
-              <h4 className="text-white font-semibold text-lg mb-2 relative z-10">
-                Testnet Information
-              </h4>
-              <p className="text-slate-400 text-sm leading-relaxed relative z-10">
-                Razorpay is in Test Mode active. You can use any mock card
-                details or UPI ID. No real money will be deducted.
+            <div className="mt-auto pt-6 border-t border-slate-800/50 flex justify-center p-4 -mb-4 -mx-2 opacity-60">
+              <p className="flex items-center gap-1.5 text-[10px] text-slate-400">
+                <Shield size={10} /> Secured by Razorpay
               </p>
             </div>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

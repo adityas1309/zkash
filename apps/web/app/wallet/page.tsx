@@ -27,8 +27,23 @@ export default function WalletPage() {
   }>({ usdc: "0", xlm: "0" });
 
   const [loading, setLoading] = useState(true);
+  const [isBalanceLoading, setIsBalanceLoading] = useState(true);
   const [faucetLoading, setFaucetLoading] = useState(false);
   const [withdrawing, setWithdrawing] = useState<"USDC" | "XLM" | null>(null);
+
+  const fetchBalance = () => {
+    return fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setBalance(data))
+      .catch(console.error);
+  };
+
+  const fetchPrivateBalance = () => {
+    return fetch(`${API_URL}/users/balance/private`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setPrivateBalance(data))
+      .catch(console.error);
+  };
 
   useEffect(() => {
     fetch(`${API_URL}/users/me`, { credentials: "include" })
@@ -36,26 +51,15 @@ export default function WalletPage() {
       .then((u) => {
         setUser(u);
         if (u) {
-          fetchBalance();
-          fetchPrivateBalance();
+          Promise.all([fetchBalance(), fetchPrivateBalance()]).finally(() => {
+            setIsBalanceLoading(false);
+          });
+        } else {
+          setIsBalanceLoading(false);
         }
       })
       .finally(() => setLoading(false));
   }, []);
-
-  const fetchBalance = () => {
-    fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setBalance(data))
-      .catch(console.error);
-  };
-
-  const fetchPrivateBalance = () => {
-    fetch(`${API_URL}/users/balance/private`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setPrivateBalance(data))
-      .catch(console.error);
-  };
 
   useEffect(() => {
     if (!user) return;
@@ -208,17 +212,25 @@ export default function WalletPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold font-secondary tracking-tight">
-                  {balance.usdc}
-                </span>
+              <div className="flex items-center justify-between h-8">
+                {isBalanceLoading ? (
+                  <div className="h-8 w-24 bg-slate-700/50 animate-pulse rounded" />
+                ) : (
+                  <span className="text-2xl font-bold font-secondary tracking-tight leading-none">
+                    {balance.usdc}
+                  </span>
+                )}
                 <span className="text-sm font-medium text-slate-400">USDC</span>
               </div>
               <div className="h-px bg-slate-700/50" />
-              <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold font-secondary tracking-tight">
-                  {balance.xlm}
-                </span>
+              <div className="flex items-center justify-between h-8">
+                {isBalanceLoading ? (
+                  <div className="h-8 w-24 bg-slate-700/50 animate-pulse rounded" />
+                ) : (
+                  <span className="text-2xl font-bold font-secondary tracking-tight leading-none">
+                    {balance.xlm}
+                  </span>
+                )}
                 <span className="text-sm font-medium text-slate-400">XLM</span>
               </div>
             </div>
@@ -262,10 +274,14 @@ export default function WalletPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex items-baseline justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20">
-                  <span className="text-xl font-bold font-secondary text-white">
-                    {privateBalance.usdc}
-                  </span>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20 h-[44px]">
+                  {isBalanceLoading ? (
+                    <div className="h-6 w-16 bg-indigo-900/50 animate-pulse rounded" />
+                  ) : (
+                    <span className="text-xl font-bold font-secondary text-white leading-none">
+                      {privateBalance.usdc}
+                    </span>
+                  )}
                   <span className="text-xs font-bold text-indigo-400">
                     USDC
                   </span>
@@ -287,10 +303,14 @@ export default function WalletPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex items-baseline justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20">
-                  <span className="text-xl font-bold font-secondary text-white">
-                    {privateBalance.xlm}
-                  </span>
+                <div className="flex items-center justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20 h-[44px]">
+                  {isBalanceLoading ? (
+                    <div className="h-6 w-16 bg-indigo-900/50 animate-pulse rounded" />
+                  ) : (
+                    <span className="text-xl font-bold font-secondary text-white leading-none">
+                      {privateBalance.xlm}
+                    </span>
+                  )}
                   <span className="text-xs font-bold text-indigo-400">XLM</span>
                 </div>
               </div>
