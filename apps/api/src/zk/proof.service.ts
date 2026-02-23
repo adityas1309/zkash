@@ -112,7 +112,7 @@ export class ProofService {
       const ok = Buffer.from(recomputed).equals(Buffer.from(stateRoot));
 
       if (!ok) {
-        throw new Error('Merkle path does not match stateRoot (commitment/index/siblings mismatch)');
+        throw new Error(`Merkle path does not match stateRoot (commitment/index/siblings mismatch). Expected: ${Buffer.from(stateRoot).toString('hex')}, Got: ${Buffer.from(recomputed).toString('hex')}`);
       }
     }
 
@@ -161,7 +161,9 @@ export class ProofService {
       console.log(`[ProofService] WTNS computed. Size: ${wtnsBuff.length} bytes`);
 
       // Write witness to temporary file to avoid buffer type mismatches in Jest/NestJS
-      const tempWtnsPath = path.resolve(process.cwd(), `temp_witness_${Date.now()}_${Math.random().toString(36).substring(7)}.wtns`);
+      // Vercel Serverless functions can only write to /tmp
+      const os = require('os');
+      const tempWtnsPath = path.join(os.tmpdir(), `temp_witness_${Date.now()}_${Math.random().toString(36).substring(7)}.wtns`);
       console.log(`[ProofService] Writing WTNS to ${tempWtnsPath}`);
       fs.writeFileSync(tempWtnsPath, wtnsBuff);
 

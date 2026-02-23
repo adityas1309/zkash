@@ -32,6 +32,59 @@ export class SorobanService {
     throw new Error(`Transaction ${hash} not confirmed after ${timeoutMs / 1000}s`);
   }
 
+  /**
+   * Helper to prepare transaction, add auth entries automatically, and add a resource/fee buffer.
+   */
+  private async prepareTransactionWithBuffer(tx: StellarSdk.Transaction): Promise<StellarSdk.Transaction> {
+    console.log('[SorobanService] Preparing transaction with native SDK...');
+    const preparedTx = await this.server.prepareTransaction(tx);
+
+    try {
+      const envelope = preparedTx.toEnvelope();
+      const txV1 = envelope.v1().tx();
+      const txExt = txV1.ext();
+
+      // @ts-ignore
+      if (txExt && txExt.switch().value === 1) {
+        const sorobanData = txExt.sorobanData();
+        const resources = sorobanData.resources();
+
+        // @ts-ignore
+        const inst = typeof resources.instructions === 'function' ? resources.instructions() : resources.instructions;
+        // @ts-ignore
+        const rb = typeof resources.readBytes === 'function' ? resources.readBytes() : resources.readBytes;
+        // @ts-ignore
+        const wb = typeof resources.writeBytes === 'function' ? resources.writeBytes() : resources.writeBytes;
+
+        // @ts-ignore
+        if (typeof resources.instructions === 'function') {
+          // @ts-ignore
+          resources.instructions(inst + 2000000);
+          // @ts-ignore
+          resources.readBytes(rb + 15000);
+          // @ts-ignore
+          resources.writeBytes(wb + 15000);
+        } else {
+          // @ts-ignore
+          resources.instructions = inst + 2000000;
+          // @ts-ignore
+          resources.readBytes = rb + 15000;
+          // @ts-ignore
+          resources.writeBytes = wb + 15000;
+        }
+
+        const oldFee = parseInt(preparedTx.fee, 10);
+        txV1.fee(oldFee + 500000);
+
+        return new StellarSdk.Transaction(envelope.toXDR('base64'), this.networkPassphrase);
+      }
+    } catch (e) {
+      console.warn('[SorobanService] Failed to add resource buffer:', e);
+    }
+
+    return preparedTx;
+  }
+
   private scValToBytes32Array(retval: StellarSdk.xdr.ScVal): Uint8Array[] {
     const switchName = retval.switch().name;
     if (switchName !== 'scvVec') throw new Error(`Unexpected retval type: ${switchName}`);
@@ -165,12 +218,13 @@ export class SorobanService {
       .setTimeout(180)
       .build();
 
-    const prepared = await this.server.prepareTransaction(tx);
+    const prepared = await this.prepareTransactionWithBuffer(tx);
     prepared.sign(keypair);
     const result = await this.server.sendTransaction(prepared);
     if (result.status === 'ERROR') {
       throw new Error(String(result.errorResult ?? 'Transaction failed'));
     }
+
     // Wait for on-chain confirmation before returning
     return this.waitForTransaction(result.hash);
   }
@@ -217,12 +271,13 @@ export class SorobanService {
       .setTimeout(180)
       .build();
 
-    const prepared = await this.server.prepareTransaction(tx);
+    const prepared = await this.prepareTransactionWithBuffer(tx);
     prepared.sign(keypair);
     const result = await this.server.sendTransaction(prepared);
     if (result.status === 'ERROR') {
       throw new Error(String(result.errorResult ?? 'Transaction failed'));
     }
+
     // Wait for on-chain confirmation before returning
     return this.waitForTransaction(result.hash);
   }
@@ -300,55 +355,10 @@ export class SorobanService {
       .setTimeout(180)
       .build();
 
-    // Debug: Simulate
-    console.log('[SorobanService] Simulating Anonymous ZK Swap execution...');
-    // @ts-ignore
-    const sim = await this.server.simulateTransaction(tx);
-    if (StellarSdk.rpc.Api.isSimulationError(sim)) {
-      console.error('[SorobanService] Simulation FAILED:', JSON.stringify(sim, null, 2));
-      throw new Error('Simulation failed');
-    }
-    console.log('[SorobanService] Simulation SUCCESS');
+    const prepared = await this.prepareTransactionWithBuffer(tx);
+    prepared.sign(aliceKp); // Sign as submitter/fee-payer
 
-    // Calculate Fee
-    let finalFee = StellarSdk.BASE_FEE;
-    // @ts-ignore
-    if (sim.minResourceFee) {
-      // @ts-ignore
-      finalFee += parseInt(sim.minResourceFee, 10) + 1000;
-    }
-
-    // Reload account for seqNum
-    // @ts-ignore
-    const accountResponse = await this.server.getAccount(aliceKp.publicKey());
-    // @ts-ignore
-    const freshSourceAccount = new StellarSdk.Account(aliceKp.publicKey(), accountResponse.sequence.toString());
-
-    const finalTx = new StellarSdk.TransactionBuilder(freshSourceAccount, {
-      fee: finalFee.toString(),
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(contract.call('execute', ...args))
-      .setTimeout(180)
-      .build();
-
-    // Attach Soroban Data
-    const envelope = finalTx.toEnvelope();
-    const txV1 = envelope.v1().tx();
-    // @ts-ignore
-    // @ts-ignore
-    const sorobanData = sim.transactionData.build();
-    // @ts-ignore
-    const newExt = new StellarSdk.xdr.TransactionExt(1, sorobanData);
-    txV1.ext(newExt);
-
-    // No Auth Entries needed! (Contract checks proofs only)
-
-    // @ts-ignore
-    const patchedTx = new StellarSdk.Transaction(envelope.toXDR('base64'), this.networkPassphrase);
-    patchedTx.sign(aliceKp); // Sign as submitter/fee-payer
-
-    const result = await this.server.sendTransaction(patchedTx);
+    const result = await this.server.sendTransaction(prepared);
     if (result.status === 'ERROR') {
       console.error('[SorobanService] execution failed:', JSON.stringify(result, null, 2));
       throw new Error(`Transaction failed: ${JSON.stringify(result.errorResult)}`);
@@ -359,3 +369,4 @@ export class SorobanService {
     return this.waitForTransaction(result.hash);
   }
 }
+

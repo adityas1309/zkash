@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "nest build",
+    "build": "pnpm --filter sdk build && nest build",
     "dev": "nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
@@ -19,6 +19,8 @@
     "@nestjs/platform-express": "^10.0.0",
     "@stellar/stellar-sdk": "^14.0.0",
     "circomlibjs": "^0.1.7",
+    "circuits": "workspace:*",
+    "connect-mongo": "^6.0.0",
     "dotenv": "^16.4.0",
     "express-session": "^1.17.0",
     "ffjavascript": "^0.3.1",
