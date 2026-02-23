@@ -24,6 +24,7 @@ import { usePrivacy } from "@/context/PrivacyContext";
 import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import Prism from "@/components/ui/Prism";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -344,37 +345,24 @@ export default function DashboardPage() {
         <PrivacyToggle checked={isPrivate} onCheckedChange={togglePrivacy} />
       </div>
 
-      {/* Background glowing effects */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 h-2/3 bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 w-full max-w-4xl h-32 bg-indigo-500/10 blur-[60px] pointer-events-none" />
+      {/* Background glowing effects & Prism */}
+      <div className="absolute inset-0 z-0 opacity-40">
+        <Prism
+          animationType="rotate"
+          timeScale={0.5}
+          height={3.5}
+          baseWidth={5.5}
+          scale={3.6}
+          hueShift={-0.3} // shift toward website's indigo
+          colorFrequency={1}
+          noise={0.1}
+          glow={1}
+        />
+      </div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4/5 h-2/3 bg-indigo-600/20 blur-[120px] rounded-full pointer-events-none z-0" />
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 w-full max-w-4xl h-32 bg-indigo-500/10 blur-[60px] pointer-events-none z-0" />
 
-      <div className="w-full max-w-[1400px] mx-auto grid grid-cols-1 xl:grid-cols-3 gap-12 items-center relative z-10">
-        {/* Left Side Text */}
-        <div className="hidden lg:block space-y-4 px-8">
-          <h1 className="text-5xl xl:text-6xl font-sans font-bold leading-tight tracking-tight">
-            Safety Invest <br />
-            in Crypto
-          </h1>
-          <p className="text-slate-400 max-w-sm text-sm">
-            Discover a user-friendly platform for trading over 3,000+ assets
-          </p>
-          <div className="flex items-center gap-4 mt-8 opacity-50">
-            {/* Mock logos for decoration */}
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-              <span className="font-bold text-xs">₿</span>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-              <span className="font-bold text-xs">S</span>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-              <span className="font-bold text-xs">E</span>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
-              <span className="font-bold text-[10px]">USDC</span>
-            </div>
-          </div>
-        </div>
-
+      <div className="w-full max-w-[1400px] mx-auto flex flex-col justify-center items-center relative z-10">
         {/* Center Widget */}
         <div className="flex justify-center relative">
           <div className="w-full max-w-[360px] bg-slate-900/80 backdrop-blur-2xl border border-slate-800 shadow-2xl rounded-[40px] p-6 pb-8 relative overflow-hidden transition-all duration-500 min-h-[620px] flex flex-col">
@@ -629,26 +617,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Right Side Text */}
-        <div className="hidden lg:flex flex-col items-end space-y-4 px-8 text-right">
-          <h2 className="text-5xl xl:text-6xl font-sans font-bold leading-tight tracking-tight">
-            Fast & Secure <br /> Platform
-          </h2>
-          <p className="text-slate-400 max-w-sm text-sm">
-            Trade and Invest with Confidence. Unlock the Future Finance with
-            Secure.
-          </p>
-          <div className="mt-8">
-            <Link
-              href="/wallet"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-slate-800 border border-slate-700 hover:border-indigo-500 transition-colors text-sm font-medium"
-            >
-              <Wallet size={16} className="text-indigo-400" />
-              Advanced Wallet
-            </Link>
           </div>
         </div>
       </div>
