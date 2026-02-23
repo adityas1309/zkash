@@ -1,15 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import { isMainnetContext } from '../network.context';
 
 @Injectable()
 export class SorobanService {
-  private server: StellarSdk.rpc.Server;
-  private networkPassphrase: string;
+  get networkPassphrase(): string {
+    return isMainnetContext() ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
+  }
 
-  constructor() {
-    const rpcUrl = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
-    this.networkPassphrase = process.env.NETWORK_PASSPHRASE ?? StellarSdk.Networks.TESTNET;
-    this.server = new StellarSdk.rpc.Server(rpcUrl);
+  get server(): StellarSdk.rpc.Server {
+    const isMainnet = isMainnetContext();
+    const defaultRpc = isMainnet ? 'https://mainnet.sorobanrpc.com' : 'https://soroban-testnet.stellar.org';
+    const rpcUrl = process.env.RPC_URL || defaultRpc;
+    return new StellarSdk.rpc.Server(rpcUrl);
   }
 
   /**
@@ -210,8 +213,9 @@ export class SorobanService {
       ),
     ];
 
+    const fee = isMainnetContext() ? '2000000' : StellarSdk.BASE_FEE;
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
-      fee: StellarSdk.BASE_FEE,
+      fee,
       networkPassphrase: this.networkPassphrase,
     })
       .addOperation(contract.call('deposit', ...args))
@@ -263,8 +267,9 @@ export class SorobanService {
       console.warn(`[SorobanService] invokeShieldedPoolWithdraw: pubSignalsBytes too short: ${pubSignalsBytes.length}`);
     }
 
+    const fee = isMainnetContext() ? '2000000' : StellarSdk.BASE_FEE;
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
-      fee: StellarSdk.BASE_FEE,
+      fee,
       networkPassphrase: this.networkPassphrase,
     })
       .addOperation(contract.call('withdraw', ...args))
@@ -347,8 +352,9 @@ export class SorobanService {
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobOutputRoot)),         // New USDC root
     ];
 
+    const fee = isMainnetContext() ? '2000000' : StellarSdk.BASE_FEE;
     const tx = new StellarSdk.TransactionBuilder(sourceAccount, {
-      fee: StellarSdk.BASE_FEE,
+      fee,
       networkPassphrase: this.networkPassphrase,
     })
       .addOperation(contract.call('execute', ...args))

@@ -1,4 +1,5 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { isMainnetContext } from '../network.context';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User } from '../schemas/user.schema';
@@ -16,7 +17,13 @@ import { MerkleTreeService } from '../zk/merkle-tree.service';
 
 @Injectable()
 export class UsersService {
-  private server: Horizon.Server;
+  get server(): Horizon.Server {
+    const isMainnet = isMainnetContext();
+    const rpcUrl = process.env.RPC_URL || '';
+    const defaultHorizon = isMainnet ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org';
+    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : defaultHorizon;
+    return new Horizon.Server(horizonUrl);
+  }
   // ShieldedPool transfers a variable amount per deposit/withdraw.
   // We use 7 decimals for calculations (1 unit = 10_000_000 stroops).
   private static readonly DECIMAL_PRECISION = 7;
@@ -31,16 +38,7 @@ export class UsersService {
     private sorobanService: SorobanService,
     private proofService: ProofService,
     private merkleTree: MerkleTreeService,
-  ) {
-    // Ensure we use the proper Horizon endpoint, not the RPC endpoint
-    const rpcUrl = process.env.RPC_URL || '';
-    // If RPC_URL is a Soroban RPC (often ends in .org with no path or /), we shouldn't use it for Horizon
-    // We default to the standard public Horizon testnet URL if the env var doesn't look like Horizon
-    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : 'https://horizon-testnet.stellar.org';
-
-    console.log(`[UsersService] Using Horizon URL: ${horizonUrl}`);
-    this.server = new Horizon.Server(horizonUrl);
-  }
+  ) { }
 
   async findById(id: string): Promise<User | null> {
     return this.userModel.findById(id).exec();
@@ -90,14 +88,15 @@ export class UsersService {
     try {
       const account = await this.server.loadAccount(user.stellarPublicKey);
 
-      // USDC Issuer on Testnet (Circle)
-      // Source: https://developers.circle.com/stablecoins/docs/usdc-on-stellar
-      const usdcIssuer = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+      const isMainnet = isMainnetContext();
+      const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
+        ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+        : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
       const usdcAsset = new Asset('USDC', usdcIssuer);
 
       const tx = new TransactionBuilder(account, {
         fee: '100',
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
         .addOperation(Operation.changeTrust({ asset: usdcAsset, limit: '1000000' }))
         .setTimeout(30)
@@ -137,15 +136,19 @@ export class UsersService {
 
       let asset: Asset;
       if (assetCode === 'USDC') {
-        const usdcIssuer = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+        const isMainnet = isMainnetContext();
+        const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
+          ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
+          : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
         asset = new Asset('USDC', usdcIssuer);
       } else {
         asset = Asset.native();
       }
 
+      const isMainnet = isMainnetContext();
       const tx = new TransactionBuilder(account, {
         fee: '100',
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
         .addOperation(Operation.payment({
           destination: destinationPublicKey,
@@ -180,14 +183,17 @@ export class UsersService {
       const account = await this.server.loadAccount(user.stellarPublicKey);
       let asset = Asset.native();
       if (assetCode !== 'XLM' && assetCode !== 'native') {
-        // Assume USDC for now if not native
-        const usdcIssuer = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+        const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
+        const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
+          ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
+          : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
         asset = new Asset('USDC', usdcIssuer);
       }
 
+      const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
       const tx = new TransactionBuilder(account, {
         fee: '100',
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
         .addOperation(Operation.payment({
           destination: destination,

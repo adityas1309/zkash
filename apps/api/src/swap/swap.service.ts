@@ -1,4 +1,5 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { isMainnetContext } from '../network.context';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Swap } from '../schemas/swap.schema';
@@ -13,7 +14,13 @@ import { Asset, Horizon, Keypair, Networks, TransactionBuilder, Operation } from
 
 @Injectable()
 export class SwapService {
-  private server: Horizon.Server;
+  get server(): Horizon.Server {
+    const isMainnet = isMainnetContext();
+    const rpcUrl = process.env.RPC_URL || '';
+    const defaultHorizon = isMainnet ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org';
+    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : defaultHorizon;
+    return new Horizon.Server(horizonUrl);
+  }
   // ShieldedPool transfers a variable amount per deposit/withdraw.
 
   constructor(
@@ -26,9 +33,6 @@ export class SwapService {
     private proofService: ProofService,
     private merkleTree: MerkleTreeService,
   ) {
-    const rpcUrl = process.env.RPC_URL || '';
-    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : 'https://horizon-testnet.stellar.org';
-    this.server = new Horizon.Server(horizonUrl);
   }
 
   async request(aliceId: Types.ObjectId, bobId: Types.ObjectId, amountIn: number, amountOut: number, offerId?: Types.ObjectId) {
@@ -76,8 +80,10 @@ export class SwapService {
     // Load seller's account (source account for the transaction)
     const sellerAccount = await this.server.loadAccount(seller.stellarPublicKey);
 
-    // USDC asset on testnet
-    const usdcIssuer = 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5';
+    const isMainnet = isMainnetContext();
+    const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
+      ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+      : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
     const usdcAsset = new Asset('USDC', usdcIssuer);
 
     // Build atomic swap transaction:
@@ -85,7 +91,7 @@ export class SwapService {
     // 2. Buyer sends XLM to seller
     const tx = new TransactionBuilder(sellerAccount, {
       fee: '100',
-      networkPassphrase: Networks.TESTNET,
+      networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
     })
       // Seller sends USDC to buyer
       .addOperation(

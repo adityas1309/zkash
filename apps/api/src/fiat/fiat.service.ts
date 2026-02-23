@@ -16,8 +16,9 @@ export class FiatService {
   private adminSecret = process.env.FIAT_ADMIN_SECRET || process.env.ADMIN_SECRET_KEY || 'SDHOAMBNLGCE2MV5zk4...';
 
   constructor(private usersService: UsersService) {
+    const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
     const rpcUrl = process.env.RPC_URL || '';
-    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : 'https://horizon-testnet.stellar.org';
+    const horizonUrl = rpcUrl.includes('horizon') ? rpcUrl : (isMainnet ? 'https://horizon.stellar.org' : 'https://horizon-testnet.stellar.org');
     this.server = new Horizon.Server(horizonUrl);
 
     if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -121,9 +122,10 @@ export class FiatService {
       const sourceKeypair = Keypair.fromSecret(sourceSecret);
       const sourceAccount = await this.server.loadAccount(sourceKeypair.publicKey());
 
+      const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
       const tx = new TransactionBuilder(sourceAccount, {
         fee: '100',
-        networkPassphrase: Networks.TESTNET,
+        networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
         .addOperation(Operation.payment({
           destination: user.stellarPublicKey,

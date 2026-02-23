@@ -1,4 +1,8 @@
 @echo off
+set NETWORK=%1
+if "%NETWORK%"=="" set NETWORK=testnet
+set SOURCE=%2
+if "%SOURCE%"=="" set SOURCE=deployer
 
 echo ================================
 echo Building Groth16 Verifier
@@ -24,21 +28,21 @@ cd ../../..
 echo ================================
 echo Deploying Groth16Verifier...
 echo ================================
-call stellar contract deploy --wasm packages/contracts/groth16_verifier/target/wasm32v1-none/release/groth16_verifier.wasm --source deployer --network testnet > verifier_address.txt
+call stellar contract deploy --wasm packages/contracts/groth16_verifier/target/wasm32v1-none/release/groth16_verifier.wasm --source %SOURCE% --network %NETWORK% > verifier_address.txt
 set /p VERIFIER_ADDR=<verifier_address.txt
 echo Verifier Deployed: %VERIFIER_ADDR%
 
 echo ================================
 echo Deploying ShieldedPool...
 echo ================================
-call stellar contract deploy --wasm packages/contracts/shielded_pool/target/wasm32v1-none/release/shielded_pool.wasm --source deployer --network testnet > shielded_pool_address.txt
+call stellar contract deploy --wasm packages/contracts/shielded_pool/target/wasm32v1-none/release/shielded_pool.wasm --source %SOURCE% --network %NETWORK% > shielded_pool_address.txt
 set /p POOL_ADDR=<shielded_pool_address.txt
 echo ShieldedPool Deployed: %POOL_ADDR%
 
 echo ================================
 echo Deploying ZKSwap...
 echo ================================
-call stellar contract deploy --wasm packages/contracts/zk_swap/target/wasm32v1-none/release/zk_swap.wasm --source deployer --network testnet > zk_swap_address.txt
+call stellar contract deploy --wasm packages/contracts/zk_swap/target/wasm32v1-none/release/zk_swap.wasm --source %SOURCE% --network %NETWORK% > zk_swap_address.txt
 set /p ZKSWAP_ADDR=<zk_swap_address.txt
 echo ZKSwap Deployed: %ZKSWAP_ADDR%
 

@@ -9,12 +9,19 @@ dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import * as StellarSdk from '@stellar/stellar-sdk';
 
-const RPC_URL = process.env.RPC_URL || 'https://soroban-testnet.stellar.org';
-const NETWORK = StellarSdk.Networks.TESTNET;
+const isMainnet = process.env.STELLAR_NETWORK === 'mainnet';
+const RPC_URL = process.env.RPC_URL || (isMainnet ? 'https://mainnet.sorobanrpc.com' : 'https://soroban-testnet.stellar.org');
+const NETWORK = isMainnet ? StellarSdk.Networks.PUBLIC : StellarSdk.Networks.TESTNET;
 const XLM_POOL = process.env.SHIELDED_POOL_XLM_ADDRESS || '';
 const ADMIN_SECRET = process.env.ADMIN_SECRET_KEY || '';
 const VERIFIER_ADDR = process.env.GROTH16_VERIFIER_ADDRESS || '';
-const XLM_TOKEN = process.env.XLM_TOKEN_ADDRESS || '';
+
+// If network is mainnet, use CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA
+// Otherwise use testnet CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
+const defaultXlmToken = isMainnet
+    ? 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA'
+    : 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
+const XLM_TOKEN = process.env.XLM_TOKEN_ADDRESS || defaultXlmToken;
 
 async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePrivacy } from "@/context/PrivacyContext";
 import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
+import { NetworkToggle } from "@/components/ui/NetworkToggle";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ export function Header() {
           {!loading &&
             (user ? (
               <>
+                <NetworkToggle />
                 <PrivacyToggle
                   checked={isPrivate}
                   onCheckedChange={togglePrivacy}
