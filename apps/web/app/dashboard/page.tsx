@@ -401,37 +401,63 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Sub Balances */}
-                <div className="bg-slate-800/40 rounded-3xl p-5 mb-8 border border-white/5 space-y-4">
+                <div className="bg-slate-800/40 rounded-3xl p-5 mb-8 border border-white/5 space-y-6">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-lg font-bold font-secondary text-white">
-                        {isPrivate ? "******" : balance.usdc}
-                      </p>
-                      <p className="text-slate-400 text-xs">USDC</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#2775ca]/10 flex items-center justify-center p-1.5 border border-[#2775ca]/20 shadow-inner opacity-90">
+                        <img
+                          src="https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035"
+                          alt="USDC"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold font-secondary text-white">
+                          {isPrivate ? "******" : balance.usdc}
+                        </p>
+                        <p className="text-slate-400 text-sm font-medium">
+                          USDC
+                        </p>
+                      </div>
                     </div>
                     {isPrivate && (
                       <div className="text-right">
-                        <p className="text-sm font-bold text-indigo-400">
+                        <p className="text-base font-bold text-indigo-400">
                           {privateBalance.usdc}
                         </p>
-                        <p className="text-slate-500 text-[10px]">Private</p>
+                        <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">
+                          Private
+                        </p>
                       </div>
                     )}
                   </div>
                   <div className="h-px w-full bg-slate-700/50" />
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-lg font-bold font-secondary text-white">
-                        {isPrivate ? "******" : balance.xlm}
-                      </p>
-                      <p className="text-slate-400 text-xs">XLM</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center p-2 border border-white/10 shadow-inner opacity-90 text-white">
+                        <img
+                          src="https://cryptologos.cc/logos/stellar-xlm-logo.svg?v=035"
+                          alt="XLM"
+                          className="w-full h-full object-contain brightness-0 invert"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold font-secondary text-white">
+                          {isPrivate ? "******" : balance.xlm}
+                        </p>
+                        <p className="text-slate-400 text-sm font-medium">
+                          XLM
+                        </p>
+                      </div>
                     </div>
                     {isPrivate && (
                       <div className="text-right">
-                        <p className="text-sm font-bold text-indigo-400">
+                        <p className="text-base font-bold text-indigo-400">
                           {privateBalance.xlm}
                         </p>
-                        <p className="text-slate-500 text-[10px]">Private</p>
+                        <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold">
+                          Private
+                        </p>
                       </div>
                     )}
                   </div>
