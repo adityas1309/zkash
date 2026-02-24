@@ -1,72 +1,114 @@
-# Private P2P Payments and Swaps on Stellar Testnet
+# ZKASH 🛡️
 
-Privacy-first P2P payments and crypto swap app on Stellar testnet. Send and trade USDC and XLM privately with zero-knowledge proofs.
+> **Privacy-first P2P payments and crypto swap application on the Stellar network using Zero-Knowledge proofs. Send and trade assets seamlessly and privately.**
 
-## Tech Stack
+---
 
-- **Frontend:** Next.js 14, Tailwind, @stellar/stellar-sdk, snarkjs, qrcode.react
+## 🚀 Live Links
+- **Deployed Website:** [zkash-swap.vercel.app](https://zkash-swap.vercel.app)
+- **Demo Video:** [YouTube Walkthrough](https://youtu.be/9XibJXIC4qg)
+
+---
+
+## 📜 Smart Contracts
+
+Our smart contracts are deployed and verifiable on the Stellar network:
+
+| Contract | Address / Link |
+|----------|---------------|
+| **Groth16 Verifier** | [`CA6NRLSK6Y5TFJTQT7LRN6DD7GJ4S6XITIJQSO3PLNW2U4BSVMYJARM6`](https://stellar.expert/explorer/public/contract/CA6NRLSK6Y5TFJTQT7LRN6DD7GJ4S6XITIJQSO3PLNW2U4BSVMYJARM6) |
+| **Shielded Pool (USDC)** | [`CA44UAU35XSFIKPANNNUTEXEOEELDEFYMVY7XLLNGM7ABBPWUN6GHZLU`](https://stellar.expert/explorer/public/contract/CA44UAU35XSFIKPANNNUTEXEOEELDEFYMVY7XLLNGM7ABBPWUN6GHZLU) |
+| **Shielded Pool (XLM)** | [`CCOED73UUQOVYUVHRSORTVHCIHZSPOL64PITWV2XDRM4HAQ55KVTG4MM`](https://stellar.expert/explorer/public/contract/CCOED73UUQOVYUVHRSORTVHCIHZSPOL64PITWV2XDRM4HAQ55KVTG4MM) |
+| **ZK Swap** | [`CC7ODJ2I23EF3CWIUNJETJHXXTUSLEFUO3M36I5VMYKTDIYDZTO6G6AM`](https://stellar.expert/explorer/public/contract/CC7ODJ2I23EF3CWIUNJETJHXXTUSLEFUO3M36I5VMYKTDIYDZTO6G6AM) |
+
+---
+
+## 🌟 Key Features
+
+- **Zero-Knowledge Privacy:** Enjoy truly private transactions using state-of-the-art zk-SNARKs (Groth16, BLS12-381). Hide amounts and transaction details from the public ledger.
+- **P2P Atomic Swaps:** Trustlessly swap tokens (e.g., USDC to XLM) with peers without a centralized exchange or exposing your financial data.
+- **Stellar & Soroban Integration:** Built on the blazing-fast Stellar network leveraging advanced Soroban smart contracts.
+- **Fiat On-Ramp & Off-Ramp:** Integrated with Razorpay seamlessly bridging the gap between traditional finance and decentralized privacy.
+- **Automated Withdrawals:** Smooth and automated exits from the shielded pool to public accounts right after swapping.
+- **Seamless Authentication:** Google OAuth integrated for a frictionless user onboarding experience.
+
+---
+
+## 🛠 Architecture & Tech Stack
+
+ZKASH is built with a modern, high-performance tech stack:
+
+- **Frontend:** Next.js 14, TailwindCSS, `@stellar/stellar-sdk`, `snarkjs`
 - **Backend:** NestJS, MongoDB, Google OAuth, Stellar SDK
-- **Contracts:** Soroban (Rust) - ShieldedPool, ZKSwap
-- **Circuits:** Circom + SnarkJS (BLS12-381)
+- **Smart Contracts:** Soroban / Rust (`ShieldedPool`, `ZKSwap`)
+- **Circuits:** Circom + SnarkJS (BLS12-381 Curve)
+- **Indexer:** Background service listening to Soroban events and managing encrypted notes.
 
-## Setup
+---
+
+## ⚙️ Local Setup & Development
 
 ### Prerequisites
-
 - Node.js 20+
-- pnpm
+- `pnpm`
 - MongoDB
-- Rust (for contracts)
-- Circom (for circuits)
+- Rust (for compiling Soroban contracts)
+- Circom (for circuit compilation)
 
-### Environment
+### 1. Environment Configuration
+
+Create `.env` inside `apps/api` and `.env.local` inside `apps/web` based on the provided setup. Example API `.env`:
 
 ```bash
-# apps/api/.env
 MONGODB_URI=mongodb://localhost:27017/lop
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
+GOOGLE_CLIENT_ID=<your-client-id>
+GOOGLE_CLIENT_SECRET=<your-client-secret>
 GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
 FRONTEND_URL=http://localhost:3000
 SESSION_SECRET=your-secret
 CORS_ORIGIN=http://localhost:3000
 RPC_URL=https://soroban-testnet.stellar.org
-GROTH16_VERIFIER_ADDRESS=...
-SHIELDED_POOL_ADDRESS=...
-ZK_SWAP_ADDRESS=...
-USDC_TOKEN_ADDRESS=...
-ADMIN_SECRET_KEY=...
-# Optional: second pool for XLM (if same as USDC pool, omit)
-# SHIELDED_POOL_XLM_ADDRESS=...
-# Optional: override circuit artifact paths (defaults: packages/circuits/private_transfer/...)
-# CIRCUIT_ROOT=...
-# CIRCUIT_WASM_PATH=...
-# CIRCUIT_ZKEY_PATH=...
 
-# apps/web/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:3001
+# Stellar Contracts
+GROTH16_VERIFIER_ADDRESS=CA6NRLSK6Y5TFJTQT7LRN6DD7GJ4S6XITIJQSO3PLNW2U4BSVMYJARM6
+SHIELDED_POOL_ADDRESS=CA44UAU35XSFIKPANNNUTEXEOEELDEFYMVY7XLLNGM7ABBPWUN6GHZLU
+ZK_SWAP_ADDRESS=CC7ODJ2I23EF3CWIUNJETJHXXTUSLEFUO3M36I5VMYKTDIYDZTO6G6AM
+SHIELDED_POOL_XLM_ADDRESS=CCOED73UUQOVYUVHRSORTVHCIHZSPOL64PITWV2XDRM4HAQ55KVTG4MM
 ```
 
-### Install
+### 2. Install Dependencies
 
 ```bash
 pnpm install
 ```
 
-### Run
+### 3. Run the Application
+
+Start the respective services in different terminals:
 
 ```bash
-# API (port 3001)
+# Start the Backend API (runs on port 3001)
 pnpm dev:api
 
-# Web (port 3000)
+# Start the Frontend App (runs on port 3000)
 pnpm dev:web
 
-# Indexer (optional)
+# Start the Indexer (optional, for syncing events)
 pnpm dev:indexer
 ```
 
-### Build Contracts
+### 4. Build Zero-Knowledge Circuits
+
+Private send and swap generate ZK proofs in the API. Build the circuit and run the trusted setup.
+
+```bash
+cd packages/circuits
+pnpm run build    # Compiles circuit, produces build/main_js/main.wasm
+pnpm run setup    # Trusted setup: produces output/main_final.zkey and output/verification_key.json
+```
+*(Do not commit `main_final.zkey` as it is a large file).*
+
+### 5. Build Smart Contracts
 
 ```bash
 cd packages/contracts
@@ -74,51 +116,15 @@ cargo build --target wasm32-unknown-unknown --release -p shielded_pool
 soroban contract optimize --wasm target/wasm32-unknown-unknown/release/shielded_pool.wasm -o shielded_pool.optimized.wasm
 ```
 
-### Initialize ShieldedPool (after deploy)
+---
 
-After deploying the contracts, you must **initialize the ShieldedPool** once (verifier, VK, token, admin):
+## 📚 References
+- [Stellar Protocol 25 Upgrade Guide](https://stellar.org/blog/developers/stellar-x-ray-protocol-25-upgrade-guide)
+- [Soroban Privacy Pools](https://github.com/ymcrcat/soroban-privacy-pools)
+- [Stellar Soroban Examples: Groth16 Verifier](https://github.com/stellar/soroban-examples/tree/main/groth16_verifier)
 
-1. **Circuit trusted setup** (so you have a verification key):
-   ```bash
-   cd packages/circuits && pnpm run build && pnpm run setup
-   ```
-   This creates `packages/circuits/private_transfer/output/verification_key.json`.
+---
 
-2. **Add to `.env`** (do not commit the secret key):
-   - `GROTH16_VERIFIER_ADDRESS` – your deployed groth16_verifier contract ID
-   - `USDC_TOKEN_ADDRESS` – testnet USDC token contract (e.g. `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`; confirm at [Circle USDC on Stellar](https://developers.circle.com/stablecoins/docs/usdc-on-stellar))
-   - `ADMIN_SECRET_KEY` – secret key of the admin (e.g. your deployer) that will own the pool
-
-3. **Run the init script** from repo root:
-   ```bash
-   node --env-file=.env scripts/init-shielded-pool.mjs
-   ```
-
-Until this is done, `deposit` and `withdraw` on the ShieldedPool will fail.
-
-### Build Circuits (required for private send and private swap)
-
-Private send and private swap generate ZK proofs in the API. You must build the circuit and run the trusted setup once so the API can load the proving key:
-
-```bash
-cd packages/circuits
-pnpm run build    # compiles circuit, produces build/main_js/main.wasm
-pnpm run setup    # trusted setup: produces output/main_final.zkey and output/verification_key.json
-```
-
-- **Do not commit** `main_final.zkey` (large file). Add `*.zkey` to `.gitignore` if needed.
-- The API looks for artifacts under `packages/circuits/private_transfer/` by default (when run from repo root). To override, set `CIRCUIT_ZKEY_PATH` and/or `CIRCUIT_WASM_PATH` (or `CIRCUIT_ROOT`) in `.env`.
-- Without a valid `main_final.zkey`, "Prepare private execution" and private send will fail with a clear error.
-
-## Architecture
-
-- **ShieldedPool:** Deposit/withdraw with commitments and ZK proofs
-- **ZKSwap:** Atomic P2P swaps between USDC and XLM
-- **Indexer:** Listens to Soroban events, stores encrypted notes
-- **Circuits:** Withdraw circuit from soroban-privacy-pools (BLS12-381)
-
-## References
-
-- [Stellar X-Ray Protocol 25](https://stellar.org/blog/developers/stellar-x-ray-protocol-25-upgrade-guide)
-- [soroban-privacy-pools](https://github.com/ymcrcat/soroban-privacy-pools)
-- [stellar/soroban-examples groth16_verifier](https://github.com/stellar/soroban-examples/tree/main/groth16_verifier)
+<p align="center">
+  Built with ❤️ for the Stellar Ecosystem.
+</p>
