@@ -1,6 +1,9 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { SessionAuthGuard } from '../auth/guards/session.guard';
+import { BalanceActionDto, SendPaymentDto, SponsorshipPreviewDto } from '../common/dto/wallet.dto';
+import { failureResponse, successResponse } from '../common/responses/transaction-response';
 
 @Controller('users')
 export class UsersController {
@@ -56,30 +59,49 @@ export class UsersController {
 
   @Post('send')
   @UseGuards(SessionAuthGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async sendPayment(@Req() req: any, @Body() body: { recipient: string; asset: 'USDC' | 'XLM'; amount: string }) {
-    if (!body.recipient || !body.asset || !body.amount) {
-      return { error: 'Missing fields' };
-    }
+  async sendPayment(@Req() req: any, @Body() body: SendPaymentDto) {
     try {
-      const hash = await this.usersService.sendPayment(req.user._id, body.recipient, body.asset, body.amount);
-      return { success: true, hash };
+      const result = await this.usersService.sendPayment(req.user._id, body.recipient, body.asset, body.amount);
+      return successResponse('public_send', 'Public payment submitted successfully.', {
+        txHash: result.txHash,
+        indexing: { status: 'not_required' },
+        sponsorship: {
+          attempted: true,
+          sponsored: result.sponsored,
+          detail: result.sponsorshipDetail,
+        },
+      });
     } catch (e) {
-      return { success: false, message: (e as Error).message };
+      return failureResponse('public_send', 'Public payment failed.', {
+        error: (e as Error).message,
+        sponsorship: { attempted: true, sponsored: false },
+      });
     }
   }
 
   @Post('send/private')
   @UseGuards(SessionAuthGuard)
+  @Throttle({ default: { limit: 15, ttl: 60_000 } })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async sendPrivate(
     @Req() req: any,
-    @Body() body: { recipient: string; asset: 'USDC' | 'XLM'; amount: string },
+    @Body() body: SendPaymentDto,
   ) {
-    if (!body?.recipient || !body?.asset || !body?.amount) {
-      return { success: false, error: 'Missing recipient, asset, or amount' };
+    const result = await this.usersService.sendPrivate(req.user._id, body.recipient, body.asset, body.amount);
+    if (!result.success) {
+      return failureResponse('private_send', result.error ?? 'Private payment failed.', {
+        error: result.error,
+        indexing: { status: 'pending', detail: 'Recipient withdrawal indexing may still be pending.' },
+        sponsorship: { attempted: false, sponsored: false },
+      });
     }
-    return this.usersService.sendPrivate(req.user._id, body.recipient, body.asset, body.amount);
+
+    return successResponse('private_send', 'Private payment submitted. Recipient can process withdrawal after indexing.', {
+      indexing: { status: 'pending', detail: 'Recipient withdrawal will appear after the indexer processes the commitment.' },
+      sponsorship: { attempted: false, sponsored: false },
+    });
   }
 
   @Post('withdrawals/process')
@@ -91,36 +113,79 @@ export class UsersController {
 
   @Post('withdrawals/self')
   @UseGuards(SessionAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async withdrawSelf(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM'; amount: number }) {
-    if (!body?.asset || !body?.amount) return { success: false, error: 'Missing asset or amount' };
-    return this.usersService.withdrawSelf(req.user._id, body.asset, body.amount);
+  async withdrawSelf(@Req() req: any, @Body() body: BalanceActionDto) {
+    const result = await this.usersService.withdrawSelf(req.user._id, body.asset, body.amount);
+    if (!result.success) {
+      return failureResponse('withdraw_self', result.error ?? 'Private withdrawal failed.', {
+        error: result.error,
+        indexing: { status: 'tracked', detail: 'Public balance should reflect the withdrawal once the chain confirms it.' },
+        sponsorship: { attempted: false, sponsored: false },
+      });
+    }
+
+    return successResponse('withdraw_self', 'Private balance withdrawn to the public wallet.', {
+      txHash: result.txHash,
+      indexing: { status: 'tracked', detail: 'Public balance will refresh after on-chain confirmation.' },
+      sponsorship: { attempted: false, sponsored: false },
+    });
   }
 
   @Post('deposit')
   @UseGuards(SessionAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async deposit(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM'; amount: number }) {
-    if (!body?.asset || (body.asset !== 'USDC' && body.asset !== 'XLM') || !body.amount) {
-      return { success: false, error: 'asset must be USDC or XLM, and amount is required' };
-    }
+  async deposit(@Req() req: any, @Body() body: BalanceActionDto) {
     try {
       const result = await this.usersService.deposit(req.user._id, body.asset, body.amount);
-      if (result.error) return { success: false, error: result.error };
-      return { success: true, txHash: result.txHash };
+      if (result.error) {
+        return failureResponse('deposit', 'Deposit failed.', {
+          error: result.error,
+          indexing: { status: 'lagging', detail: 'Private balance will not update until the deposit is confirmed and indexed.' },
+          sponsorship: { attempted: false, sponsored: false },
+        });
+      }
+      return successResponse('deposit', 'Deposit submitted to the shielded pool.', {
+        txHash: result.txHash,
+        indexing: { status: 'pending', detail: 'Private balance will update once the canonical indexer syncs the new note.' },
+        sponsorship: { attempted: false, sponsored: false },
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       console.error('[UsersController] deposit failed:', e);
-      return { success: false, error: message };
+      return failureResponse('deposit', 'Deposit failed.', {
+        error: message,
+        indexing: { status: 'lagging', detail: 'The request did not complete cleanly; no private balance update should be assumed.' },
+        sponsorship: { attempted: false, sponsored: false },
+      });
     }
   }
 
   @Post('split')
   @UseGuards(SessionAuthGuard)
+  @Throttle({ default: { limit: 8, ttl: 60_000 } })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async splitNote(@Req() req: any, @Body() body: { asset: 'USDC' | 'XLM'; amount: number }) {
-    if (!body?.asset || !body?.amount) return { success: false, error: 'Missing asset or amount' };
-    return this.usersService.splitNote(req.user._id, body.asset, body.amount);
+  async splitNote(@Req() req: any, @Body() body: BalanceActionDto) {
+    const result = await this.usersService.splitNote(req.user._id, body.asset, body.amount);
+    if (!result.success) {
+      return failureResponse('split_note', result.error ?? 'Split failed.', {
+        error: result.error,
+        indexing: { status: 'pending', detail: 'If any withdrawal leg was sent, private balances may take time to settle.' },
+        sponsorship: { attempted: false, sponsored: false },
+      });
+    }
+    return successResponse('split_note', 'Note split completed and exact-value note recreated.', {
+      indexing: { status: 'pending', detail: 'The recreated note will appear after indexer sync.' },
+      sponsorship: { attempted: false, sponsored: false },
+    });
+  }
+
+  @Post('sponsorship/preview')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async previewSponsorship(@Req() req: any, @Body() body: SponsorshipPreviewDto) {
+    return this.usersService.previewSponsorship(req.user._id, body);
   }
 
   @Get('history')
