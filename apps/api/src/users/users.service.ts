@@ -15,6 +15,9 @@ import { computeCommitment, type NoteFields } from '../zk/commitment';
 import { ProofService } from '../zk/proof.service';
 import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.context';
+import { MetricsService } from '../ops/metrics.service';
+import { AppLoggerService } from '../common/logging/app-logger.service';
+import { SponsorshipPreviewDto } from '../common/dto/wallet.dto';
 
 @Injectable()
 export class UsersService {
@@ -36,6 +39,8 @@ export class UsersService {
     private sorobanService: SorobanService,
     private proofService: ProofService,
     private merkleTree: MerkleTreeService,
+    private metrics: MetricsService,
+    private logger: AppLoggerService,
   ) { }
 
   async findById(id: string): Promise<User | null> {
@@ -110,7 +115,12 @@ export class UsersService {
     }
   }
 
-  async sendPayment(senderId: string, recipientIdentifier: string, assetCode: 'USDC' | 'XLM', amount: string): Promise<string> {
+  async sendPayment(
+    senderId: string,
+    recipientIdentifier: string,
+    assetCode: 'USDC' | 'XLM',
+    amount: string,
+  ): Promise<{ txHash: string; sponsored: boolean; sponsorshipDetail: string }> {
     const sender = await this.findById(senderId);
     if (!sender) throw new Error('Sender not found');
     if (!sender.googleId) throw new Error('Sender Google ID required');
@@ -158,10 +168,56 @@ export class UsersService {
 
       tx.sign(keypair);
 
-      const res = await this.server.submitTransaction(tx);
-      return res.hash;
+      const sponsorSecret = process.env.SPONSOR_SECRET_KEY;
+      const sponsorMaxAmount = Number(process.env.SPONSOR_MAX_AMOUNT ?? '250');
+      const shouldSponsor = Boolean(
+        sponsorSecret &&
+        Number.isFinite(Number(amount)) &&
+        Number(amount) > 0 &&
+        Number(amount) <= sponsorMaxAmount,
+      );
+
+      let res: { hash: string };
+      let sponsored = false;
+      let sponsorshipDetail = 'Sponsorship unavailable; transaction submitted with the sender paying the fee.';
+
+      if (shouldSponsor && sponsorSecret) {
+        const sponsorKeypair = Keypair.fromSecret(sponsorSecret);
+        const feeBump = TransactionBuilder.buildFeeBumpTransaction(
+          sponsorKeypair,
+          '1000',
+          tx,
+          isMainnet ? Networks.PUBLIC : Networks.TESTNET,
+        );
+        feeBump.sign(sponsorKeypair);
+        const result = await this.server.submitTransaction(feeBump);
+        res = { hash: result.hash };
+        sponsored = true;
+        sponsorshipDetail = 'Fee sponsorship applied through a fee-bump envelope.';
+        this.metrics.increment('wallet', 'public_send_sponsored');
+      } else {
+        const result = await this.server.submitTransaction(tx);
+        res = { hash: result.hash };
+      }
+
+      this.metrics.increment('wallet', 'public_send_success');
+      this.logger.logEvent('wallet', 'public_send_success', {
+        senderId,
+        recipientIdentifier,
+        assetCode,
+        amount,
+        txHash: res.hash,
+        sponsored,
+      });
+      return { txHash: res.hash, sponsored, sponsorshipDetail };
     } catch (e) {
-      console.error('[UsersService] Send Payment Error:', e);
+      this.metrics.incrementError('wallet', 'public_send_failure');
+      this.logger.errorEvent('wallet', 'public_send_failure', e, {
+        senderId,
+        recipientIdentifier,
+        assetCode,
+        amount,
+      });
       // Improve error message
       const msg = (e as any)?.response?.data?.extras?.result_codes?.operations?.[0] || (e as Error).message;
       throw new Error(`Payment failed: ${msg}`);
@@ -403,9 +459,23 @@ export class UsersService {
 
       // Mark note spent using SECRET nullifier (database index)
       await this.markNoteSpent(senderId, nullifierSecret);
+      this.metrics.increment('wallet', 'private_send_success');
+      this.logger.logEvent('wallet', 'private_send_success', {
+        senderId,
+        recipientIdentifier,
+        asset,
+        amount,
+      });
       console.log('[sendPrivate] SUCCESS');
       return { success: true };
     } catch (proofErr: any) {
+      this.metrics.incrementError('wallet', 'private_send_failure');
+      this.logger.errorEvent('wallet', 'private_send_failure', proofErr, {
+        senderId,
+        recipientIdentifier,
+        asset,
+        amount,
+      });
       console.error('[sendPrivate] PROOF/WITHDRAWAL ERROR:', proofErr.message || proofErr);
       return { success: false, error: proofErr.message || String(proofErr) };
     }
@@ -511,10 +581,19 @@ export class UsersService {
 
       // 4. Mark note spent
       await this.markNoteSpent(userId, nullifierSecret);
+      this.metrics.increment('wallet', 'withdraw_success');
+      this.logger.logEvent('wallet', 'withdraw_success', {
+        userId,
+        asset,
+        amount,
+        txHash,
+      });
 
       return { success: true, txHash };
 
     } catch (e: any) {
+      this.metrics.incrementError('wallet', 'withdraw_failure');
+      this.logger.errorEvent('wallet', 'withdraw_failure', e, { userId, asset, amount });
       console.error('[withdrawSelf] error:', e);
       const msg = e.message || String(e);
 
@@ -590,7 +669,13 @@ export class UsersService {
         p.processed = true;
         p.txHash = hash;
         await p.save();
+        this.metrics.increment('wallet', 'pending_withdrawal_processed');
       } catch (e) {
+        this.metrics.incrementError('wallet', 'pending_withdrawal_failure');
+        this.logger.errorEvent('wallet', 'pending_withdrawal_failure', e, {
+          userId,
+          pendingWithdrawalId: String(p._id),
+        });
         console.error('[UsersService] processPendingWithdrawals error:', e);
       }
     }
@@ -712,12 +797,52 @@ export class UsersService {
         console.error('[UsersService] deposit: failed to create EncryptedNote for private balance:', e);
       }
 
+      this.metrics.increment('wallet', 'deposit_success');
+      this.logger.logEvent('wallet', 'deposit_success', {
+        userId,
+        asset,
+        amount,
+        txHash,
+      });
       return { txHash };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
+      this.metrics.incrementError('wallet', 'deposit_failure');
+      this.logger.errorEvent('wallet', 'deposit_failure', e, { userId, asset, amount });
       console.error('[UsersService] deposit error:', e);
       return { txHash: '', error: message };
     }
+  }
+
+  async previewSponsorship(userId: string, body: SponsorshipPreviewDto) {
+    const user = await this.findById(userId);
+    if (!user) {
+      return {
+        supported: false,
+        sponsored: false,
+        reason: 'User not found.',
+      };
+    }
+
+    const enabled = Boolean(process.env.SPONSOR_SECRET_KEY);
+    const supportedOperations = new Set(['public_send', 'deposit', 'withdraw_self']);
+    const supported = enabled && supportedOperations.has(body.operation);
+
+    return {
+      supported,
+      sponsored: supported,
+      operation: body.operation,
+      asset: body.asset,
+      reason: supported
+        ? 'Sponsorship is configured and available for this operation.'
+        : enabled
+          ? 'This operation is not yet covered by sponsorship policy.'
+          : 'SPONSOR_SECRET_KEY is not configured.',
+      policy: {
+        maxAmount: Number(process.env.SPONSOR_MAX_AMOUNT ?? '250'),
+        recipientRequired: body.operation === 'public_send',
+      },
+    };
   }
 
   /**

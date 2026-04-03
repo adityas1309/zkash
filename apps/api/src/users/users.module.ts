@@ -9,6 +9,7 @@ import { UsersController } from './users.controller';
 import { AuthModule } from '../auth/auth.module';
 import { SorobanModule } from '../soroban/soroban.module';
 import { ZkModule } from '../zk/zk.module';
+import { OpsModule } from '../ops/ops.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { ZkModule } from '../zk/zk.module';
     forwardRef(() => AuthModule),
     SorobanModule,
     ZkModule,
+    OpsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],

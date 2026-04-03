@@ -393,18 +393,18 @@ describe('E2E Flow Verification (Real Stellar Testnet)', () => {
     describe('Flow 4: Direct P2P Payment (XLM)', () => {
         it('should send XLM from Alice to Bob', async () => {
             await runStep('4.1 Send 10 XLM Alice → Bob', async () => {
-                const hash = await usersService.sendPayment(
+                const result = await usersService.sendPayment(
                     alice._id.toString(),
                     bob.username!,
                     'XLM',
                     '10',
                 );
 
-                expect(hash).toBeDefined();
-                expect(typeof hash).toBe('string');
-                expect(hash.length).toBeGreaterThan(0);
+                expect(result).toBeDefined();
+                expect(typeof result.txHash).toBe('string');
+                expect(result.txHash.length).toBeGreaterThan(0);
 
-                return `txHash: ${hash}`;
+                return `txHash: ${result.txHash}`;
             });
         });
 
