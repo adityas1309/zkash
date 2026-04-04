@@ -18,6 +18,7 @@ import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.
 import { MetricsService } from '../ops/metrics.service';
 import { AppLoggerService } from '../common/logging/app-logger.service';
 import { SponsorshipPreviewDto } from '../common/dto/wallet.dto';
+import { SponsorshipService } from '../sponsorship/sponsorship.service';
 
 @Injectable()
 export class UsersService {
@@ -41,6 +42,7 @@ export class UsersService {
     private merkleTree: MerkleTreeService,
     private metrics: MetricsService,
     private logger: AppLoggerService,
+    private sponsorshipService: SponsorshipService,
   ) { }
 
   async findById(id: string): Promise<User | null> {
@@ -169,13 +171,12 @@ export class UsersService {
       tx.sign(keypair);
 
       const sponsorSecret = process.env.SPONSOR_SECRET_KEY;
-      const sponsorMaxAmount = Number(process.env.SPONSOR_MAX_AMOUNT ?? '250');
-      const shouldSponsor = Boolean(
-        sponsorSecret &&
-        Number.isFinite(Number(amount)) &&
-        Number(amount) > 0 &&
-        Number(amount) <= sponsorMaxAmount,
-      );
+      const shouldSponsor = this.sponsorshipService.shouldSponsor({
+        operation: 'public_send',
+        asset: assetCode,
+        amount: Number(amount),
+        recipient: recipientIdentifier,
+      });
 
       let res: { hash: string };
       let sponsored = false;
@@ -824,24 +825,14 @@ export class UsersService {
       };
     }
 
-    const enabled = Boolean(process.env.SPONSOR_SECRET_KEY);
-    const supportedOperations = new Set(['public_send', 'deposit', 'withdraw_self']);
-    const supported = enabled && supportedOperations.has(body.operation);
-
     return {
-      supported,
-      sponsored: supported,
-      operation: body.operation,
+      ...this.sponsorshipService.evaluate({
+        operation: body.operation as any,
+        asset: body.asset,
+        amount: body.amount,
+        recipient: body.recipient,
+      }),
       asset: body.asset,
-      reason: supported
-        ? 'Sponsorship is configured and available for this operation.'
-        : enabled
-          ? 'This operation is not yet covered by sponsorship policy.'
-          : 'SPONSOR_SECRET_KEY is not configured.',
-      policy: {
-        maxAmount: Number(process.env.SPONSOR_MAX_AMOUNT ?? '250'),
-        recipientRequired: body.operation === 'public_send',
-      },
     };
   }
 

@@ -10,6 +10,7 @@ import { AuthModule } from '../auth/auth.module';
 import { SorobanModule } from '../soroban/soroban.module';
 import { ZkModule } from '../zk/zk.module';
 import { OpsModule } from '../ops/ops.module';
+import { SponsorshipModule } from '../sponsorship/sponsorship.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { OpsModule } from '../ops/ops.module';
     SorobanModule,
     ZkModule,
     OpsModule,
+    SponsorshipModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],
