@@ -1,45 +1,24 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Users, ArrowRightLeft, TrendingUp, Zap } from "lucide-react";
+import { Users, ArrowRightLeft, Activity, ShieldCheck } from "lucide-react";
 import { Card } from "./ui/Card";
 import { useEffect, useState } from "react";
 
-const stats = [
-  {
-    icon: Users,
-    label: "Active Users",
-    value: 12500,
-    suffix: "+",
-    color: "indigo",
-  },
-  {
-    icon: ArrowRightLeft,
-    label: "Transactions",
-    value: 847000,
-    suffix: "+",
-    color: "purple",
-  },
-  {
-    icon: TrendingUp,
-    label: "Volume Traded",
-    value: 2.4,
-    prefix: "$",
-    suffix: "M",
-    color: "blue",
-  },
-  {
-    icon: Zap,
-    label: "Avg. Speed",
-    value: 3.2,
-    suffix: "s",
-    color: "violet",
-  },
-];
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+
+type StatsCard = {
+  icon: typeof Users;
+  label: string;
+  value: number;
+  suffix?: string;
+  prefix?: string;
+  color: "indigo" | "purple" | "blue" | "violet";
+};
 
 function AnimatedCounter({
   end,
-  duration = 2,
+  duration = 1.5,
   prefix = "",
   suffix = "",
 }: {
@@ -57,7 +36,6 @@ function AnimatedCounter({
     const animate = (currentTime: number) => {
       if (!startTime) startTime = currentTime;
       const progress = Math.min((currentTime - startTime) / (duration * 1000), 1);
-
       setCount(Math.floor(progress * end));
 
       if (progress < 1) {
@@ -66,61 +44,129 @@ function AnimatedCounter({
     };
 
     animationFrame = requestAnimationFrame(animate);
-
     return () => cancelAnimationFrame(animationFrame);
   }, [end, duration]);
-
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1);
-    }
-    if (num >= 1000) {
-      return num.toLocaleString();
-    }
-    return num.toFixed(1);
-  };
 
   return (
     <span>
       {prefix}
-      {formatNumber(count)}
+      {count.toLocaleString()}
       {suffix}
     </span>
   );
 }
 
 export function StatsSection() {
+  const [stats, setStats] = useState<StatsCard[]>([
+    {
+      icon: Users,
+      label: "Active Users (24h)",
+      value: 0,
+      color: "indigo",
+    },
+    {
+      icon: ArrowRightLeft,
+      label: "Tracked Swaps",
+      value: 0,
+      color: "purple",
+    },
+    {
+      icon: Activity,
+      label: "Indexed Commitments",
+      value: 0,
+      color: "blue",
+    },
+    {
+      icon: ShieldCheck,
+      label: "Healthy Pools",
+      value: 0,
+      color: "violet",
+    },
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStats = async () => {
+      try {
+        const res = await fetch(`${API_URL}/stats`, { cache: "no-store" });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        const healthyPools = Array.isArray(data?.indexer?.pools)
+          ? data.indexer.pools.filter(
+              (pool: { status?: string }) => pool.status === "healthy",
+            ).length
+          : 0;
+
+        setStats([
+          {
+            icon: Users,
+            label: "Active Users (24h)",
+            value: Number(data?.users?.active24h ?? 0),
+            color: "indigo",
+          },
+          {
+            icon: ArrowRightLeft,
+            label: "Tracked Swaps",
+            value: Number(data?.flows?.swaps ?? 0),
+            color: "purple",
+          },
+          {
+            icon: Activity,
+            label: "Indexed Commitments",
+            value: Number(data?.indexer?.commitments ?? 0),
+            color: "blue",
+          },
+          {
+            icon: ShieldCheck,
+            label: "Healthy Pools",
+            value: healthyPools,
+            color: "violet",
+          },
+        ]);
+      } catch (error) {
+        console.error("Failed to load operational stats", error);
+      }
+    };
+
+    loadStats();
+    const interval = setInterval(loadStats, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
-    <section className="relative w-full py-24 overflow-hidden bg-slate-950">
-      {/* Background Gradients */}
+    <section className="relative w-full overflow-hidden bg-slate-950 py-24">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[120px]" />
+        <div className="absolute right-[-10%] top-[-20%] h-[50%] w-[50%] rounded-full bg-purple-500/10 blur-[120px]" />
+        <div className="absolute bottom-[-20%] left-[-10%] h-[50%] w-[50%] rounded-full bg-indigo-500/10 blur-[120px]" />
       </div>
 
-      {/* Top fade for seamless transition from PrivacySection */}
-      <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-slate-950 to-transparent z-[5] pointer-events-none" />
+      <div className="absolute left-0 top-0 z-[5] h-32 w-full bg-gradient-to-b from-slate-950 to-transparent pointer-events-none" />
 
-      <div className="container relative z-10 px-4 mx-auto max-w-6xl">
-        {/* Section Header */}
+      <div className="container relative z-10 mx-auto max-w-6xl px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="text-center mb-16"
+          className="mb-16 text-center"
         >
-          <h2 className="text-4xl md:text-5xl font-bold tracking-tighter text-white mb-4 font-secondary">
-            Trusted by <span className="text-indigo-500">Thousands</span>
+          <h2 className="mb-4 font-secondary text-4xl font-bold tracking-tighter text-white md:text-5xl">
+            Live <span className="text-indigo-500">Operational Trust Signals</span>
           </h2>
-          <p className="text-slate-400 text-lg leading-relaxed max-w-2xl mx-auto">
-            Join a growing community of users who trust ZKash for private,
-            secure, and instant transactions.
+          <p className="mx-auto max-w-2xl text-lg leading-relaxed text-slate-400">
+            ZKASH now surfaces real backend usage, indexer freshness, and tracked
+            activity instead of relying on presentation-only numbers.
           </p>
         </motion.div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat, index) => {
             const colorClasses = {
               indigo: {
@@ -145,35 +191,27 @@ export function StatsSection() {
               },
             };
 
-            const colors = colorClasses[stat.color as keyof typeof colorClasses];
+            const colors = colorClasses[stat.color];
 
             return (
               <motion.div
-                key={index}
+                key={stat.label}
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{
-                  duration: 0.6,
-                  delay: index * 0.1,
-                  ease: "easeOut",
-                }}
+                transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
               >
                 <Card
                   variant="glass"
-                  className={`flex flex-col items-center text-center p-8 hover:bg-slate-800/50 transition-all duration-300 group hover:scale-105 ${colors.glow}`}
+                  className={`group flex flex-col items-center p-8 text-center transition-all duration-300 hover:scale-105 hover:bg-slate-800/50 ${colors.glow}`}
                 >
-                  {/* Icon */}
                   <div
-                    className={`p-4 ${colors.bg} rounded-2xl mb-4 group-hover:scale-110 transition-transform duration-300`}
+                    className={`mb-4 rounded-2xl p-4 transition-transform duration-300 group-hover:scale-110 ${colors.bg}`}
                   >
-                    <stat.icon className={`w-8 h-8 ${colors.text}`} />
+                    <stat.icon className={`h-8 w-8 ${colors.text}`} />
                   </div>
 
-                  {/* Value */}
-                  <div
-                    className={`text-4xl md:text-5xl font-bold ${colors.text} mb-2 font-secondary`}
-                  >
+                  <div className={`mb-2 font-secondary text-4xl font-bold md:text-5xl ${colors.text}`}>
                     <AnimatedCounter
                       end={stat.value}
                       prefix={stat.prefix}
@@ -181,27 +219,23 @@ export function StatsSection() {
                     />
                   </div>
 
-                  {/* Label */}
-                  <p className="text-slate-400 text-sm font-medium">
-                    {stat.label}
-                  </p>
+                  <p className="text-sm font-medium text-slate-400">{stat.label}</p>
                 </Card>
               </motion.div>
             );
           })}
         </div>
 
-        {/* Bottom CTA or Additional Info */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
-          className="text-center mt-12"
+          className="mt-12 text-center"
         >
-          <p className="text-slate-500 text-sm">
-            All transactions are secured with zero-knowledge proofs • Real-time
-            stats updated every 24 hours
+          <p className="text-sm text-slate-500">
+            Zero-knowledge transfers backed by live API stats, indexer health,
+            and continuously refreshed activity counters
           </p>
         </motion.div>
       </div>

@@ -30,6 +30,16 @@ export default function WalletPage() {
   const [isBalanceLoading, setIsBalanceLoading] = useState(true);
   const [faucetLoading, setFaucetLoading] = useState(false);
   const [withdrawing, setWithdrawing] = useState<"USDC" | "XLM" | null>(null);
+  const [opsStats, setOpsStats] = useState<{
+    indexer?: {
+      commitments?: number;
+      pools?: Array<{ status: string; lastProcessedLedger: number }>;
+    };
+    flows?: { pendingWithdrawals?: number };
+  } | null>(null);
+  const [withdrawSponsorship, setWithdrawSponsorship] = useState<
+    Record<string, string>
+  >({});
 
   const fetchBalance = () => {
     return fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
@@ -45,13 +55,20 @@ export default function WalletPage() {
       .catch(console.error);
   };
 
+  const fetchOpsStats = () => {
+    return fetch(`${API_URL}/stats`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setOpsStats(data))
+      .catch(console.error);
+  };
+
   useEffect(() => {
     fetch(`${API_URL}/users/me`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((u) => {
         setUser(u);
         if (u) {
-          Promise.all([fetchBalance(), fetchPrivateBalance()]).finally(() => {
+          Promise.all([fetchBalance(), fetchPrivateBalance(), fetchOpsStats()]).finally(() => {
             setIsBalanceLoading(false);
           });
         } else {
@@ -66,6 +83,7 @@ export default function WalletPage() {
     const interval = setInterval(() => {
       fetchBalance();
       fetchPrivateBalance();
+      fetchOpsStats();
     }, 5000);
     return () => clearInterval(interval);
   }, [user]);
@@ -170,6 +188,29 @@ export default function WalletPage() {
       setWithdrawing(null);
     }
   };
+
+  useEffect(() => {
+    if (!user) return;
+
+    (["USDC", "XLM"] as const).forEach((assetCode) => {
+      fetch(`${API_URL}/users/sponsorship/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ asset: assetCode, operation: "withdraw_self" }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.reason) {
+            setWithdrawSponsorship((prev) => ({
+              ...prev,
+              [assetCode]: data.reason,
+            }));
+          }
+        })
+        .catch(console.error);
+    });
+  }, [user]);
 
   if (loading) return <div className="p-8">Loading...</div>;
   if (!user) {
@@ -386,6 +427,33 @@ export default function WalletPage() {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">
+              Indexed Commitments
+            </p>
+            <p className="text-2xl font-bold text-white">
+              {opsStats?.indexer?.commitments ?? 0}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">
+              Pending Withdrawals
+            </p>
+            <p className="text-2xl font-bold text-white">
+              {opsStats?.flows?.pendingWithdrawals ?? 0}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-4">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">
+              Sponsorship Status
+            </p>
+            <p className="text-sm leading-relaxed text-slate-300">
+              {withdrawSponsorship.XLM ?? "Checking sponsorship policy..."}
+            </p>
           </div>
         </div>
       </main>

@@ -62,6 +62,24 @@ export default function DashboardPage() {
   const [status, setStatus] = useState("");
   const [sendLoading, setSendLoading] = useState(false);
   const [processStep, setProcessStep] = useState("");
+  const [sponsorship, setSponsorship] = useState<{
+    supported: boolean;
+    sponsored: boolean;
+    reason: string;
+  } | null>(null);
+  const [opsStats, setOpsStats] = useState<{
+    users?: { active24h?: number; total?: number };
+    flows?: { swaps?: number; openOffers?: number; pendingWithdrawals?: number };
+    indexer?: {
+      commitments?: number;
+      pools?: Array<{
+        poolAddress: string;
+        status: string;
+        lastProcessedLedger: number;
+        lastSuccessfulSyncAt?: string;
+      }>;
+    };
+  } | null>(null);
 
   const fetchBalance = () => {
     return fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
@@ -74,6 +92,13 @@ export default function DashboardPage() {
     return fetch(`${API_URL}/users/balance/private`, { credentials: "include" })
       .then((r) => r.json())
       .then((data) => setPrivateBalance(data))
+      .catch(console.error);
+  };
+
+  const fetchOpsStats = () => {
+    return fetch(`${API_URL}/stats`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => setOpsStats(data))
       .catch(console.error);
   };
 
@@ -98,16 +123,44 @@ export default function DashboardPage() {
 
     setIsBalanceLoading(true);
 
-    Promise.all([fetchBalance(), fetchPrivateBalance()]).finally(() => {
+    Promise.all([fetchBalance(), fetchPrivateBalance(), fetchOpsStats()]).finally(() => {
       setIsBalanceLoading(false);
     });
 
     const interval = setInterval(() => {
       fetchBalance();
       fetchPrivateBalance();
+      fetchOpsStats();
     }, 5000);
     return () => clearInterval(interval);
   }, [user, network]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${API_URL}/users/sponsorship/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        asset,
+        operation: isPrivate ? "private_send" : "public_send",
+        recipient,
+        amount: Number(amount || 0),
+      }),
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setSponsorship(data);
+      })
+      .catch((error) => {
+        if ((error as Error).name !== "AbortError") {
+          console.error(error);
+        }
+      });
+
+    return () => controller.abort();
+  }, [asset, isPrivate, recipient, amount]);
 
   const copyToClipboard = async () => {
     if (user?.stellarPublicKey) {
@@ -242,14 +295,15 @@ export default function DashboardPage() {
       try {
         const data = await attemptSend();
         if (isPrivate) {
-          setStatus(
-            "Private payment submitted. Recipient can process withdrawals on their wallet.",
-          );
+          setStatus(data.message ?? "Private payment submitted.");
         } else {
-          setStatus(`Payment successful! TX: ${data.hash}`);
+          setStatus(
+            `${data.message ?? "Payment successful."}${data.txHash ? ` TX: ${data.txHash}` : ""}${data.sponsorship?.detail ? ` ${data.sponsorship.detail}` : ""}`,
+          );
         }
         fetchBalance();
         fetchPrivateBalance();
+        fetchOpsStats();
         setAmount("");
         setRecipient("");
       } catch (err: unknown) {
@@ -277,22 +331,20 @@ export default function DashboardPage() {
 
             setProcessStep("Retrying payment after split...");
             const retryData = await attemptSend();
-            setStatus(
-              "Private payment submitted. Recipient can process withdrawals on their wallet.",
-            );
+            setStatus(retryData.message ?? "Private payment submitted.");
             fetchBalance();
             fetchPrivateBalance();
+            fetchOpsStats();
             setAmount("");
             setRecipient("");
           } else if (msg.includes("Insufficient private balance")) {
             await runDepositFlow(asset, numAmount);
             setProcessStep("Retrying payment after deposit...");
             const retryData = await attemptSend();
-            setStatus(
-              "Private payment submitted. Recipient can process withdrawals on their wallet.",
-            );
+            setStatus(retryData.message ?? "Private payment submitted.");
             fetchBalance();
             fetchPrivateBalance();
+            fetchOpsStats();
             setAmount("");
             setRecipient("");
           } else {
@@ -491,6 +543,39 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                <div className="mb-8 rounded-3xl border border-white/5 bg-slate-800/30 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Ops Snapshot
+                    </p>
+                    <span className="text-[11px] text-emerald-400">
+                      {opsStats?.indexer?.pools?.every((pool) => pool.status === "healthy")
+                        ? "Healthy"
+                        : "Watching"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-2xl bg-slate-900/60 p-3">
+                      <p className="text-lg font-bold text-white">
+                        {opsStats?.users?.active24h ?? 0}
+                      </p>
+                      <p className="text-[11px] text-slate-400">Active 24h</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/60 p-3">
+                      <p className="text-lg font-bold text-white">
+                        {opsStats?.flows?.swaps ?? 0}
+                      </p>
+                      <p className="text-[11px] text-slate-400">Swaps</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-900/60 p-3">
+                      <p className="text-lg font-bold text-white">
+                        {opsStats?.indexer?.commitments ?? 0}
+                      </p>
+                      <p className="text-[11px] text-slate-400">Indexed</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Send / Receive Actions */}
                 <div className="flex items-center gap-3 mb-auto">
                   <Link
@@ -542,6 +627,20 @@ export default function DashboardPage() {
                       {isPrivate
                         ? "Hidden using ZK proofs."
                         : "Visible on chain."}
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-900/50 border border-slate-700/50">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 mb-1">
+                      Fee Sponsorship
+                    </p>
+                    <p
+                      className={`text-xs leading-relaxed ${
+                        sponsorship?.sponsored ? "text-emerald-300" : "text-slate-300"
+                      }`}
+                    >
+                      {sponsorship?.reason ??
+                        "Checking whether this action can be sponsored..."}
                     </p>
                   </div>
 
