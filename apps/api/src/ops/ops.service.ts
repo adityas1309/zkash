@@ -9,6 +9,7 @@ import { EncryptedNote } from '../schemas/encrypted-note.schema';
 import { PendingWithdrawal } from '../schemas/pending-withdrawal.schema';
 import { PoolCommitment } from '../schemas/pool-commitment.schema';
 import { IndexerSyncState } from '../schemas/indexer-sync-state.schema';
+import { TransactionAudit } from '../schemas/transaction-audit.schema';
 
 @Injectable()
 export class OpsService {
@@ -21,6 +22,7 @@ export class OpsService {
     @InjectModel(PendingWithdrawal.name) private readonly pendingWithdrawalModel: Model<PendingWithdrawal>,
     @InjectModel(PoolCommitment.name) private readonly poolCommitmentModel: Model<PoolCommitment>,
     @InjectModel(IndexerSyncState.name) private readonly syncStateModel: Model<IndexerSyncState>,
+    @InjectModel(TransactionAudit.name) private readonly transactionAuditModel: Model<TransactionAudit>,
   ) {}
 
   async getHealth() {
@@ -54,7 +56,7 @@ export class OpsService {
   }
 
   async getStats() {
-    const [users, swaps, offers, encryptedNotes, pendingWithdrawals, commitments, syncStates] = await Promise.all([
+    const [users, swaps, offers, encryptedNotes, pendingWithdrawals, commitments, syncStates, auditEntries] = await Promise.all([
       this.userModel.countDocuments().exec(),
       this.swapModel.countDocuments().exec(),
       this.offerModel.countDocuments().exec(),
@@ -62,6 +64,7 @@ export class OpsService {
       this.pendingWithdrawalModel.countDocuments({ processed: false }).exec(),
       this.poolCommitmentModel.countDocuments().exec(),
       this.syncStateModel.find().lean().exec(),
+      this.transactionAuditModel.countDocuments().exec(),
     ]);
 
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -78,6 +81,7 @@ export class OpsService {
         openOffers: offers,
         encryptedNotes,
         pendingWithdrawals,
+        auditedTransactions: auditEntries,
       },
       indexer: {
         commitments,

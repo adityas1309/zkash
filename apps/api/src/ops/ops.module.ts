@@ -11,6 +11,7 @@ import { EncryptedNote, EncryptedNoteSchema } from '../schemas/encrypted-note.sc
 import { PendingWithdrawal, PendingWithdrawalSchema } from '../schemas/pending-withdrawal.schema';
 import { PoolCommitment, PoolCommitmentSchema } from '../schemas/pool-commitment.schema';
 import { IndexerSyncState, IndexerSyncStateSchema } from '../schemas/indexer-sync-state.schema';
+import { TransactionAudit, TransactionAuditSchema } from '../schemas/transaction-audit.schema';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { IndexerSyncState, IndexerSyncStateSchema } from '../schemas/indexer-syn
       { name: PendingWithdrawal.name, schema: PendingWithdrawalSchema },
       { name: PoolCommitment.name, schema: PoolCommitmentSchema },
       { name: IndexerSyncState.name, schema: IndexerSyncStateSchema },
+      { name: TransactionAudit.name, schema: TransactionAuditSchema },
     ]),
   ],
   controllers: [OpsController],
