@@ -78,4 +78,13 @@ export class TransactionAuditService {
       .lean()
       .exec();
   }
+
+  async listRecentForSwap(swapId: string, limit = 20) {
+    return this.transactionAuditModel
+      .find({ 'metadata.swapId': swapId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  }
 }

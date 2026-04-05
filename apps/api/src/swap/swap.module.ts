@@ -9,6 +9,7 @@ import { AuthModule } from '../auth/auth.module';
 import { SorobanModule } from '../soroban/soroban.module';
 import { ZkModule } from '../zk/zk.module';
 import { UsersModule } from '../users/users.module';
+import { TransactionsModule } from '../transactions/transactions.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from '../users/users.module';
     SorobanModule,
     ZkModule,
     forwardRef(() => UsersModule),
+    TransactionsModule,
   ],
   controllers: [SwapController],
   providers: [SwapService],
