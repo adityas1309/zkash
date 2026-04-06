@@ -1,15 +1,21 @@
-import { Body, Controller, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
-import { OffersService } from './offers.service';
-import { SessionAuthGuard } from '../auth/guards/session.guard';
+import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { Types } from 'mongoose';
+import { SessionAuthGuard } from '../auth/guards/session.guard';
+import { CreateOfferDto, OfferQueryDto, UpdateOfferDto } from './dto/offer.dto';
+import { OffersService } from './offers.service';
 
 @Controller('offers')
 export class OffersController {
   constructor(private offersService: OffersService) {}
 
+  @Get('market/highlights')
+  getMarketHighlights() {
+    return this.offersService.getMarketHighlights();
+  }
+
   @Get()
-  findAll() {
-    return this.offersService.findAll();
+  findAll(@Query() query: OfferQueryDto) {
+    return this.offersService.findAll(query);
   }
 
   @Get(':id')
@@ -17,18 +23,20 @@ export class OffersController {
     return this.offersService.findById(id);
   }
 
+  @Get(':id/insights')
+  findInsights(@Param('id') id: string) {
+    return this.offersService.getOfferInsights(id);
+  }
+
   @Post()
   @UseGuards(SessionAuthGuard)
-  create(
-    @Body() body: { assetIn: string; assetOut: string; rate: number; min: number; max: number },
-    @Req() req: { user: { _id: Types.ObjectId } },
-  ) {
+  create(@Body() body: CreateOfferDto, @Req() req: { user: { _id: Types.ObjectId } }) {
     return this.offersService.create(req.user._id, body);
   }
 
   @Put(':id')
   @UseGuards(SessionAuthGuard)
-  update(@Param('id') id: string, @Body() body: { active?: boolean }) {
+  update(@Param('id') id: string, @Body() body: UpdateOfferDto) {
     return this.offersService.update(id, body);
   }
 }
