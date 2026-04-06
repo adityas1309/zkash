@@ -1,652 +1,826 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePrivacy } from '@/context/PrivacyContext';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { ArrowLeft, RefreshCw, Shield, Globe, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Card } from '@/components/ui/Card';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle,
+  Clock3,
+  Globe,
+  Lock,
+  RefreshCw,
+  Shield,
+  Sparkles,
+  XCircle,
+} from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
-function LockedSwapCard({
-    swap,
-    isSeller,
-    actionLoading,
-    onExecute,
-    onPrepareProof,
-    onExecutePrivate,
-}: {
-    swap: Swap;
-    isSeller: boolean;
-    actionLoading: string | null;
-    onExecute: () => void;
-    onPrepareProof: () => void;
-    onExecutePrivate: () => void;
-}) {
-    const { isPrivate } = usePrivacy();
+type SwapStatus =
+  | 'requested'
+  | 'proofs_pending'
+  | 'proofs_ready'
+  | 'executing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
-    return (
-        <Card variant="neon" className="mb-4 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-10">
-                <Lock size={100} />
-            </div>
+type ProofStatus =
+  | 'awaiting_acceptance'
+  | 'awaiting_both'
+  | 'awaiting_alice'
+  | 'awaiting_bob'
+  | 'ready';
 
-            <div className="mb-6 relative z-10">
-                <div className="flex justify-between items-start mb-2">
-                    <p className="font-medium text-slate-300">
-                        {isSeller ? 'Buyer' : 'Seller'}: <span className="text-indigo-400">@{isSeller ? swap.aliceId?.username : swap.bobId?.username || 'Unknown'}</span>
-                    </p>
-                    <Badge variant="default" className="bg-blue-500/20 text-blue-300 border-blue-500/30">LOCKED</Badge>
-                </div>
-
-                <div className="text-xl font-semibold text-white mb-2 flex items-center gap-2">
-                    {isSeller
-                        ? <>{swap.amountOut} USDC <ArrowLeft className="w-4 h-4 text-slate-500" /> {swap.amountIn} XLM</>
-                        : <>{swap.amountIn} XLM <ArrowLeft className="w-4 h-4 text-slate-500" /> {swap.amountOut} USDC</>
-                    }
-                </div>
-                <p className="text-slate-500 text-xs flex items-center gap-1">
-                    <Clock size={12} />
-                    {new Date(swap.createdAt).toLocaleString()}
-                </p>
-            </div>
-
-            <div className="space-y-3 relative z-10">
-                {isSeller && (
-                    !isPrivate ? (
-                        <Button
-                            onClick={onExecute}
-                            isLoading={actionLoading === swap._id}
-                            className="w-full"
-                            variant="primary"
-                        >
-                            Execute Publicly
-                        </Button>
-                    ) : (
-                        <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 text-center">
-                            <p className="text-sm text-slate-400 mb-2">Switch to Public mode to execute on-chain</p>
-                            <Button disabled variant="secondary" className="w-full opacity-50 cursor-not-allowed">
-                                Execute Publicly (Disabled in Private Mode)
-                            </Button>
-                        </div>
-                    )
-                )}
-
-                {isPrivate ? (
-                    swap.proofReady ? (
-                        <Button
-                            onClick={onExecutePrivate}
-                            isLoading={actionLoading === swap._id}
-                            className="w-full"
-                            variant="primary" // Greenish via custom class or just primary
-                        >
-                            <Shield className="w-4 h-4 mr-2" />
-                            Execute Private Swap
-                        </Button>
-                    ) : !swap.hasMyProof ? (
-                        <Button
-                            onClick={onPrepareProof}
-                            isLoading={actionLoading === swap._id}
-                            className="w-full"
-                            variant="primary"
-                        >
-                            <Shield className="w-4 h-4 mr-2" />
-                            Prepare Private Execution
-                        </Button>
-                    ) : (
-                        <div className="p-3 bg-slate-800/50 rounded-lg text-center border border-slate-700">
-                            <p className="text-slate-400 text-sm">Your proof is submitted. Waiting for counterparty.</p>
-                        </div>
-                    )
-                ) : (
-                    // In Public mode, show Private option but maybe less prominent or disabled/hinted?
-                    // The requirement says "if public is selected then all send p2p swap will be publicly exuted"
-                    // "if private is on then all things will be privatelt executed through zk flow"
-                    // So we should hide the other option or disable it to enforce the toggle.
-                    <div className="p-3 rounded-lg bg-slate-900/50 border border-slate-700/50 text-center">
-                        <p className="text-sm text-slate-400 mb-2">Switch to Private mode for ZK Swap</p>
-                        <Button disabled variant="secondary" className="w-full opacity-50 cursor-not-allowed">
-                            <Shield className="w-4 h-4 mr-2" />
-                            Private Swap (Disabled in Public Mode)
-                        </Button>
-                    </div>
-                )}
-            </div>
-        </Card>
-    );
-}
+type ExecutionStatus = 'not_started' | 'ready' | 'processing' | 'confirmed' | 'failed';
 
 interface User {
-    _id: string;
-    username: string;
+  _id: string;
+  username: string;
 }
 
-interface Swap {
-    _id: string;
-    aliceId: { username: string; _id: string };
-    bobId: { username: string; _id: string };
-    amountIn: number;
-    amountOut: number;
-    status: 'requested' | 'locked' | 'completed' | 'cancelled';
-    createdAt: string;
+interface SwapParty {
+  _id: string;
+  username: string;
+}
+
+interface SwapSummary {
+  _id: string;
+  aliceId: SwapParty;
+  bobId: SwapParty;
+  offerId?: string;
+  amountIn: number;
+  amountOut: number;
+  status: SwapStatus;
+  proofStatus: ProofStatus;
+  executionStatus: ExecutionStatus;
+  txHash?: string;
+  createdAt: string;
+  acceptedAt?: string;
+  proofsReadyAt?: string;
+  completedAt?: string;
+  failedAt?: string;
+  lastError?: string;
+  participantRole: 'alice' | 'bob' | null;
+  proofReady: boolean;
+  myProofSubmitted: boolean;
+  counterpartyProofSubmitted: boolean;
+  lastActorRole?: 'alice' | 'bob';
+}
+
+interface SwapAuditEntry {
+  id: string;
+  operation: string;
+  state: 'queued' | 'pending' | 'success' | 'failed' | 'retryable';
+  txHash?: string;
+  indexingStatus?: string;
+  indexingDetail?: string;
+  error?: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface SwapStatusDetails {
+  swap: SwapSummary;
+  participantRole: 'alice' | 'bob';
+  proofs: {
+    status: ProofStatus;
+    hasAliceProof: boolean;
+    hasBobProof: boolean;
+    ready: boolean;
+  };
+  execution: {
+    status: ExecutionStatus;
     txHash?: string;
-    proofReady?: boolean;
-    hasMyProof?: boolean;
+    lastError?: string;
+  };
+  audits: SwapAuditEntry[];
 }
 
-export default function MySwapsPage() {
-    const { isPrivate } = usePrivacy();
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [pendingSwaps, setPendingSwaps] = useState<Swap[]>([]);
-    const [allSwaps, setAllSwaps] = useState<Swap[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [actionLoading, setActionLoading] = useState<string | null>(null);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+interface ApiTransactionResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  txHash?: string;
+}
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [needsSplit, setNeedsSplit] = useState<string | null>(null);
+const statusVariantMap: Record<SwapStatus, 'warning' | 'default' | 'success' | 'error'> = {
+  requested: 'warning',
+  proofs_pending: 'default',
+  proofs_ready: 'default',
+  executing: 'warning',
+  completed: 'success',
+  failed: 'error',
+  cancelled: 'error',
+};
 
-    const fetchData = async () => {
-        try {
-            const [userRes, pendingRes, myRes] = await Promise.all([
-                fetch(`${API_URL}/users/me`, { credentials: 'include' }),
-                fetch(`${API_URL}/swap/pending`, { credentials: 'include' }),
-                fetch(`${API_URL}/swap/my`, { credentials: 'include' }),
-            ]);
+const proofLabelMap: Record<ProofStatus, string> = {
+  awaiting_acceptance: 'Waiting for seller acceptance',
+  awaiting_both: 'Waiting for both proofs',
+  awaiting_alice: 'Waiting for buyer proof',
+  awaiting_bob: 'Waiting for seller proof',
+  ready: 'Both proofs ready',
+};
 
-            if (userRes.ok) {
-                setCurrentUser(await userRes.json());
-            }
-            if (pendingRes.ok) {
-                setPendingSwaps(await pendingRes.json());
-            }
-            if (myRes.ok) {
-                setAllSwaps(await myRes.json());
-            }
-        } catch {
-            setError('Failed to load swaps');
-        } finally {
-            setLoading(false);
-        }
-    };
+const executionLabelMap: Record<ExecutionStatus, string> = {
+  not_started: 'Execution not started',
+  ready: 'Ready to execute',
+  processing: 'Executing on-chain',
+  confirmed: 'Execution confirmed',
+  failed: 'Execution failed',
+};
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+function formatRelativeTimestamp(value?: string) {
+  if (!value) {
+    return 'Not available';
+  }
 
-    const handleAccept = async (swapId: string) => {
-        setActionLoading(swapId);
-        setError('');
-        setSuccess('');
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'Not available';
+  }
 
-        try {
-            const res = await fetch(`${API_URL}/swap/${swapId}/accept`, {
-                method: 'POST',
-                credentials: 'include',
-            });
+  return `${date.toLocaleString()}`;
+}
 
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.message || 'Failed to accept swap');
-            }
+function getAssetNeedForProof(swap: SwapSummary) {
+  if (swap.participantRole === 'alice') {
+    return { asset: 'XLM' as const, amount: swap.amountIn };
+  }
+  return { asset: 'USDC' as const, amount: swap.amountOut };
+}
 
-            setSuccess('Swap accepted! Now execute the transaction.');
-            await fetchData();
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to accept swap');
-        } finally {
-            setActionLoading(null);
-        }
-    };
+function getCounterpartyLabel(swap: SwapSummary) {
+  return swap.participantRole === 'alice' ? swap.bobId?.username : swap.aliceId?.username;
+}
 
-    const handleExecute = async (swapId: string) => {
-        setActionLoading(swapId);
-        setError('');
-        setSuccess('');
-        try {
-            const res = await fetch(`${API_URL}/swap/${swapId}/execute`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({}),
-            });
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.message || 'Failed to execute swap');
-            }
-            setSuccess('Swap completed successfully!');
-            await fetchData();
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to execute swap');
-        } finally {
-            setActionLoading(null);
-        }
-    };
+function getSwapDirectionLabel(swap: SwapSummary) {
+  if (swap.participantRole === 'bob') {
+    return `Sell ${swap.amountOut} USDC for ${swap.amountIn} XLM`;
+  }
+  return `Buy ${swap.amountOut} USDC with ${swap.amountIn} XLM`;
+}
 
-    const [autoProcessing, setAutoProcessing] = useState<string | null>(null);
-    const [processStep, setProcessStep] = useState<string>('');
-
-    const handleExecutePrivate = async (swapId: string) => {
-        setActionLoading(swapId);
-        setError('');
-        setSuccess('');
-        try {
-            const res = await fetch(`${API_URL}/swap/${swapId}/execute-private`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({}),
-            });
-            let data;
-            try {
-                data = await res.json();
-            } catch {
-                throw new Error(`Server error: ${res.status} ${res.statusText}`);
-            }
-            if (!res.ok || data.error) {
-                throw new Error(data.error || data.message || 'Failed to execute private swap');
-            }
-            setSuccess('Private swap completed! TX: ' + (data.txHash ?? ''));
-            await fetchData();
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Failed to execute private swap');
-        } finally {
-            setActionLoading(null);
-            setAutoProcessing(null);
-        }
-    };
-
-    const handleSplit = async (swapId: string, asset: 'USDC' | 'XLM', amount: number) => {
-        setProcessStep('Splitting note to match exact amount...');
-        try {
-            const res = await fetch(`${API_URL}/users/split`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ asset, amount }),
-            });
-            const data = await res.json();
-            if (!res.ok || !data.success) throw new Error(data.error || 'Split failed');
-
-            // Wait a bit for the transaction to be confirmed and indexed
-            setProcessStep('Waiting for split confirmation...');
-            await new Promise(r => setTimeout(r, 6000));
-            return true;
-        } catch (e) {
-            throw e;
-        }
-    };
-
-    const handleDeposit = async (asset: 'USDC' | 'XLM', amount: number) => {
-        setProcessStep(`Depositing ${amount} ${asset} from public balance...`);
-        try {
-            const res = await fetch(`${API_URL}/users/deposit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ asset, amount }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (data.success) {
-                // Wait for deposit to be indexed
-                setProcessStep('Waiting for deposit confirmation...');
-                await new Promise(r => setTimeout(r, 6000));
-                return true;
-            } else {
-                throw new Error(data.error || 'Deposit failed');
-            }
-        } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            throw new Error(msg.includes('fetch') || msg.includes('Failed') ? 'Deposit failed. The network may be slow.' : `Deposit failed: ${msg}`);
-        }
-    };
-
-    const handlePrepareProof = async (swapId: string, isBuyer: boolean, amount: number, asset: 'USDC' | 'XLM') => {
-        setActionLoading(swapId);
-        setAutoProcessing(swapId);
-        setError('');
-        setSuccess('');
-        setNeedsSplit(null);
-        setProcessStep('Preparing proof...');
-
-        const runDepositFlow = async () => {
-            if (confirm(`Insufficient private balance. Do you want to transfer ${amount} ${asset} from your public pool to continue?`)) {
-                console.log('Insufficient balance, attempting auto-deposit...');
-                await handleDeposit(asset, amount);
-                return true;
-            }
-            throw new Error('Cancelled by user.');
-        };
-
-        try {
-            const attemptPrepare = async () => {
-                const res = await fetch(`${API_URL}/swap/${swapId}/prepare-my-proof`, {
-                    method: 'POST',
-                    credentials: 'include',
-                });
-                const data = await res.json();
-                if (data.error) throw new Error(data.error);
-                return data;
-            };
-
-            const handleSuccess = async (data: any) => {
-                setSuccess(data.ready ? 'Both proofs ready. Auto-executing...' : 'Your proof is ready. Waiting for the other party.');
-                await fetchData();
-                if (data.ready) {
-                    setProcessStep('Executing private swap...');
-                    await handleExecutePrivate(swapId);
-                }
-            };
-
-            try {
-                const data = await attemptPrepare();
-                await handleSuccess(data);
-            } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
-                if (msg.includes('No private note with EXACT amount')) {
-                    // Auto-split logic
-                    console.log('Exact note missing, attempting auto-split...');
-                    try {
-                        await handleSplit(swapId, asset, amount);
-                    } catch (splitErr: unknown) {
-                        const splitMsg = splitErr instanceof Error ? splitErr.message : String(splitErr);
-                        if (splitMsg.includes('Insufficient private balance')) {
-                            await runDepositFlow();
-                        } else {
-                            throw splitErr;
-                        }
-                    }
-                    setProcessStep('Retrying proof preparation...');
-                    const retryData = await attemptPrepare();
-                    await handleSuccess(retryData);
-
-                } else if (msg.includes('Insufficient private balance')) {
-                    await runDepositFlow();
-                    setProcessStep('Retrying proof preparation after deposit...');
-                    const retryData = await attemptPrepare();
-                    await handleSuccess(retryData);
-                } else {
-                    throw err;
-                }
-            }
-        } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Failed to prepare proof';
-            if (msg !== 'Cancelled by user.') {
-                setError(msg);
-            }
-            setAutoProcessing(null);
-        } finally {
-            if (!autoProcessing) {
-                setActionLoading(null);
-                setProcessStep('');
-            }
-        }
-    };
-
-
-    const getStatusBadge = (status: string) => {
-        const variants: Record<string, "warning" | "default" | "success" | "error"> = {
-            requested: 'warning',
-            locked: 'default', // blue-ish
-            completed: 'success',
-            cancelled: 'error',
-        };
-        return (
-            <Badge variant={variants[status] || 'default'}>
-                {status.toUpperCase()}
-            </Badge>
-        );
-    };
-
-    // Filter swaps where I'm the buyer (alice)
-    const swapsAsBuyer = allSwaps.filter(s => s.aliceId?._id === currentUser?._id);
-    // Filter swaps where I'm the seller (bob), excluding pending (they go in pendingSwaps)
-    const swapsAsSeller = allSwaps.filter(
-        s => s.bobId?._id === currentUser?._id && s.status !== 'requested'
+function AuditTimeline({ audits }: { audits: SwapAuditEntry[] }) {
+  if (!audits.length) {
+    return (
+      <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm text-slate-500">
+        No audit events recorded yet.
+      </div>
     );
+  }
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[50vh]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+  return (
+    <div className="space-y-3">
+      {audits.slice(0, 4).map((audit) => (
+        <div key={audit.id} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">{audit.operation.replaceAll('_', ' ')}</p>
+              <p className="text-xs text-slate-400">{formatRelativeTimestamp(audit.createdAt)}</p>
             </div>
+            <Badge
+              variant={
+                audit.state === 'success'
+                  ? 'success'
+                  : audit.state === 'failed'
+                    ? 'error'
+                    : audit.state === 'retryable'
+                      ? 'warning'
+                      : 'default'
+              }
+            >
+              {audit.state.toUpperCase()}
+            </Badge>
+          </div>
+          {audit.indexingDetail && <p className="mt-2 text-xs text-slate-400">{audit.indexingDetail}</p>}
+          {audit.error && <p className="mt-2 text-xs text-red-300">{audit.error}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActiveSwapCard({
+  swap,
+  details,
+  isPrivate,
+  actionLoading,
+  processStep,
+  onExecutePublic,
+  onPrepareProof,
+  onExecutePrivate,
+}: {
+  swap: SwapSummary;
+  details?: SwapStatusDetails;
+  isPrivate: boolean;
+  actionLoading: string | null;
+  processStep?: string;
+  onExecutePublic: () => void;
+  onPrepareProof: () => void;
+  onExecutePrivate: () => void;
+}) {
+  const counterparty = getCounterpartyLabel(swap);
+  const proofState = details?.proofs.status ?? swap.proofStatus;
+  const executionState = details?.execution.status ?? swap.executionStatus;
+  const latestAudit = details?.audits?.[0];
+
+  const renderAction = () => {
+    if (swap.status === 'requested') {
+      return (
+        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-yellow-100">
+          Waiting for the seller to accept this request.
+        </div>
+      );
+    }
+
+    if (swap.status === 'failed') {
+      return (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-100">
+          {swap.lastError || details?.execution.lastError || 'The last execution attempt failed. Review the audit trail below.'}
+        </div>
+      );
+    }
+
+    if (isPrivate) {
+      if (proofState === 'ready') {
+        return (
+          <Button
+            onClick={onExecutePrivate}
+            isLoading={actionLoading === swap._id}
+            className="w-full"
+            variant="primary"
+          >
+            <Shield className="mr-2 h-4 w-4" />
+            Execute Private Swap
+          </Button>
         );
+      }
+
+      if (!swap.myProofSubmitted) {
+        return (
+          <Button
+            onClick={onPrepareProof}
+            isLoading={actionLoading === swap._id}
+            className="w-full"
+            variant="primary"
+          >
+            <Shield className="mr-2 h-4 w-4" />
+            Prepare My Proof
+          </Button>
+        );
+      }
+
+      return (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 p-3 text-sm text-blue-100">
+          Your proof is stored. Waiting for the counterparty proof before private execution.
+        </div>
+      );
+    }
+
+    if (swap.participantRole === 'bob' && executionState !== 'confirmed') {
+      return (
+        <Button
+          onClick={onExecutePublic}
+          isLoading={actionLoading === swap._id}
+          className="w-full"
+          variant="primary"
+        >
+          <Globe className="mr-2 h-4 w-4" />
+          Execute Public Swap
+        </Button>
+      );
     }
 
     return (
-        <main className="p-4 md:p-8 max-w-4xl mx-auto">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">My Swaps</h1>
-                    <p className="text-slate-400 text-sm mt-1">
-                        Logged in as: <span className="text-indigo-400">@{currentUser?.username || 'Unknown'}</span>
-                    </p>
-                </div>
-                <Badge variant={isPrivate ? 'success' : 'warning'} className="px-3 py-1">
-                    {isPrivate ? (
-                        <span className="flex items-center gap-1"><Shield size={14} /> Private Mode Active</span>
-                    ) : (
-                        <span className="flex items-center gap-1"><Globe size={14} /> Public Mode Active</span>
-                    )}
-                </Badge>
-            </div>
-
-            {error && (
-                <Card variant="default" className="bg-red-900/20 border-red-500/50 mb-6 flex items-start gap-4">
-                    <XCircle className="text-red-400 shrink-0 mt-0.5" />
-                    <p className="text-red-200">{error}</p>
-                </Card>
-            )}
-
-            {success && (
-                <Card variant="default" className="bg-green-900/20 border-green-500/50 mb-6 flex items-start gap-4">
-                    <CheckCircle className="text-green-400 shrink-0 mt-0.5" />
-                    <p className="text-green-200">{success}</p>
-                </Card>
-            )}
-
-            {autoProcessing && (
-                <Card variant="neon" className="mb-6 flex items-center justify-center gap-3 p-4">
-                    <RefreshCw className="animate-spin text-indigo-400" />
-                    <span className="text-indigo-200 animate-pulse">{processStep || 'Processing...'}</span>
-                </Card>
-            )}
-
-            {/* Pending Swaps to Accept (as Seller) */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-                    <div className="p-1.5 bg-yellow-500/20 rounded-lg">
-                        <Clock size={16} className="text-yellow-400" />
-                    </div>
-                    Pending Requests <span className="text-sm font-normal text-slate-500">(You are Seller)</span>
-                </h2>
-
-                {pendingSwaps.length === 0 ? (
-                    <Card variant="glass" className="text-center py-8">
-                        <p className="text-slate-500">No pending swap requests.</p>
-                    </Card>
-                ) : (
-                    <div className="grid gap-4">
-                        {pendingSwaps.map((swap) => (
-                            <Card key={swap._id} variant="default" className="border-l-4 border-l-yellow-500">
-                                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="font-semibold text-white">@{swap.aliceId?.username || 'Unknown'}</span>
-                                            <Badge variant="warning">Wants to Buy</Badge>
-                                        </div>
-                                        <p className="text-slate-300 text-lg">
-                                            {swap.amountIn} XLM <span className="text-slate-500">→</span> {swap.amountOut} USDC
-                                        </p>
-                                        <p className="text-slate-500 text-xs mt-2">
-                                            {new Date(swap.createdAt).toLocaleString()}
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-2 text-right">
-                                        {getStatusBadge(swap.status)}
-                                        <Button
-                                            onClick={() => handleAccept(swap._id)}
-                                            isLoading={actionLoading === swap._id}
-                                            variant="primary"
-                                            size="sm"
-                                        >
-                                            Accept Swap
-                                        </Button>
-                                    </div>
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                )}
-            </section>
-
-            {/* Locked Swaps to Execute (as Seller) */}
-            {swapsAsSeller.filter(s => s.status === 'locked').length > 0 && (
-                <section className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-                        <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                            <Lock size={16} className="text-blue-400" />
-                        </div>
-                        Ready to Execute <span className="text-sm font-normal text-slate-500">(You are Seller)</span>
-                    </h2>
-
-                    <div className="grid gap-4">
-                        {swapsAsSeller.filter(s => s.status === 'locked').map((swap) => (
-                            <LockedSwapCard
-                                key={swap._id}
-                                swap={swap}
-                                isSeller
-                                actionLoading={actionLoading}
-                                onExecute={() => handleExecute(swap._id)}
-                                onPrepareProof={() => handlePrepareProof(swap._id, true, swap.amountOut, 'USDC')}
-                                onExecutePrivate={() => handleExecutePrivate(swap._id)}
-                            />
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* Locked Swaps (as Buyer) - submit proof */}
-            {swapsAsBuyer.filter(s => s.status === 'locked').length > 0 && (
-                <section className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4 flex items-center gap-2 text-white">
-                        <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                            <Lock size={16} className="text-blue-400" />
-                        </div>
-                        Locked Swaps <span className="text-sm font-normal text-slate-500">(You are Buyer)</span>
-                    </h2>
-                    <div className="grid gap-4">
-                        {swapsAsBuyer.filter(s => s.status === 'locked').map((swap) => (
-                            <LockedSwapCard
-                                key={swap._id}
-                                swap={swap}
-                                isSeller={false}
-                                actionLoading={actionLoading}
-                                onExecute={() => { }}
-                                onPrepareProof={() => handlePrepareProof(swap._id, false, swap.amountIn, 'XLM')}
-                                onExecutePrivate={() => handleExecutePrivate(swap._id)}
-                            />
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* My Swaps as Buyer */}
-            <section className="mb-8">
-                <h2 className="text-xl font-semibold mb-4 text-white">Requested Swaps</h2>
-
-                {swapsAsBuyer.length === 0 ? (
-                    <Card variant="glass" className="text-center py-8">
-                        <p className="text-slate-500">You haven&apos;t initiated any swaps yet.</p>
-                        <Link href="/swap" className="mt-4 inline-block">
-                            <Button variant="outline">Browse Offers</Button>
-                        </Link>
-                    </Card>
-                ) : (
-                    <div className="grid gap-4">
-                        {swapsAsBuyer.map((swap) => (
-                            <Card key={swap._id} variant="glass">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-medium text-slate-300">
-                                            Seller: <span className="text-indigo-400">@{swap.bobId?.username || 'Unknown'}</span>
-                                        </p>
-                                        <p className="text-white mt-1">
-                                            {swap.amountIn} XLM <span className="text-slate-500">→</span> {swap.amountOut} USDC
-                                        </p>
-                                        <p className="text-slate-500 text-xs mt-2">
-                                            {new Date(swap.createdAt).toLocaleString()}
-                                        </p>
-                                        {swap.txHash && swap.txHash !== 'pending' && (
-                                            <a
-                                                href={`https://stellar.expert/explorer/testnet/tx/${swap.txHash}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-green-400 text-xs hover:underline mt-2 inline-flex items-center gap-1"
-                                            >
-                                                View Transaction <Globe size={10} />
-                                            </a>
-                                        )}
-                                    </div>
-                                    {getStatusBadge(swap.status)}
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                )}
-            </section>
-
-            {/* Completed Swaps as Seller */}
-            {swapsAsSeller.filter(s => s.status === 'completed').length > 0 && (
-                <section className="mb-8">
-                    <h2 className="text-xl font-semibold mb-4 text-white">Completed Sales</h2>
-
-                    <div className="grid gap-4">
-                        {swapsAsSeller.filter(s => s.status === 'completed').map((swap) => (
-                            <Card key={swap._id} variant="glass" className="opacity-75 hover:opacity-100 transition-opacity">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-medium text-slate-300">
-                                            Buyer: <span className="text-indigo-400">@{swap.aliceId?.username || 'Unknown'}</span>
-                                        </p>
-                                        <p className="text-white mt-1">
-                                            Sold {swap.amountOut} USDC for {swap.amountIn} XLM
-                                        </p>
-                                        {swap.txHash && swap.txHash !== 'pending' && (
-                                            <a
-                                                href={`https://stellar.expert/explorer/testnet/tx/${swap.txHash}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-green-400 text-xs hover:underline mt-2 inline-flex items-center gap-1"
-                                            >
-                                                View Transaction <Globe size={10} />
-                                            </a>
-                                        )}
-                                    </div>
-                                    {getStatusBadge(swap.status)}
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            <div className="mt-8 flex gap-4">
-                <Link href="/swap">
-                    <Button variant="ghost">
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Browse Offers
-                    </Button>
-                </Link>
-                <Link href="/dashboard">
-                    <Button variant="ghost">
-                        Dashboard
-                    </Button>
-                </Link>
-            </div>
-        </main>
+      <div className="rounded-xl border border-slate-700 bg-slate-900/60 p-3 text-sm text-slate-300">
+        Public execution is handled by the seller. Switch to private mode if both parties want the ZK path.
+      </div>
     );
+  };
+
+  return (
+    <Card variant="neon" className="overflow-hidden">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-slate-400">
+            Counterparty: <span className="font-medium text-indigo-300">@{counterparty || 'Unknown'}</span>
+          </p>
+          <h3 className="mt-2 text-xl font-semibold text-white">{getSwapDirectionLabel(swap)}</h3>
+          <p className="mt-2 text-xs text-slate-500">Created {formatRelativeTimestamp(swap.createdAt)}</p>
+        </div>
+        <Badge variant={statusVariantMap[swap.status]}>{swap.status.replaceAll('_', ' ').toUpperCase()}</Badge>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Proof Stage</p>
+          <p className="mt-2 text-sm font-medium text-white">{proofLabelMap[proofState]}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            My proof: {swap.myProofSubmitted ? 'submitted' : 'missing'} | Counterparty: {swap.counterpartyProofSubmitted ? 'submitted' : 'missing'}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Execution</p>
+          <p className="mt-2 text-sm font-medium text-white">{executionLabelMap[executionState]}</p>
+          <p className="mt-1 text-xs text-slate-400">{swap.txHash ? `Tx: ${swap.txHash.slice(0, 12)}...` : 'No on-chain hash yet'}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Mode Hint</p>
+          <p className="mt-2 text-sm font-medium text-white">{isPrivate ? 'Private execution path' : 'Public execution path'}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {isPrivate
+              ? 'Proof collection and private execution rely on exact private notes.'
+              : 'Seller executes both public legs directly on-chain.'}
+          </p>
+        </div>
+      </div>
+
+      {processStep && actionLoading === swap._id && (
+        <div className="mt-4 flex items-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-sm text-indigo-100">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          <span>{processStep}</span>
+        </div>
+      )}
+
+      {latestAudit?.error && (
+        <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-100">
+          {latestAudit.error}
+        </div>
+      )}
+
+      <div className="mt-4">{renderAction()}</div>
+
+      <div className="mt-5">
+        <p className="mb-3 text-xs uppercase tracking-wide text-slate-500">Recent Audit Trail</p>
+        <AuditTimeline audits={details?.audits ?? []} />
+      </div>
+    </Card>
+  );
+}
+
+export default function MySwapsPage() {
+  const { isPrivate } = usePrivacy();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [pendingSwaps, setPendingSwaps] = useState<SwapSummary[]>([]);
+  const [allSwaps, setAllSwaps] = useState<SwapSummary[]>([]);
+  const [recentActivity, setRecentActivity] = useState<SwapSummary[]>([]);
+  const [statusMap, setStatusMap] = useState<Record<string, SwapStatusDetails>>({});
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [processStep, setProcessStep] = useState('');
+
+  const fetchStatuses = async (swaps: SwapSummary[]) => {
+    const relevant = swaps.filter((swap) => swap.status !== 'completed' && swap.status !== 'cancelled');
+    const entries = await Promise.all(
+      relevant.map(async (swap) => {
+        const res = await fetch(`${API_URL}/swap/${swap._id}/status`, {
+          credentials: 'include',
+        });
+        const data = await res.json();
+        return [swap._id, data] as const;
+      }),
+    );
+
+    const nextMap: Record<string, SwapStatusDetails> = {};
+    for (const [swapId, payload] of entries) {
+      if (payload?.swap?._id) {
+        nextMap[swapId] = payload as SwapStatusDetails;
+      }
+    }
+    setStatusMap(nextMap);
+  };
+
+  const fetchData = async () => {
+    try {
+      const [userRes, pendingRes, myRes, recentRes] = await Promise.all([
+        fetch(`${API_URL}/users/me`, { credentials: 'include' }),
+        fetch(`${API_URL}/swap/pending`, { credentials: 'include' }),
+        fetch(`${API_URL}/swap/my`, { credentials: 'include' }),
+        fetch(`${API_URL}/swap/activity/recent?limit=6`, { credentials: 'include' }),
+      ]);
+
+      const [userData, pendingData, myData, recentData] = await Promise.all([
+        userRes.ok ? userRes.json() : null,
+        pendingRes.ok ? pendingRes.json() : [],
+        myRes.ok ? myRes.json() : [],
+        recentRes.ok ? recentRes.json() : [],
+      ]);
+
+      setCurrentUser(userData);
+      setPendingSwaps(Array.isArray(pendingData) ? pendingData : []);
+      setAllSwaps(Array.isArray(myData) ? myData : []);
+      setRecentActivity(Array.isArray(recentData) ? recentData : []);
+      await fetchStatuses(Array.isArray(myData) ? myData : []);
+    } catch {
+      setError('Failed to load swaps.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAccept = async (swapId: string) => {
+    setActionLoading(swapId);
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch(`${API_URL}/swap/${swapId}/accept`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to accept swap');
+      }
+      setSuccess('Swap accepted. Proof collection can start now.');
+      await fetchData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to accept swap');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleExecute = async (swapId: string) => {
+    setActionLoading(swapId);
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch(`${API_URL}/swap/${swapId}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      });
+      const data = (await res.json().catch(() => ({}))) as ApiTransactionResponse;
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || data.message || 'Failed to execute swap');
+      }
+      setSuccess(data.message || 'Public swap completed successfully.');
+      await fetchData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to execute swap');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleExecutePrivate = async (swapId: string) => {
+    setActionLoading(swapId);
+    setError('');
+    setSuccess('');
+    setProcessStep('Executing private swap...');
+
+    try {
+      const res = await fetch(`${API_URL}/swap/${swapId}/execute-private`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
+      const data = (await res.json().catch(() => ({}))) as ApiTransactionResponse;
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || data.message || 'Failed to execute private swap');
+      }
+      setSuccess(data.message || 'Private swap executed successfully.');
+      await fetchData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to execute private swap');
+    } finally {
+      setActionLoading(null);
+      setProcessStep('');
+    }
+  };
+
+  const handleSplit = async (asset: 'USDC' | 'XLM', amount: number) => {
+    setProcessStep(`Splitting ${asset} note to create an exact ${amount} amount...`);
+    const res = await fetch(`${API_URL}/users/split`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ asset, amount }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Split failed');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+  };
+
+  const handleDeposit = async (asset: 'USDC' | 'XLM', amount: number) => {
+    setProcessStep(`Depositing ${amount} ${asset} into the private pool...`);
+    const res = await fetch(`${API_URL}/users/deposit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ asset, amount }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) {
+      throw new Error(data.error || 'Deposit failed');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 6000));
+  };
+
+  const handlePrepareProof = async (swap: SwapSummary) => {
+    const requirement = getAssetNeedForProof(swap);
+    setActionLoading(swap._id);
+    setError('');
+    setSuccess('');
+    setProcessStep('Preparing proof...');
+
+    try {
+      const attemptPrepare = async () => {
+        const res = await fetch(`${API_URL}/swap/${swap._id}/prepare-my-proof`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) {
+          throw new Error(data.error || data.message || 'Failed to prepare proof');
+        }
+        return data;
+      };
+
+      try {
+        const data = await attemptPrepare();
+        setSuccess(data.message || (data.ready ? 'Both proofs are ready.' : 'Your proof is stored.'));
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to prepare proof';
+        if (message.includes('EXACT amount')) {
+          await handleSplit(requirement.asset, requirement.amount);
+          setProcessStep('Retrying proof preparation after note split...');
+          const data = await attemptPrepare();
+          setSuccess(data.message || 'Proof stored after splitting the note.');
+        } else if (
+          message.includes('Insufficient private balance') ||
+          message.includes('No private note with EXACT amount')
+        ) {
+          if (window.confirm(`Private proof needs ${requirement.amount} ${requirement.asset}. Deposit from public balance now?`)) {
+            await handleDeposit(requirement.asset, requirement.amount);
+            setProcessStep('Retrying proof preparation after deposit...');
+            const data = await attemptPrepare();
+            setSuccess(data.message || 'Proof stored after deposit.');
+          } else {
+            throw new Error('Proof preparation cancelled before deposit.');
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      await fetchData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to prepare proof';
+      if (message !== 'Proof preparation cancelled before deposit.') {
+        setError(message);
+      }
+    } finally {
+      setActionLoading(null);
+      setProcessStep('');
+    }
+  };
+
+  const activeSwaps = useMemo(
+    () =>
+      allSwaps.filter((swap) =>
+        ['proofs_pending', 'proofs_ready', 'executing', 'failed'].includes(swap.status),
+      ),
+    [allSwaps],
+  );
+
+  const buyerRequests = useMemo(
+    () => allSwaps.filter((swap) => swap.participantRole === 'alice' && swap.status === 'requested'),
+    [allSwaps],
+  );
+
+  const completedSwaps = useMemo(
+    () => allSwaps.filter((swap) => swap.status === 'completed'),
+    [allSwaps],
+  );
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <main className="mx-auto max-w-6xl p-4 md:p-8">
+      <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <h1 className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-3xl font-bold text-transparent">
+            My Swaps
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Signed in as <span className="text-indigo-300">@{currentUser?.username || 'Unknown'}</span>
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant={isPrivate ? 'success' : 'warning'} className="px-3 py-1">
+            {isPrivate ? (
+              <span className="flex items-center gap-1">
+                <Shield size={14} />
+                Private Mode
+              </span>
+            ) : (
+              <span className="flex items-center gap-1">
+                <Globe size={14} />
+                Public Mode
+              </span>
+            )}
+          </Badge>
+          <Button variant="ghost" onClick={() => fetchData()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {error && (
+        <Card variant="default" className="mb-6 flex items-start gap-3 border-red-500/40 bg-red-900/20">
+          <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
+          <p className="text-red-100">{error}</p>
+        </Card>
+      )}
+
+      {success && (
+        <Card variant="default" className="mb-6 flex items-start gap-3 border-green-500/40 bg-green-900/20">
+          <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-400" />
+          <p className="text-green-100">{success}</p>
+        </Card>
+      )}
+
+      <section className="mb-8 grid gap-4 md:grid-cols-4">
+        <Card variant="glass">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Pending requests</p>
+          <p className="mt-2 text-3xl font-semibold text-white">{pendingSwaps.length}</p>
+        </Card>
+        <Card variant="glass">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Active swaps</p>
+          <p className="mt-2 text-3xl font-semibold text-white">{activeSwaps.length}</p>
+        </Card>
+        <Card variant="glass">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Proofs ready</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {allSwaps.filter((swap) => swap.proofStatus === 'ready').length}
+          </p>
+        </Card>
+        <Card variant="glass">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Completed</p>
+          <p className="mt-2 text-3xl font-semibold text-white">{completedSwaps.length}</p>
+        </Card>
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Clock3 className="h-5 w-5 text-yellow-400" />
+          <h2 className="text-xl font-semibold text-white">Incoming Requests</h2>
+        </div>
+        {pendingSwaps.length === 0 ? (
+          <Card variant="glass" className="py-8 text-center text-slate-500">
+            No one is waiting on your acceptance right now.
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {pendingSwaps.map((swap) => (
+              <Card key={swap._id} variant="default" className="border-l-4 border-l-yellow-500">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400">Buyer</p>
+                    <p className="mt-1 text-lg font-medium text-white">@{swap.aliceId?.username || 'Unknown'}</p>
+                    <p className="mt-2 text-slate-300">{swap.amountIn} XLM for {swap.amountOut} USDC</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatRelativeTimestamp(swap.createdAt)}</p>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 md:items-end">
+                    <Badge variant="warning">REQUESTED</Badge>
+                    <Button
+                      onClick={() => handleAccept(swap._id)}
+                      isLoading={actionLoading === swap._id}
+                      variant="primary"
+                    >
+                      Accept Swap
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-indigo-400" />
+          <h2 className="text-xl font-semibold text-white">Active Lifecycle</h2>
+        </div>
+        {activeSwaps.length === 0 ? (
+          <Card variant="glass" className="py-8 text-center text-slate-500">
+            No swaps are in proof collection or execution right now.
+          </Card>
+        ) : (
+          <div className="grid gap-5">
+            {activeSwaps.map((swap) => (
+              <ActiveSwapCard
+                key={swap._id}
+                swap={swap}
+                details={statusMap[swap._id]}
+                isPrivate={isPrivate}
+                actionLoading={actionLoading}
+                processStep={processStep}
+                onExecutePublic={() => handleExecute(swap._id)}
+                onPrepareProof={() => handlePrepareProof(swap)}
+                onExecutePrivate={() => handleExecutePrivate(swap._id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Lock className="h-5 w-5 text-slate-400" />
+          <h2 className="text-xl font-semibold text-white">My Requested Swaps</h2>
+        </div>
+        {buyerRequests.length === 0 ? (
+          <Card variant="glass" className="py-8 text-center text-slate-500">
+            You have not created any swap requests that are still waiting on acceptance.
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {buyerRequests.map((swap) => (
+              <Card key={swap._id} variant="glass">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400">Seller</p>
+                    <p className="mt-1 text-lg font-medium text-white">@{swap.bobId?.username || 'Unknown'}</p>
+                    <p className="mt-2 text-slate-300">{swap.amountIn} XLM for {swap.amountOut} USDC</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatRelativeTimestamp(swap.createdAt)}</p>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 md:items-end">
+                    <Badge variant={statusVariantMap[swap.status]}>{swap.status.replaceAll('_', ' ').toUpperCase()}</Badge>
+                    <p className="max-w-xs text-xs text-slate-400">The seller must accept before either side can start proof collection or execution.</p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex items-center gap-2">
+          <AlertTriangle className="h-5 w-5 text-slate-400" />
+          <h2 className="text-xl font-semibold text-white">Recent Activity</h2>
+        </div>
+        {recentActivity.length === 0 ? (
+          <Card variant="glass" className="py-8 text-center text-slate-500">
+            No recent swap activity yet.
+          </Card>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {recentActivity.map((swap) => (
+              <Card key={swap._id} variant="glass">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-slate-400">{swap.participantRole === 'bob' ? 'Sale' : 'Purchase'}</p>
+                    <p className="mt-1 font-medium text-white">{getSwapDirectionLabel(swap)}</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatRelativeTimestamp(swap.completedAt || swap.createdAt)}</p>
+                  </div>
+                  <Badge variant={statusVariantMap[swap.status]}>{swap.status.replaceAll('_', ' ').toUpperCase()}</Badge>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="mt-8 flex gap-4">
+        <Link href="/swap">
+          <Button variant="ghost">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Browse Offers
+          </Button>
+        </Link>
+        <Link href="/dashboard">
+          <Button variant="ghost">Dashboard</Button>
+        </Link>
+      </div>
+    </main>
+  );
 }
