@@ -4,6 +4,7 @@ import { User, UserSchema } from '../schemas/user.schema';
 import { PendingWithdrawal, PendingWithdrawalSchema } from '../schemas/pending-withdrawal.schema';
 import { EncryptedNote, EncryptedNoteSchema } from '../schemas/encrypted-note.schema';
 import { SpendableNote, SpendableNoteSchema } from '../schemas/spendable-note.schema';
+import { Swap, SwapSchema } from '../schemas/swap.schema';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
 import { AuthModule } from '../auth/auth.module';
@@ -20,6 +21,7 @@ import { TransactionsModule } from '../transactions/transactions.module';
       { name: PendingWithdrawal.name, schema: PendingWithdrawalSchema },
       { name: EncryptedNote.name, schema: EncryptedNoteSchema },
       { name: SpendableNote.name, schema: SpendableNoteSchema },
+      { name: Swap.name, schema: SwapSchema },
     ]),
     forwardRef(() => AuthModule),
     SorobanModule,

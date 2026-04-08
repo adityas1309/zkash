@@ -8,6 +8,7 @@ import { SorobanService } from '../soroban/soroban.service';
 import { PendingWithdrawal } from '../schemas/pending-withdrawal.schema';
 import { EncryptedNote } from '../schemas/encrypted-note.schema';
 import { SpendableNote } from '../schemas/spendable-note.schema';
+import { Swap } from '../schemas/swap.schema';
 import { Asset, Horizon, Keypair, Networks, TransactionBuilder, Operation } from '@stellar/stellar-sdk';
 import * as nacl from 'tweetnacl';
 import * as naclUtil from 'tweetnacl-util';
@@ -19,6 +20,7 @@ import { MetricsService } from '../ops/metrics.service';
 import { AppLoggerService } from '../common/logging/app-logger.service';
 import { SponsorshipPreviewDto } from '../common/dto/wallet.dto';
 import { SponsorshipService } from '../sponsorship/sponsorship.service';
+import { TransactionAuditService } from '../transactions/transaction-audit.service';
 
 @Injectable()
 export class UsersService {
@@ -36,6 +38,7 @@ export class UsersService {
     @InjectModel(PendingWithdrawal.name) private pendingWithdrawalModel: Model<PendingWithdrawal>,
     @InjectModel(EncryptedNote.name) private encryptedNoteModel: Model<EncryptedNote>,
     @InjectModel(SpendableNote.name) private spendableNoteModel: Model<SpendableNote>,
+    @InjectModel(Swap.name) private swapModel: Model<Swap>,
     @Inject(forwardRef(() => AuthService)) private authService: AuthService,
     private sorobanService: SorobanService,
     private proofService: ProofService,
@@ -43,6 +46,7 @@ export class UsersService {
     private metrics: MetricsService,
     private logger: AppLoggerService,
     private sponsorshipService: SponsorshipService,
+    private transactionAuditService: TransactionAuditService,
   ) { }
 
   async findById(id: string): Promise<User | null> {
@@ -1104,38 +1108,298 @@ export class UsersService {
   }
 
   async getHistory(userId: string) {
-    const encNotes = await this.encryptedNoteModel.find({ recipientId: userId }).sort({ createdAt: -1 }).exec();
-    const withdrawals = await this.pendingWithdrawalModel.find({ recipientId: userId }).sort({ createdAt: -1 }).exec();
+    const objectId = new Types.ObjectId(userId);
+    const [audits, encNotes, withdrawals, swaps] = await Promise.all([
+      this.transactionAuditService.listRecentForUser(userId, 40),
+      this.encryptedNoteModel.find({ recipientId: objectId }).sort({ createdAt: -1 }).limit(20).lean().exec(),
+      this.pendingWithdrawalModel.find({ recipientId: objectId }).sort({ createdAt: -1 }).limit(20).lean().exec(),
+      this.swapModel
+        .find({ $or: [{ aliceId: objectId }, { bobId: objectId }] })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .limit(20)
+        .populate('aliceId', 'username')
+        .populate('bobId', 'username')
+        .lean()
+        .exec(),
+    ]);
 
-    const history: any[] = [];
+    const timeline: Array<{
+      id: string;
+      source: 'audit' | 'encrypted_note' | 'withdrawal' | 'swap';
+      category: 'wallet' | 'private' | 'swap' | 'system';
+      operation: string;
+      title: string;
+      detail: string;
+      state: 'success' | 'pending' | 'failed' | 'retryable' | 'queued';
+      asset?: string;
+      amount?: string;
+      amountDisplay: string;
+      txHash?: string;
+      sponsorship: {
+        attempted: boolean;
+        sponsored: boolean;
+        detail?: string;
+      };
+      indexing?: {
+        status?: string;
+        detail?: string;
+      };
+      participants?: {
+        role?: 'alice' | 'bob';
+        counterparty?: string;
+      };
+      privateFlow: boolean;
+      date: string | Date | undefined;
+      statusLabel: string;
+    }> = [];
 
-    // Incoming Transfers / Deposits
-    for (const n of encNotes) {
-      history.push({
-        type: n.txHash === 'pending' ? 'pending_transfer' : 'deposit_or_transfer',
-        asset: n.asset,
-        amount: '?', // Encrypted
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        date: (n as any).createdAt,
-        txHash: n.txHash,
-        id: n._id
+    for (const audit of audits as any[]) {
+      const metadata = (audit.metadata ?? {}) as Record<string, unknown>;
+      const operation = String(audit.operation ?? 'activity');
+      const swapId = typeof metadata.swapId === 'string' ? metadata.swapId : undefined;
+      const swapMatch = swapId ? swaps.find((swap: any) => swap._id?.toString() === swapId) : undefined;
+      const participantRole = swapMatch
+        ? (swapMatch.aliceId as any)?.toString?.() === userId || (swapMatch.aliceId as any)?._id?.toString?.() === userId
+          ? 'alice'
+          : 'bob'
+        : undefined;
+      const counterparty =
+        swapMatch && participantRole
+          ? participantRole === 'alice'
+            ? (swapMatch.bobId as any)?.username
+            : (swapMatch.aliceId as any)?.username
+          : undefined;
+
+      timeline.push({
+        id: `audit:${audit._id}`,
+        source: 'audit',
+        category: operation.startsWith('swap') ? 'swap' : operation.includes('private') || operation.includes('deposit') || operation.includes('withdraw') ? 'private' : 'wallet',
+        operation,
+        title: this.describeAuditTitle(operation),
+        detail:
+          audit.error ||
+          audit.indexingDetail ||
+          (operation.startsWith('swap')
+            ? 'Tracked from the transaction audit stream so you can see proof, execution, and fallback state.'
+            : 'Tracked from the transaction audit stream so you can see status, sponsorship, and indexing state.'),
+        state: audit.state,
+        asset: audit.asset,
+        amount: audit.amount,
+        amountDisplay: audit.amount || (operation.includes('private') ? 'Private amount' : 'Not available'),
+        txHash: audit.txHash,
+        sponsorship: {
+          attempted: !!audit.sponsorshipAttempted,
+          sponsored: !!audit.sponsored,
+          detail: audit.sponsorshipDetail,
+        },
+        indexing: {
+          status: audit.indexingStatus,
+          detail: audit.indexingDetail,
+        },
+        participants: {
+          role: participantRole,
+          counterparty,
+        },
+        privateFlow:
+          operation.includes('private') ||
+          operation.includes('deposit') ||
+          operation.includes('withdraw') ||
+          operation.includes('swap'),
+        date: audit.updatedAt ?? audit.createdAt,
+        statusLabel: this.describeAuditState(audit.state),
       });
     }
 
-    // Withdrawals
-    for (const w of withdrawals) {
-      history.push({
-        type: 'withdrawal',
-        asset: w.asset,
-        amount: w.amount,
-        status: w.processed ? 'completed' : 'pending',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        date: (w as any).createdAt,
-        txHash: w.txHash,
-        id: w._id
+    for (const note of encNotes as any[]) {
+      timeline.push({
+        id: `note:${note._id}`,
+        source: 'encrypted_note',
+        category: 'private',
+        operation: note.txHash === 'pending' ? 'pending_private_transfer' : 'encrypted_note_credit',
+        title: note.txHash === 'pending' ? 'Pending private transfer received' : 'Private balance note received',
+        detail:
+          note.txHash === 'pending'
+            ? 'A private note was created for you, but the matching withdrawal or indexer confirmation has not completed yet.'
+            : 'A private note reached your account history. This usually corresponds to a deposit, private transfer, or private swap output.',
+        state: note.txHash === 'pending' ? 'pending' : 'success',
+        asset: note.asset,
+        amountDisplay: 'Encrypted amount',
+        txHash: note.txHash === 'pending' ? undefined : note.txHash,
+        sponsorship: {
+          attempted: false,
+          sponsored: false,
+        },
+        indexing: {
+          status: note.txHash === 'pending' ? 'pending' : 'tracked',
+          detail:
+            note.txHash === 'pending'
+              ? 'The private note exists locally but is still waiting on the rest of the transfer flow.'
+              : 'The note is already attached to a confirmed transaction hash.',
+        },
+        privateFlow: true,
+        date: note.createdAt,
+        statusLabel: note.txHash === 'pending' ? 'Waiting on chain follow-up' : 'Private note stored',
       });
     }
 
-    return history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    for (const withdrawal of withdrawals as any[]) {
+      timeline.push({
+        id: `withdrawal:${withdrawal._id}`,
+        source: 'withdrawal',
+        category: 'private',
+        operation: 'pending_withdrawal',
+        title: withdrawal.processed ? 'Private withdrawal completed' : 'Private withdrawal queued',
+        detail: withdrawal.processed
+          ? 'The withdrawal proof has already been processed into a public-balance transaction.'
+          : 'This withdrawal is still waiting to be processed or retried into a public-balance transaction.',
+        state: withdrawal.processed ? 'success' : 'pending',
+        asset: withdrawal.asset,
+        amount: withdrawal.amount,
+        amountDisplay: withdrawal.amount,
+        txHash: withdrawal.txHash,
+        sponsorship: {
+          attempted: false,
+          sponsored: false,
+        },
+        indexing: {
+          status: withdrawal.processed ? 'tracked' : 'pending',
+          detail: withdrawal.processed
+            ? 'The public balance should reflect this withdrawal after normal chain confirmation.'
+            : 'The withdrawal is waiting for processing or a successful retry.',
+        },
+        privateFlow: true,
+        date: withdrawal.createdAt,
+        statusLabel: withdrawal.processed ? 'Withdrawal confirmed' : 'Queued for processing',
+      });
+    }
+
+    const knownSwapIds = new Set(
+      timeline
+        .filter((entry) => entry.source === 'audit')
+        .map((entry) => {
+          const candidate = entry.id.startsWith('audit:') ? entry.id : '';
+          return candidate;
+        }),
+    );
+
+    for (const swap of swaps as any[]) {
+      const swapId = swap._id?.toString?.() ?? String(swap._id);
+      const role =
+        swap.aliceId?.toString?.() === userId || swap.aliceId?._id?.toString?.() === userId ? 'alice' : 'bob';
+      const counterparty = role === 'alice' ? swap.bobId?.username : swap.aliceId?.username;
+      const hasAudit = audits.some((audit: any) => String(audit.metadata?.swapId ?? '') === swapId);
+      if (hasAudit || knownSwapIds.has(`swap:${swapId}`)) {
+        continue;
+      }
+
+      timeline.push({
+        id: `swap:${swapId}`,
+        source: 'swap',
+        category: 'swap',
+        operation: 'swap_lifecycle',
+        title: role === 'alice' ? 'Swap requested or updated' : 'Swap sale updated',
+        detail: `Swap state is ${swap.status}. Proof state is ${swap.proofStatus}, and execution state is ${swap.executionStatus}.`,
+        state:
+          swap.status === 'completed'
+            ? 'success'
+            : swap.status === 'failed'
+              ? 'failed'
+              : swap.status === 'requested' || swap.status === 'executing'
+                ? 'pending'
+                : 'queued',
+        amountDisplay: `${swap.amountIn} XLM / ${swap.amountOut} USDC`,
+        txHash: swap.txHash,
+        sponsorship: {
+          attempted: false,
+          sponsored: false,
+        },
+        indexing: {
+          status: swap.status === 'completed' ? 'tracked' : 'pending',
+          detail:
+            swap.status === 'completed'
+              ? 'Swap execution completed and now contributes to account history.'
+              : 'Swap has started but still depends on acceptance, proof collection, or execution.',
+        },
+        participants: {
+          role,
+          counterparty,
+        },
+        privateFlow: swap.proofStatus === 'ready' || swap.status === 'proofs_pending' || swap.status === 'proofs_ready' || swap.status === 'executing',
+        date: swap.updatedAt ?? swap.createdAt,
+        statusLabel: this.describeSwapState(swap.status, swap.executionStatus),
+      });
+    }
+
+    return timeline
+      .sort((left, right) => new Date(right.date ?? 0).getTime() - new Date(left.date ?? 0).getTime())
+      .slice(0, 60);
+  }
+
+  private describeAuditTitle(operation: string) {
+    switch (operation) {
+      case 'public_send':
+        return 'Public payment';
+      case 'private_send':
+        return 'Private payment';
+      case 'deposit':
+        return 'Private deposit';
+      case 'withdraw_self':
+        return 'Self withdrawal';
+      case 'split_note':
+        return 'Note split';
+      case 'swap_request':
+        return 'Swap request created';
+      case 'swap_accept':
+        return 'Swap request accepted';
+      case 'swap_prepare_proof':
+        return 'Swap proof prepared';
+      case 'swap_submit_proof':
+        return 'Swap proof submitted';
+      case 'swap_execute_public':
+        return 'Public swap execution';
+      case 'swap_execute_private':
+        return 'Private swap execution';
+      case 'swap_complete':
+        return 'Swap marked complete';
+      default:
+        return operation.replaceAll('_', ' ');
+    }
+  }
+
+  private describeAuditState(state: string) {
+    switch (state) {
+      case 'success':
+        return 'Completed successfully';
+      case 'failed':
+        return 'Failed';
+      case 'retryable':
+        return 'Needs retry';
+      case 'queued':
+        return 'Queued';
+      default:
+        return 'In progress';
+    }
+  }
+
+  private describeSwapState(status: string, executionStatus?: string) {
+    if (status === 'completed') {
+      return 'Swap completed';
+    }
+    if (status === 'failed') {
+      return executionStatus === 'failed' ? 'Execution failed' : 'Swap failed';
+    }
+    if (status === 'requested') {
+      return 'Waiting for acceptance';
+    }
+    if (status === 'proofs_pending') {
+      return 'Collecting proofs';
+    }
+    if (status === 'proofs_ready') {
+      return 'Ready for execution';
+    }
+    if (status === 'executing') {
+      return 'Executing on-chain';
+    }
+    return 'Swap updated';
   }
 }
