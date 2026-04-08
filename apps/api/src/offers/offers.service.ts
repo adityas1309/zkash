@@ -106,6 +106,43 @@ export interface OfferInsightsView {
   };
 }
 
+export interface OfferPreviewView {
+  merchant: {
+    id: Types.ObjectId;
+    existingOffers: number;
+    activeOffers: number;
+    completedAsSeller: number;
+    sellerCompletionRate: number;
+  };
+  listing: {
+    assetIn: 'USDC' | 'XLM';
+    assetOut: 'USDC' | 'XLM';
+    rate: number;
+    min: number;
+    max: number;
+    bandWidth: number;
+  };
+  marketContext: {
+    pairMetrics: PairMetricsView;
+    nearestRates: {
+      lower: number | null;
+      upper: number | null;
+      median: number | null;
+    };
+    percentileHint: string;
+  };
+  diagnostics: Array<{
+    label: string;
+    tone: 'good' | 'caution' | 'risk';
+    detail: string;
+  }>;
+  publishingGuidance: {
+    readinessScore: number;
+    launchTone: 'good' | 'caution' | 'risk';
+    notes: string[];
+  };
+}
+
 @Injectable()
 export class OffersService {
   constructor(
@@ -116,6 +153,147 @@ export class OffersService {
   async create(merchantId: Types.ObjectId, data: CreateOfferDto) {
     this.validateOfferPayload(data);
     return this.offerModel.create({ merchantId, ...data });
+  }
+
+  async previewCreate(merchantId: Types.ObjectId, data: CreateOfferDto): Promise<OfferPreviewView> {
+    this.validateOfferPayload(data);
+
+    const [pairMetrics, merchantMetrics, sellerOfferCounts, pairOffers] = await Promise.all([
+      this.getPairMetrics(data.assetIn, data.assetOut),
+      this.getMerchantMetrics(merchantId, new Types.ObjectId()),
+      Promise.all([
+        this.offerModel.countDocuments({ merchantId }).exec(),
+        this.offerModel.countDocuments({ merchantId, active: true }).exec(),
+      ]),
+      this.offerModel.find({ assetIn: data.assetIn, assetOut: data.assetOut, active: true }).select('rate').lean().exec(),
+    ]);
+
+    const rateValues = pairOffers
+      .map((offer) => Number(offer.rate) || 0)
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((left, right) => left - right);
+
+    const lower = [...rateValues].reverse().find((value) => value <= data.rate) ?? null;
+    const upper = rateValues.find((value) => value >= data.rate) ?? null;
+    const median =
+      rateValues.length === 0
+        ? null
+        : rateValues.length % 2 === 1
+          ? rateValues[Math.floor(rateValues.length / 2)]
+          : Number(((rateValues[rateValues.length / 2 - 1] + rateValues[rateValues.length / 2]) / 2).toFixed(4));
+
+    const percentileHint = this.describeRatePosition(data.rate, rateValues);
+    const bandWidth = Number((data.max - data.min).toFixed(4));
+
+    const diagnostics: OfferPreviewView['diagnostics'] = [
+      {
+        label: 'Pair saturation',
+        tone: pairMetrics.activeOffers >= 6 ? 'risk' : pairMetrics.activeOffers >= 3 ? 'caution' : 'good',
+        detail:
+          pairMetrics.activeOffers >= 6
+            ? 'This pair already has a crowded active board, so your listing must differentiate on rate or reliability.'
+            : pairMetrics.activeOffers >= 3
+              ? 'The pair is active enough to support discovery, but not so thin that every listing gets instant attention.'
+              : 'This pair is relatively thin, so a well-priced listing can stand out quickly.',
+      },
+      {
+        label: 'Rate placement',
+        tone:
+          percentileHint === 'aggressive_low' || percentileHint === 'aggressive_high'
+            ? 'risk'
+            : percentileHint === 'discount_edge' || percentileHint === 'premium_edge'
+              ? 'caution'
+              : 'good',
+        detail: this.describeRateDiagnostic(data.rate, percentileHint, median),
+      },
+      {
+        label: 'Trade band shape',
+        tone: bandWidth <= 0.25 ? 'risk' : bandWidth <= 5 ? 'good' : 'caution',
+        detail:
+          bandWidth <= 0.25
+            ? 'The min/max band is very tight, which can make the listing hard to discover unless you expect exact-ticket buyers.'
+            : bandWidth <= 5
+              ? 'The band is focused enough to be specific while still leaving room for multiple ticket sizes.'
+              : 'The band is broad, which can help discovery but may attract requests that do not match your ideal execution size.',
+      },
+      {
+        label: 'Seller readiness',
+        tone:
+          merchantMetrics.completedAsSeller === 0
+            ? 'caution'
+            : merchantMetrics.pendingAsSeller + merchantMetrics.activeAsSeller >= 5
+              ? 'risk'
+              : 'good',
+        detail:
+          merchantMetrics.completedAsSeller === 0
+            ? 'You are publishing without seller-side completion history on record, so the first few fills should focus on trust-building.'
+            : merchantMetrics.pendingAsSeller + merchantMetrics.activeAsSeller >= 5
+              ? 'You already have several seller-side requests in flight, so adding another listing may stretch response times.'
+              : 'Your current seller-side queue looks manageable for supporting a fresh listing.',
+      },
+    ];
+
+    const readinessScore = Math.max(
+      10,
+      Math.min(
+        99,
+        Math.round(
+          55 +
+            Math.min(merchantMetrics.completedAsSeller * 3, 15) -
+            pairMetrics.activeOffers * 2 +
+            (bandWidth > 0.25 && bandWidth <= 5 ? 8 : 0) +
+            (percentileHint === 'balanced' ? 10 : percentileHint.includes('edge') ? 2 : -8),
+        ),
+      ),
+    );
+
+    const launchTone = readinessScore >= 80 ? 'good' : readinessScore >= 60 ? 'caution' : 'risk';
+    const [existingOffers, activeOffers] = sellerOfferCounts;
+
+    return {
+      merchant: {
+        id: merchantId,
+        existingOffers,
+        activeOffers,
+        completedAsSeller: merchantMetrics.completedAsSeller,
+        sellerCompletionRate: merchantMetrics.completionRate,
+      },
+      listing: {
+        assetIn: data.assetIn,
+        assetOut: data.assetOut,
+        rate: data.rate,
+        min: data.min,
+        max: data.max,
+        bandWidth,
+      },
+      marketContext: {
+        pairMetrics,
+        nearestRates: {
+          lower,
+          upper,
+          median,
+        },
+        percentileHint,
+      },
+      diagnostics,
+      publishingGuidance: {
+        readinessScore,
+        launchTone,
+        notes: [
+          launchTone === 'good'
+            ? 'This listing shape looks publishable without obvious structural problems.'
+            : launchTone === 'caution'
+              ? 'The listing is viable, but small pricing or band adjustments could improve discovery and execution confidence.'
+              : 'This draft is publishable, but it is carrying clear rate, saturation, or readiness risk that may weaken execution outcomes.',
+          pairMetrics.pairOpenRequests > 0
+            ? `There are already ${pairMetrics.pairOpenRequests} open requests on this pair, which means buyers exist but queue pressure may be rising.`
+            : 'There are no open pair requests right now, so the listing may need a sharper rate or broader band to attract the first request.',
+          data.assetIn === 'XLM'
+            ? 'Because buyers fund this listing in XLM, the quoted USDC outcome needs to feel stable and fair compared with adjacent offers.'
+            : 'Because buyers fund this listing in USDC, private execution will be more sensitive to exact-note preparation if users choose shielded settlement.',
+        ],
+      },
+    };
   }
 
   async findAll(query: OfferQueryDto | boolean = {}) {
@@ -473,5 +651,46 @@ export class OffersService {
       return 'balanced range';
     }
     return 'premium range';
+  }
+
+  private describeRatePosition(rate: number, rateValues: number[]) {
+    if (rateValues.length === 0) {
+      return 'first_listing';
+    }
+
+    const min = rateValues[0];
+    const max = rateValues[rateValues.length - 1];
+    if (rate < min * 0.85) {
+      return 'aggressive_low';
+    }
+    if (rate < min) {
+      return 'discount_edge';
+    }
+    if (rate > max * 1.15) {
+      return 'aggressive_high';
+    }
+    if (rate > max) {
+      return 'premium_edge';
+    }
+    return 'balanced';
+  }
+
+  private describeRateDiagnostic(rate: number, percentileHint: string, median: number | null) {
+    if (percentileHint === 'first_listing') {
+      return 'This would be the first active listing on the pair, so your rate becomes the initial market anchor.';
+    }
+    if (percentileHint === 'aggressive_low') {
+      return `The proposed rate ${rate} sits well below current pair norms${median ? ` around ${median}` : ''}, which may look underpriced or mistaken.`;
+    }
+    if (percentileHint === 'discount_edge') {
+      return `The rate ${rate} undercuts the current board, which can attract requests quickly but may leave little room for execution friction.`;
+    }
+    if (percentileHint === 'aggressive_high') {
+      return `The rate ${rate} is materially above the current board${median ? ` around ${median}` : ''}, so discovery may be weak unless the seller reputation carries it.`;
+    }
+    if (percentileHint === 'premium_edge') {
+      return `The rate ${rate} sits above the visible board but still close enough to compete if the listing quality is strong.`;
+    }
+    return `The rate ${rate}${median ? ` clusters near the visible market midpoint around ${median}` : ''}, which is usually easier to explain to buyers.`;
   }
 }

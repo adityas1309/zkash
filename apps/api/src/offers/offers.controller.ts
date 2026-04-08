@@ -28,6 +28,12 @@ export class OffersController {
     return this.offersService.getOfferInsights(id);
   }
 
+  @Post('preview')
+  @UseGuards(SessionAuthGuard)
+  preview(@Body() body: CreateOfferDto, @Req() req: { user: { _id: Types.ObjectId } }) {
+    return this.offersService.previewCreate(req.user._id, body);
+  }
+
   @Post()
   @UseGuards(SessionAuthGuard)
   create(@Body() body: CreateOfferDto, @Req() req: { user: { _id: Types.ObjectId } }) {
