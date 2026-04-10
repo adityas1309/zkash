@@ -1,137 +1,235 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
-import { Send, Droplet, ShieldCheck, Landmark } from "lucide-react";
-
+import {
+  ArrowRightLeft,
+  Clock3,
+  Droplet,
+  ExternalLink,
+  Globe,
+  Landmark,
+  RefreshCw,
+  Send,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
 import { usePrivacy } from "@/context/PrivacyContext";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
-export default function WalletPage() {
-  const { isPrivate, togglePrivacy } = usePrivacy();
+interface HistoryEntry {
+  id: string;
+  title: string;
+  detail: string;
+  state: "success" | "pending" | "failed" | "retryable" | "queued";
+  category: "wallet" | "private" | "swap" | "system";
+  asset?: string;
+  amountDisplay: string;
+  txHash?: string;
+  privateFlow: boolean;
+  date: string;
+}
 
-  const [user, setUser] = useState<{
+interface WalletWorkspace {
+  user: {
     username?: string;
     stellarPublicKey?: string;
-  } | null>(null);
-  const [balance, setBalance] = useState<{ usdc: string; xlm: string }>({
-    usdc: "0",
-    xlm: "0",
-  });
-  const [privateBalance, setPrivateBalance] = useState<{
-    usdc: string;
-    xlm: string;
-  }>({ usdc: "0", xlm: "0" });
-
-  const [loading, setLoading] = useState(true);
-  const [isBalanceLoading, setIsBalanceLoading] = useState(true);
-  const [faucetLoading, setFaucetLoading] = useState(false);
-  const [withdrawing, setWithdrawing] = useState<"USDC" | "XLM" | null>(null);
-  const [opsStats, setOpsStats] = useState<{
-    indexer?: {
-      commitments?: number;
-      pools?: Array<{ status: string; lastProcessedLedger: number }>;
+    reputation?: number;
+  };
+  balances: {
+    public: { usdc: string; xlm: string };
+    private: { usdc: string; xlm: string };
+    composition: {
+      usdcPrivateShare: number;
+      xlmPrivateShare: number;
     };
-    flows?: { pendingWithdrawals?: number };
-  } | null>(null);
-  const [withdrawSponsorship, setWithdrawSponsorship] = useState<
-    Record<string, string>
-  >({});
-
-  const fetchBalance = () => {
-    return fetch(`${API_URL}/users/balance/all`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setBalance(data))
-      .catch(console.error);
   };
-
-  const fetchPrivateBalance = () => {
-    return fetch(`${API_URL}/users/balance/private`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setPrivateBalance(data))
-      .catch(console.error);
+  pending: {
+    count: number;
+    byAsset: {
+      usdc: string;
+      xlm: string;
+    };
+    items: Array<{
+      id: string;
+      asset: string;
+      amount: string;
+      processed: boolean;
+      txHash?: string;
+      createdAt: string;
+    }>;
   };
+  sponsorship: {
+    withdrawSelf: Record<
+      string,
+      {
+        supported: boolean;
+        sponsored: boolean;
+        reason?: string;
+      }
+    >;
+  };
+  privateActions: Array<{
+    action: string;
+    enabled: boolean;
+    asset: string | null;
+    availableAmount: string;
+    sponsorship: {
+      supported: boolean;
+      sponsored: boolean;
+      reason?: string;
+    };
+  }>;
+  recentHistory: HistoryEntry[];
+  workspaceGuidance: string[];
+}
 
-  const fetchOpsStats = () => {
-    return fetch(`${API_URL}/stats`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((data) => setOpsStats(data))
-      .catch(console.error);
+function formatTimestamp(value?: string) {
+  if (!value) {
+    return "Unknown time";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown time";
+  }
+  return date.toLocaleString();
+}
+
+function getStateVariant(state: HistoryEntry["state"]) {
+  if (state === "success") {
+    return "success" as const;
+  }
+  if (state === "failed") {
+    return "error" as const;
+  }
+  if (state === "retryable") {
+    return "warning" as const;
+  }
+  return "default" as const;
+}
+
+function BalanceCard({
+  title,
+  tone,
+  usdc,
+  xlm,
+  extra,
+}: {
+  title: string;
+  tone: "public" | "private";
+  usdc: string;
+  xlm: string;
+  extra?: React.ReactNode;
+}) {
+  const isPrivate = tone === "private";
+  return (
+    <Card
+      variant={isPrivate ? "neon" : "glass"}
+      className={isPrivate ? "border-indigo-500/25 bg-gradient-to-br from-indigo-900/30 to-slate-900/70" : ""}
+    >
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-slate-400">{title}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {isPrivate ? "Shielded notes and queued privacy flows" : "Visible on-chain account balances"}
+          </p>
+        </div>
+        <Badge variant={isPrivate ? "success" : "default"}>
+          {isPrivate ? (
+            <span className="flex items-center gap-1">
+              <Shield className="h-3.5 w-3.5" />
+              ZK Notes
+            </span>
+          ) : (
+            <span className="flex items-center gap-1">
+              <Globe className="h-3.5 w-3.5" />
+              On-chain
+            </span>
+          )}
+        </Badge>
+      </div>
+
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">USDC</p>
+            <p className="text-2xl font-semibold text-white">{usdc}</p>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">XLM</p>
+            <p className="text-2xl font-semibold text-white">{xlm}</p>
+          </div>
+        </div>
+      </div>
+
+      {extra && <div className="mt-4">{extra}</div>}
+    </Card>
+  );
+}
+
+export default function WalletPage() {
+  const { isPrivate, togglePrivacy } = usePrivacy();
+  const [workspace, setWorkspace] = useState<WalletWorkspace | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [faucetLoading, setFaucetLoading] = useState(false);
+  const [processingPending, setProcessingPending] = useState(false);
+  const [withdrawing, setWithdrawing] = useState<"USDC" | "XLM" | null>(null);
+
+  const fetchWorkspace = async () => {
+    try {
+      const res = await fetch(`${API_URL}/users/workspace`, { credentials: "include" });
+      const data = await res.json().catch(() => null);
+      setWorkspace(data);
+    } catch (error) {
+      console.error("[WalletPage] Failed to load wallet workspace", error);
+      setWorkspace(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetch(`${API_URL}/users/me`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((u) => {
-        setUser(u);
-        if (u) {
-          Promise.all([fetchBalance(), fetchPrivateBalance(), fetchOpsStats()]).finally(() => {
-            setIsBalanceLoading(false);
-          });
-        } else {
-          setIsBalanceLoading(false);
-        }
-      })
-      .finally(() => setLoading(false));
+    fetchWorkspace();
   }, []);
 
   useEffect(() => {
-    if (!user) return;
-    const interval = setInterval(() => {
-      fetchBalance();
-      fetchPrivateBalance();
-      fetchOpsStats();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [user]);
+    if (!workspace?.user?.stellarPublicKey) {
+      return;
+    }
 
-  // Auto-process withdrawals
-  useEffect(() => {
-    if (!user) return;
+    const interval = window.setInterval(() => {
+      fetchWorkspace();
+    }, 12000);
 
-    const process = async () => {
-      try {
-        const res = await fetch(`${API_URL}/users/withdrawals/process`, {
-          method: "POST",
-          credentials: "include",
-        });
-        const data = await res.json();
-        if (data.processed > 0) {
-          console.log(
-            `Auto-processed ${data.processed} withdrawals. TX: ${data.txHashes?.join(", ")}`,
-          );
-          fetchBalance();
-          fetchPrivateBalance();
-        }
-      } catch (e) {
-        console.error("Auto-process error:", e);
-      }
-    };
-
-    // Run immediately on load
-    process();
-
-    // Then poll every 10s
-    const interval = setInterval(process, 10000);
-    return () => clearInterval(interval);
-  }, [user]);
+    return () => window.clearInterval(interval);
+  }, [workspace?.user?.stellarPublicKey]);
 
   const handleXlmFaucet = async () => {
-    if (!user?.stellarPublicKey) return;
+    if (!workspace?.user?.stellarPublicKey) {
+      return;
+    }
+
     setFaucetLoading(true);
     try {
       const res = await fetch(`${API_URL}/faucet/xlm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ address: user.stellarPublicKey }),
+        body: JSON.stringify({ address: workspace.user.stellarPublicKey }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.success) {
-        setTimeout(fetchBalance, 4000);
+        window.setTimeout(() => fetchWorkspace(), 3500);
       }
     } finally {
       setFaucetLoading(false);
@@ -144,27 +242,31 @@ export default function WalletPage() {
         method: "POST",
         credentials: "include",
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data.success) {
-        alert("Trustline added! Transaction: " + data.hash);
-        setTimeout(fetchBalance, 4000);
+        window.alert(`Trustline added successfully.\nTransaction: ${data.hash}`);
+        window.setTimeout(() => fetchWorkspace(), 3500);
       } else {
-        alert("Failed: " + (data.message || "Unknown error"));
+        window.alert(`Failed to add trustline: ${data.message || "Unknown error"}`);
       }
-    } catch (e) {
-      alert("Error adding trustline");
+    } catch {
+      window.alert("Error adding trustline");
     }
   };
 
   const handleWithdrawSelf = async (asset: "USDC" | "XLM") => {
-    const amount =
-      asset === "USDC"
-        ? Number(privateBalance.usdc)
-        : Number(privateBalance.xlm);
-    if (amount <= 0) return;
-
-    if (!confirm(`Withdraw ${amount} ${asset} from Private to Public balance?`))
+    if (!workspace) {
       return;
+    }
+
+    const amount = Number(asset === "USDC" ? workspace.balances.private.usdc : workspace.balances.private.xlm);
+    if (amount <= 0) {
+      return;
+    }
+
+    if (!window.confirm(`Withdraw ${amount} ${asset} from private balance into the public wallet?`)) {
+      return;
+    }
 
     setWithdrawing(asset);
     try {
@@ -174,46 +276,46 @@ export default function WalletPage() {
         credentials: "include",
         body: JSON.stringify({ asset, amount }),
       });
-      const data = await res.json();
-      if (data.success) {
-        alert(`Withdrawal successful! TX: ${data.txHash}`);
-        fetchBalance();
-        fetchPrivateBalance();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        window.alert(`Withdrawal failed: ${data.error || data.message || "Unknown error"}`);
       } else {
-        alert(`Withdrawal failed: ${data.error}`);
+        window.alert(`Withdrawal submitted.\nTransaction: ${data.txHash || "Pending hash"}`);
+        fetchWorkspace();
       }
-    } catch (e: any) {
-      alert(`Withdrawal error: ${e.message}`);
     } finally {
       setWithdrawing(null);
     }
   };
 
-  useEffect(() => {
-    if (!user) return;
-
-    (["USDC", "XLM"] as const).forEach((assetCode) => {
-      fetch(`${API_URL}/users/sponsorship/preview`, {
+  const handleProcessPending = async () => {
+    setProcessingPending(true);
+    try {
+      const res = await fetch(`${API_URL}/users/withdrawals/process`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ asset: assetCode, operation: "withdraw_self" }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (data?.reason) {
-            setWithdrawSponsorship((prev) => ({
-              ...prev,
-              [assetCode]: data.reason,
-            }));
-          }
-        })
-        .catch(console.error);
-    });
-  }, [user]);
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.processed > 0) {
+        window.alert(`Processed ${data.processed} withdrawal(s).\nTransactions: ${(data.txHashes || []).join(", ")}`);
+      }
+      fetchWorkspace();
+    } finally {
+      setProcessingPending(false);
+    }
+  };
 
-  if (loading) return <div className="p-8">Loading...</div>;
-  if (!user) {
+  const composition = useMemo(() => workspace?.balances.composition, [workspace]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
+
+  if (!workspace?.user) {
     return (
       <div className="p-8">
         <p>
@@ -227,235 +329,296 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="w-full relative overflow-hidden bg-slate-900/30 rounded-[32px] border border-white/5 text-white selection:bg-indigo-500/30 font-sans flex flex-col p-8 lg:p-12 mb-8 items-center max-w-[1400px] mx-auto min-h-[50vh]">
-      {/* Top Controls */}
-      <div className="absolute top-6 right-8 z-20">
+    <div className="mx-auto mb-8 flex min-h-[50vh] max-w-[1450px] flex-col rounded-[32px] border border-white/5 bg-slate-900/30 p-8 text-white selection:bg-indigo-500/30 lg:p-12">
+      <div className="absolute right-8 top-6 z-20">
         <PrivacyToggle checked={isPrivate} onCheckedChange={togglePrivacy} />
       </div>
 
-      <main className="w-full max-w-5xl mx-auto space-y-8 relative z-10 pt-4">
-        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 mb-8">
-          Advanced Wallet
-        </h1>
-        {/* Balance Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Public Balance */}
-          <div className="relative group overflow-hidden rounded-2xl bg-slate-800 border border-slate-700 p-6 transition-all hover:border-slate-600 shadow-xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-slate-400 font-medium flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-                Public Balance
-              </h2>
-              <span className="text-xs font-mono text-slate-500 border border-slate-700 rounded px-2 py-0.5">
-                On-chain
-              </span>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between h-8">
-                {isBalanceLoading ? (
-                  <div className="h-8 w-24 bg-slate-700/50 animate-pulse rounded" />
-                ) : (
-                  <span className="text-2xl font-bold font-secondary tracking-tight leading-none">
-                    {balance.usdc}
-                  </span>
-                )}
-                <span className="text-sm font-medium text-slate-400">USDC</span>
-              </div>
-              <div className="h-px bg-slate-700/50" />
-              <div className="flex items-center justify-between h-8">
-                {isBalanceLoading ? (
-                  <div className="h-8 w-24 bg-slate-700/50 animate-pulse rounded" />
-                ) : (
-                  <span className="text-2xl font-bold font-secondary tracking-tight leading-none">
-                    {balance.xlm}
-                  </span>
-                )}
-                <span className="text-sm font-medium text-slate-400">XLM</span>
-              </div>
-            </div>
+      <main className="relative z-10 mx-auto w-full max-w-6xl space-y-8 pt-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Wallet Workspace</p>
+            <h1 className="mt-2 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-3xl font-bold text-transparent">
+              Advanced Wallet
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+              One place for public balances, private balances, queued withdrawals, sponsorship status, and the most
+              recent activity touching your wallet.
+            </p>
           </div>
-
-          {/* Private Balance */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-900/40 to-slate-800 border border-indigo-500/30 p-6 shadow-2xl shadow-indigo-900/10">
-            <div className="absolute top-0 right-0 p-3 opacity-10 pointer-events-none">
-              <svg
-                className="w-24 h-24 text-indigo-400"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.95V5h-2.93v2.63c-1.71.47-3.15 1.73-3.15 3.23 0 2.18 1.99 2.84 3.99 3.32 2.03.5 2.4.97 2.4 1.76 0 1.1-.95 1.58-2.48 1.58-1.57 0-2.5-.56-2.53-1.84h-1.71c.08 1.96 1.49 2.89 3.09 3.3v2.71h2.93v-2.75c1.98-.53 3.38-1.93 3.38-3.74 0-2.42-2.18-3.26-4.03-3.79z" />
-              </svg>
-            </div>
-
-            <div className="flex items-center justify-between mb-6 relative z-10">
-              <h2 className="text-indigo-200 font-medium flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-indigo-400 shadow-[0_0_12px_rgba(129,140,248,0.8)] animate-pulse" />
-                Private Balance
-              </h2>
-              <span className="text-xs font-mono text-indigo-300/80 border border-indigo-500/30 rounded px-2 py-0.5 bg-indigo-500/10">
-                ZK Notes
-              </span>
-            </div>
-
-            <div className="space-y-4 relative z-10">
-              <div className="group">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-indigo-300/70 ">
-                    Encrypted USDC
-                  </span>
-                  {Number(privateBalance.usdc) > 0 && (
-                    <button
-                      onClick={() => handleWithdrawSelf("USDC")}
-                      disabled={withdrawing === "USDC"}
-                      className="text-[10px] uppercase font-bold tracking-wider text-indigo-300 hover:text-white transition-colors"
-                    >
-                      {withdrawing === "USDC" ? "Processing..." : "Withdraw"}
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20 h-[44px]">
-                  {isBalanceLoading ? (
-                    <div className="h-6 w-16 bg-indigo-900/50 animate-pulse rounded" />
-                  ) : (
-                    <span className="text-xl font-bold font-secondary text-white leading-none">
-                      {privateBalance.usdc}
-                    </span>
-                  )}
-                  <span className="text-xs font-bold text-indigo-400">
-                    USDC
-                  </span>
-                </div>
-              </div>
-
-              <div className="group">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-indigo-300/70">
-                    Encrypted XLM
-                  </span>
-                  {Number(privateBalance.xlm) > 0 && (
-                    <button
-                      onClick={() => handleWithdrawSelf("XLM")}
-                      disabled={withdrawing === "XLM"}
-                      className="text-[10px] uppercase font-bold tracking-wider text-indigo-300 hover:text-white transition-colors"
-                    >
-                      {withdrawing === "XLM" ? "Processing..." : "Withdraw"}
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-lg bg-indigo-950/30 border border-indigo-500/10 transition-colors group-hover:border-indigo-500/20 h-[44px]">
-                  {isBalanceLoading ? (
-                    <div className="h-6 w-16 bg-indigo-900/50 animate-pulse rounded" />
-                  ) : (
-                    <span className="text-xl font-bold font-secondary text-white leading-none">
-                      {privateBalance.xlm}
-                    </span>
-                  )}
-                  <span className="text-xs font-bold text-indigo-400">XLM</span>
-                </div>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant={isPrivate ? "success" : "warning"}>
+              {isPrivate ? (
+                <span className="flex items-center gap-1">
+                  <Shield className="h-3.5 w-3.5" />
+                  Private-first
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <Globe className="h-3.5 w-3.5" />
+                  Public-first
+                </span>
+              )}
+            </Badge>
+            <Button variant="ghost" onClick={() => fetchWorkspace()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Actions Panel */}
-          <div className="lg:col-span-2 bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-slate-700 bg-slate-800/50">
-              <h3 className="font-semibold text-slate-200">Quick Actions</h3>
+        <section className="grid gap-6 md:grid-cols-2">
+          <BalanceCard
+            title="Public Balance"
+            tone="public"
+            usdc={workspace.balances.public.usdc}
+            xlm={workspace.balances.public.xlm}
+            extra={
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">USDC private share</p>
+                  <p className="mt-2 text-sm font-medium text-white">{composition?.usdcPrivateShare ?? 0}%</p>
+                </div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">XLM private share</p>
+                  <p className="mt-2 text-sm font-medium text-white">{composition?.xlmPrivateShare ?? 0}%</p>
+                </div>
+              </div>
+            }
+          />
+
+          <BalanceCard
+            title="Private Balance"
+            tone="private"
+            usdc={workspace.balances.private.usdc}
+            xlm={workspace.balances.private.xlm}
+            extra={
+              <div className="grid gap-3 md:grid-cols-2">
+                <button
+                  onClick={() => handleWithdrawSelf("USDC")}
+                  disabled={withdrawing === "USDC" || Number(workspace.balances.private.usdc) <= 0}
+                  className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-left transition hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <p className="text-xs uppercase tracking-wide text-indigo-200">Withdraw private USDC</p>
+                  <p className="mt-2 text-sm text-indigo-50">
+                    {withdrawing === "USDC" ? "Processing..." : workspace.sponsorship.withdrawSelf.USDC?.reason || "Withdraw into public balance"}
+                  </p>
+                </button>
+                <button
+                  onClick={() => handleWithdrawSelf("XLM")}
+                  disabled={withdrawing === "XLM" || Number(workspace.balances.private.xlm) <= 0}
+                  className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-left transition hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <p className="text-xs uppercase tracking-wide text-indigo-200">Withdraw private XLM</p>
+                  <p className="mt-2 text-sm text-indigo-50">
+                    {withdrawing === "XLM" ? "Processing..." : workspace.sponsorship.withdrawSelf.XLM?.reason || "Withdraw into public balance"}
+                  </p>
+                </button>
+              </div>
+            }
+          />
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[0.64fr_0.36fr]">
+          <Card variant="glass">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Quick Actions</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Wallet controls</h2>
+              </div>
+              <Badge variant="default">
+                <Wallet className="mr-1 h-3.5 w-3.5" />
+                Live tools
+              </Badge>
             </div>
-            <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Link
                 href="/dashboard"
-                className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-indigo-600 hover:text-white border border-slate-700 hover:border-indigo-500 transition-all group gap-2"
+                className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 transition hover:border-indigo-500 hover:bg-indigo-500/10"
               >
-                <Send className="w-6 h-6 text-white group-hover:text-white transition-colors" />
-                <span className="text-xs font-medium">Send Funds</span>
+                <Send className="h-6 w-6 text-white" />
+                <p className="mt-3 font-medium text-white">Send Funds</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Open the main transfer workspace.</p>
               </Link>
 
               <button
                 onClick={handleXlmFaucet}
                 disabled={faucetLoading}
-                className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-cyan-600 hover:text-white border border-slate-700 hover:border-cyan-500 transition-all group gap-2 disabled:opacity-50"
+                className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Droplet className="w-6 h-6 text-white group-hover:text-white transition-colors" />
-                <span className="text-xs font-medium">
-                  {faucetLoading ? "Loading..." : "XLM Faucet"}
-                </span>
+                <Droplet className="h-6 w-6 text-white" />
+                <p className="mt-3 font-medium text-white">{faucetLoading ? "Funding..." : "XLM Faucet"}</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Top up testnet XLM through the app faucet.</p>
               </button>
 
               <button
                 onClick={handleTrustline}
-                className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-emerald-600 hover:text-white border border-slate-700 hover:border-emerald-500 transition-all group gap-2"
+                className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 text-left transition hover:border-emerald-500 hover:bg-emerald-500/10"
               >
-                <ShieldCheck className="w-6 h-6 text-white group-hover:text-white transition-colors" />
-                <span className="text-xs font-medium">Add Trustline</span>
+                <ShieldCheck className="h-6 w-6 text-white" />
+                <p className="mt-3 font-medium text-white">Add Trustline</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Prepare the wallet for USDC-based flows.</p>
               </button>
 
               <a
                 href="https://faucet.circle.com/?network=stellar-testnet"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex flex-col items-center justify-center p-4 rounded-xl bg-slate-700/30 hover:bg-blue-600 hover:text-white border border-slate-700 hover:border-blue-500 transition-all group gap-2"
+                className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 transition hover:border-blue-500 hover:bg-blue-500/10"
               >
-                <Landmark className="w-6 h-6 text-white group-hover:text-white transition-colors" />
-                <span className="text-xs font-medium">Circle Faucet</span>
+                <Landmark className="h-6 w-6 text-white" />
+                <p className="mt-3 font-medium text-white">Circle Faucet</p>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Open the Circle testnet faucet in a new tab.</p>
               </a>
             </div>
-          </div>
+          </Card>
 
-          {/* Receive QR */}
-          <div className="bg-white rounded-2xl p-6 shadow-xl flex flex-col items-center justify-center">
-            <h3 className="text-slate-800 text-sm font-bold uppercase tracking-wider mb-4">
-              Receive Assets
-            </h3>
-            <div className="p-3 bg-white border-2 border-slate-100 rounded-xl shadow-inner mb-4">
-              <QRCodeSVG
-                value={user.stellarPublicKey ?? ""}
-                size={140}
-                level="M"
-              />
+          <Card variant="glass" className="flex flex-col items-center justify-center">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Receive Assets</h3>
+            <div className="my-4 rounded-2xl border-2 border-slate-100 bg-white p-3 shadow-inner">
+              <QRCodeSVG value={workspace.user.stellarPublicKey ?? ""} size={150} level="M" />
             </div>
-            <div className="w-full">
-              <p className="text-[10px] uppercase text-slate-400 font-bold text-center mb-1">
-                Your Wallet Address
-              </p>
-              <div className="bg-slate-100 rounded p-2 text-center border border-slate-200">
-                <p className="text-xs font-mono text-slate-600 break-all leading-tight">
-                  {user.stellarPublicKey}
-                </p>
+            <div className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-center">
+              <p className="text-[10px] uppercase tracking-wide text-slate-500">Wallet Address</p>
+              <p className="mt-2 break-all font-mono text-xs text-slate-300">{workspace.user.stellarPublicKey}</p>
+            </div>
+          </Card>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-[0.38fr_0.62fr]">
+          <Card variant="glass">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Pending & Guidance</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Private queue status</h2>
+              </div>
+              <Badge variant={workspace.pending.count > 0 ? "warning" : "success"}>
+                <Clock3 className="mr-1 h-3.5 w-3.5" />
+                {workspace.pending.count} queued
+              </Badge>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Pending by asset</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="text-sm text-slate-400">USDC</p>
+                    <p className="mt-1 text-xl font-semibold text-white">{workspace.pending.byAsset.usdc}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-400">XLM</p>
+                    <p className="mt-1 text-xl font-semibold text-white">{workspace.pending.byAsset.xlm}</p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={handleProcessPending}
+                disabled={processingPending || workspace.pending.count === 0}
+                className="w-full rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4 text-left transition hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <div className="flex items-center gap-3">
+                  <ArrowRightLeft className="h-5 w-5 text-indigo-200" />
+                  <div>
+                    <p className="font-medium text-indigo-50">
+                      {processingPending ? "Processing queued withdrawals..." : "Process pending withdrawals"}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-indigo-100/80">
+                      Submit the current pending withdrawal queue into public-balance transactions.
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              <div className="space-y-3">
+                {workspace.workspaceGuidance.map((entry) => (
+                  <div key={entry} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="flex items-start gap-3">
+                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-300" />
+                      <p className="text-sm leading-6 text-slate-300">{entry}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        </div>
+          </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">
-              Indexed Commitments
-            </p>
-            <p className="text-2xl font-bold text-white">
-              {opsStats?.indexer?.commitments ?? 0}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">
-              Pending Withdrawals
-            </p>
-            <p className="text-2xl font-bold text-white">
-              {opsStats?.flows?.pendingWithdrawals ?? 0}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 mb-2">
-              Sponsorship Status
-            </p>
-            <p className="text-sm leading-relaxed text-slate-300">
-              {withdrawSponsorship.XLM ?? "Checking sponsorship policy..."}
-            </p>
-          </div>
-        </div>
+          <Card variant="glass">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Recent Activity</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Latest wallet events</h2>
+              </div>
+              <Link href="/history">
+                <Button variant="ghost">Open full history</Button>
+              </Link>
+            </div>
+
+            <div className="space-y-3">
+              {workspace.recentHistory.length === 0 ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500">
+                  No recent wallet history yet.
+                </div>
+              ) : (
+                workspace.recentHistory.map((entry) => (
+                  <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge variant={getStateVariant(entry.state)}>{entry.state.toUpperCase()}</Badge>
+                          <Badge variant={entry.privateFlow ? "success" : "default"}>
+                            {entry.privateFlow ? (
+                              <span className="flex items-center gap-1">
+                                <Shield className="h-3 w-3" />
+                                Private
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <Globe className="h-3 w-3" />
+                                Public
+                              </span>
+                            )}
+                          </Badge>
+                        </div>
+                        <h3 className="text-lg font-semibold text-white">{entry.title}</h3>
+                        <p className="mt-1 text-sm leading-6 text-slate-400">{entry.detail}</p>
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">Amount</p>
+                            <p className="mt-1 text-sm font-medium text-white">{entry.amountDisplay}</p>
+                          </div>
+                          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                            <p className="text-xs uppercase tracking-wide text-slate-500">Time</p>
+                            <p className="mt-1 text-sm font-medium text-white">{formatTimestamp(entry.date)}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        {entry.txHash ? (
+                          <a
+                            href={`https://stellar.expert/explorer/testnet/tx/${entry.txHash}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 px-4 py-2 text-sm text-indigo-200 transition-colors hover:bg-indigo-500/20"
+                          >
+                            View tx
+                            <ExternalLink className="ml-2 h-4 w-4" />
+                          </a>
+                        ) : (
+                          <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-500">
+                            No transaction hash
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </section>
       </main>
     </div>
   );

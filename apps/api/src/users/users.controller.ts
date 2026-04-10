@@ -49,6 +49,13 @@ export class UsersController {
     return this.usersService.getPrivateBalance(req.user._id);
   }
 
+  @Get('workspace')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getWalletWorkspace(@Req() req: any) {
+    return this.usersService.getWalletWorkspace(req.user._id);
+  }
+
   @Post('trustline')
   @UseGuards(SessionAuthGuard)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

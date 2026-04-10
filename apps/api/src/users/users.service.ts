@@ -18,7 +18,7 @@ import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.context';
 import { MetricsService } from '../ops/metrics.service';
 import { AppLoggerService } from '../common/logging/app-logger.service';
-import { SponsorshipPreviewDto } from '../common/dto/wallet.dto';
+import { SponsorshipPreviewDto, WalletAsset } from '../common/dto/wallet.dto';
 import { SponsorshipService } from '../sponsorship/sponsorship.service';
 import { TransactionAuditService } from '../transactions/transaction-audit.service';
 
@@ -1105,6 +1105,142 @@ export class UsersService {
     if (dRes.error) return { success: false, error: `Deposit failed: ${dRes.error}` };
 
     return { success: true };
+  }
+
+  async getWalletWorkspace(userId: string) {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const [balances, privateBalances, pendingWithdrawals, recentHistory, withdrawalSponsorship] = await Promise.all([
+      this.getBalances(userId),
+      this.getPrivateBalance(userId),
+      this.pendingWithdrawalModel
+        .find({ recipientId: new Types.ObjectId(userId), processed: false })
+        .sort({ createdAt: -1 })
+        .limit(12)
+        .lean()
+        .exec(),
+      this.getHistory(userId),
+      Promise.all(
+        (['USDC', 'XLM'] as const).map(async (asset) => {
+          const preview = await this.previewSponsorship(userId, {
+            asset: asset as WalletAsset,
+            operation: 'withdraw_self',
+          });
+          return [asset, preview] as const;
+        }),
+      ),
+    ]);
+
+    const totalPendingByAsset = pendingWithdrawals.reduce(
+      (accumulator, item: any) => {
+        const numeric = Number(item.amount || 0);
+        if (item.asset === 'USDC') {
+          accumulator.usdc += numeric;
+        }
+        if (item.asset === 'XLM') {
+          accumulator.xlm += numeric;
+        }
+        return accumulator;
+      },
+      { usdc: 0, xlm: 0 },
+    );
+
+    const privateActions = [
+      {
+        action: 'withdraw_usdc',
+        enabled: Number(privateBalances.usdc) > 0,
+        asset: 'USDC',
+        availableAmount: privateBalances.usdc,
+        sponsorship: Object.fromEntries(withdrawalSponsorship).USDC,
+      },
+      {
+        action: 'withdraw_xlm',
+        enabled: Number(privateBalances.xlm) > 0,
+        asset: 'XLM',
+        availableAmount: privateBalances.xlm,
+        sponsorship: Object.fromEntries(withdrawalSponsorship).XLM,
+      },
+      {
+        action: 'process_pending_withdrawals',
+        enabled: pendingWithdrawals.length > 0,
+        asset: null,
+        availableAmount: String(pendingWithdrawals.length),
+        sponsorship: {
+          supported: false,
+          sponsored: false,
+          reason: pendingWithdrawals.length > 0
+            ? 'Pending withdrawals will process with the existing proof queue.'
+            : 'No pending withdrawals waiting for processing.',
+        },
+      },
+    ];
+
+    const privateShareUsdc = Number(balances.usdc) + Number(privateBalances.usdc) > 0
+      ? Number(
+          (
+            (Number(privateBalances.usdc) / (Number(balances.usdc) + Number(privateBalances.usdc))) *
+            100
+          ).toFixed(1),
+        )
+      : 0;
+    const privateShareXlm = Number(balances.xlm) + Number(privateBalances.xlm) > 0
+      ? Number(
+          (
+            (Number(privateBalances.xlm) / (Number(balances.xlm) + Number(privateBalances.xlm))) *
+            100
+          ).toFixed(1),
+        )
+      : 0;
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      balances: {
+        public: balances,
+        private: privateBalances,
+        composition: {
+          usdcPrivateShare: privateShareUsdc,
+          xlmPrivateShare: privateShareXlm,
+        },
+      },
+      pending: {
+        count: pendingWithdrawals.length,
+        byAsset: {
+          usdc: totalPendingByAsset.usdc.toFixed(7).replace(/\.?0+$/, ''),
+          xlm: totalPendingByAsset.xlm.toFixed(7).replace(/\.?0+$/, ''),
+        },
+        items: pendingWithdrawals.map((item: any) => ({
+          id: item._id.toString(),
+          asset: item.asset,
+          amount: item.amount,
+          processed: item.processed,
+          txHash: item.txHash,
+          createdAt: item.createdAt,
+        })),
+      },
+      sponsorship: {
+        withdrawSelf: Object.fromEntries(withdrawalSponsorship),
+      },
+      privateActions,
+      recentHistory: recentHistory.slice(0, 8),
+      workspaceGuidance: [
+        Number(privateBalances.usdc) > 0 || Number(privateBalances.xlm) > 0
+          ? 'Private balances are available. Withdraw only when you need public settlement or public spending.'
+          : 'Your private balances are empty right now, so deposits or private transfers will be the next way to populate them.',
+        pendingWithdrawals.length > 0
+          ? `There are ${pendingWithdrawals.length} pending withdrawals still waiting on processing or retries.`
+          : 'No pending withdrawals are queued right now.',
+        Number(privateBalances.usdc) > Number(balances.usdc) || Number(privateBalances.xlm) > Number(balances.xlm)
+          ? 'A larger share of your holdings currently sits in private notes than in the public wallet.'
+          : 'Your public wallet currently carries at least as much visible balance as your private pool.',
+      ],
+    };
   }
 
   async getHistory(userId: string) {
