@@ -1,24 +1,28 @@
-import { Injectable, Logger, BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { UsersService } from '../users/users.service';
-import { User } from '../schemas/user.schema';
-import { Keypair, Networks, TransactionBuilder, Operation, Asset, Horizon } from '@stellar/stellar-sdk';
-import { CreateOrderDto } from './dto/create-order.dto';
-import { isMainnetContext, getHorizonUrl } from '../network.context';
-import Razorpay from 'razorpay';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { Asset, Horizon, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
+import Razorpay from 'razorpay';
+import { isMainnetContext, getHorizonUrl } from '../network.context';
+import { User } from '../schemas/user.schema';
+import { UsersService } from '../users/users.service';
+import { CreateOrderDto, SellFiatDto } from './dto/create-order.dto';
 
 @Injectable()
 export class FiatService {
   private readonly logger = new Logger(FiatService.name);
-  private server: Horizon.Server;
-  private razorpay: any;
+  private readonly server: Horizon.Server;
+  private readonly razorpay: Razorpay | null;
 
-  // Mock Admin Key (Testnet Faucet/Fulfiller)
-  private adminSecret = process.env.FIAT_ADMIN_SECRET || process.env.ADMIN_SECRET_KEY || 'SDHOAMBNLGCE2MV5zk4...';
+  private readonly adminSecret =
+    process.env.FIAT_ADMIN_SECRET || process.env.ADMIN_SECRET_KEY || 'SDHOAMBNLGCE2MV5zk4...';
+  private readonly buyRateInrToXlm = Number(process.env.FIAT_BUY_RATE_INR_TO_XLM || '0.1');
+  private readonly sellRateXlmToInr = Number(process.env.FIAT_SELL_RATE_XLM_TO_INR || '10');
+  private readonly buyFeePercent = Number(process.env.FIAT_BUY_FEE_PERCENT || '1.5');
+  private readonly sellFeePercent = Number(process.env.FIAT_SELL_FEE_PERCENT || '1.5');
+  private readonly payoutHoldMinutes = Number(process.env.FIAT_PAYOUT_HOLD_MINUTES || '10');
 
-  constructor(private usersService: UsersService) {
-    const horizonUrl = getHorizonUrl();
-    this.server = new Horizon.Server(horizonUrl);
+  constructor(private readonly usersService: UsersService) {
+    this.server = new Horizon.Server(getHorizonUrl());
 
     if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
       this.razorpay = new Razorpay({
@@ -26,12 +30,154 @@ export class FiatService {
         key_secret: process.env.RAZORPAY_KEY_SECRET,
       });
     } else {
-      this.logger.warn('RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing!');
+      this.razorpay = null;
+      this.logger.warn('RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET is missing');
     }
   }
 
+  async getWorkspace(user: User) {
+    const walletWorkspace = await this.usersService.getWalletWorkspace(user._id.toString());
+    const publicXlm = Number(walletWorkspace.balances.public.xlm || 0);
+    const privateXlm = Number(walletWorkspace.balances.private.xlm || 0);
+    const totalXlm = publicXlm + privateXlm;
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+      },
+      provider: {
+        razorpayConfigured: !!this.razorpay,
+        keyIdPresent: !!process.env.RAZORPAY_KEY_ID,
+      },
+      pricing: {
+        buyRateInrToXlm: this.buyRateInrToXlm,
+        sellRateXlmToInr: this.sellRateXlmToInr,
+        buyFeePercent: this.buyFeePercent,
+        sellFeePercent: this.sellFeePercent,
+      },
+      balances: {
+        publicXlm,
+        privateXlm,
+        totalXlm,
+      },
+      payoutPolicy: {
+        holdMinutes: this.payoutHoldMinutes,
+        bankRequirements: [
+          'Account number must be 9-18 digits.',
+          'IFSC must match the standard Indian bank format.',
+          'Sell flow currently deducts XLM first and marks payout as pending.',
+        ],
+      },
+      guidance: [
+        this.razorpay
+          ? 'Payment provider is configured, so buy-side checkout can proceed through Razorpay test mode.'
+          : 'Payment provider is not configured yet, so buy-side checkout will fail until Razorpay keys are present.',
+        totalXlm > 0
+          ? 'You already hold XLM, so the sell-side payout preview can be evaluated against your visible and private balances.'
+          : 'Your XLM balance is empty across public and private views, so the sell-side flow will need fresh inventory before it can succeed.',
+        walletWorkspace.pending.count > 0
+          ? `There are ${walletWorkspace.pending.count} pending withdrawal actions in the wallet workspace, which can affect how quickly private balances become public.`
+          : 'There are no pending private withdrawal actions blocking wallet state right now.',
+      ],
+    };
+  }
+
+  async previewBuy(user: User, dto: CreateOrderDto) {
+    const normalized = this.normalizeBuyDto(dto);
+    const grossXlm = normalized.amount * this.buyRateInrToXlm;
+    const feeXlm = grossXlm * (this.buyFeePercent / 100);
+    const netXlm = Number((grossXlm - feeXlm).toFixed(7));
+
+    return {
+      user: {
+        username: user.username,
+      },
+      payment: {
+        amountInInr: normalized.amount,
+        currency: normalized.currency,
+        mode: normalized.mode,
+      },
+      conversion: {
+        rateInrToXlm: this.buyRateInrToXlm,
+        grossXlm: Number(grossXlm.toFixed(7)),
+        feePercent: this.buyFeePercent,
+        feeXlm: Number(feeXlm.toFixed(7)),
+        netXlm,
+      },
+      destination: {
+        mode: normalized.mode,
+        fulfillmentType: normalized.mode === 'zk' ? 'private_balance_flow' : 'public_wallet_transfer',
+      },
+      readiness: {
+        providerConfigured: !!this.razorpay,
+        walletDestinationReady: !!user.stellarPublicKey,
+        recommendation:
+          normalized.mode === 'zk'
+            ? 'Private buy flow protects the received balance, but the note must still be indexed before every downstream private action can use it.'
+            : 'Public buy flow is simpler to observe because the XLM lands directly in the visible wallet.',
+      },
+      warnings: [
+        !this.razorpay ? 'Razorpay is not configured, so this checkout cannot complete until provider keys are added.' : null,
+        normalized.mode === 'zk'
+          ? 'Shielded fulfillment is modeled as a private balance path. Make sure downstream private actions account for indexing delay.'
+          : 'Public fulfillment sends XLM directly to the wallet and exposes the transfer on-chain.',
+      ].filter(Boolean),
+    };
+  }
+
+  async previewSell(user: User, dto: SellFiatDto) {
+    const walletWorkspace = await this.usersService.getWalletWorkspace(user._id.toString());
+    const publicXlm = Number(walletWorkspace.balances.public.xlm || 0);
+    const privateXlm = Number(walletWorkspace.balances.private.xlm || 0);
+    const grossInr = dto.amount * this.sellRateXlmToInr;
+    const feeInr = grossInr * (this.sellFeePercent / 100);
+    const netInr = Number((grossInr - feeInr).toFixed(2));
+
+    return {
+      user: {
+        username: user.username,
+      },
+      sale: {
+        amountXlm: dto.amount,
+        publicXlm,
+        privateXlm,
+        totalXlm: Number((publicXlm + privateXlm).toFixed(7)),
+      },
+      payout: {
+        grossInr: Number(grossInr.toFixed(2)),
+        feePercent: this.sellFeePercent,
+        feeInr: Number(feeInr.toFixed(2)),
+        netInr,
+        estimatedHoldMinutes: this.payoutHoldMinutes,
+      },
+      bankAccount: {
+        maskedAccount: this.maskAccountNumber(dto.accountDetails.accountNo),
+        ifsc: dto.accountDetails.ifsc,
+      },
+      readiness: {
+        canFundFromPublicWallet: publicXlm >= dto.amount,
+        needsPrivateWithdrawal: publicXlm < dto.amount && publicXlm + privateXlm >= dto.amount,
+        inventoryShortfall:
+          publicXlm + privateXlm < dto.amount
+            ? Number((dto.amount - (publicXlm + privateXlm)).toFixed(7))
+            : 0,
+      },
+      warnings: [
+        publicXlm < dto.amount && publicXlm + privateXlm >= dto.amount
+          ? 'You have enough XLM overall, but some of it is private and would need to be withdrawn before a public sell transfer can complete cleanly.'
+          : null,
+        publicXlm + privateXlm < dto.amount
+          ? 'Your current XLM inventory is lower than the amount you are trying to sell.'
+          : null,
+        'Sell flow is currently modeled as a payout initiation after XLM deduction, not an instant bank settlement.',
+      ].filter(Boolean),
+    };
+  }
+
   async createOrder(user: User, dto: CreateOrderDto) {
-    this.logger.log(`Creating Razorpay order for ${user.username}: ${dto.amount} ${dto.currency}`);
+    const normalized = this.normalizeBuyDto(dto);
+    this.logger.log(`Creating Razorpay order for ${user.username}: ${normalized.amount} ${normalized.currency}`);
 
     if (!this.razorpay) {
       throw new InternalServerErrorException('Payment gateway not configured');
@@ -39,142 +185,163 @@ export class FiatService {
 
     try {
       const options = {
-        amount: Math.round(dto.amount * 100), // Amount in smallest currency unit (paise)
-        currency: dto.currency || 'INR',
+        amount: Math.round(normalized.amount * 100),
+        currency: normalized.currency,
         receipt: `receipt_${Date.now()}`,
         notes: {
           userId: user._id.toString(),
-          mode: dto.mode
-        }
+          mode: normalized.mode,
+          inrAmount: normalized.amount.toString(),
+        },
       };
 
-      const order = await this.razorpay.orders.create(options);
-
-      this.logger.log(`Razorpay Order Created: ${order.id}`);
+      const order = await this.razorpay.orders.create(options as any);
+      const preview = await this.previewBuy(user, normalized);
 
       return {
         orderId: order.id,
-        keyId: process.env.RAZORPAY_KEY_ID, // Send Key ID to frontend
+        keyId: process.env.RAZORPAY_KEY_ID,
         currency: order.currency,
         amount: order.amount,
-        mode: dto.mode
+        mode: normalized.mode,
+        preview: {
+          netXlm: preview.conversion.netXlm,
+          feeXlm: preview.conversion.feeXlm,
+          recommendation: preview.readiness.recommendation,
+        },
       };
-    } catch (e: any) {
-      this.logger.error('Failed to create Razorpay order', e);
-      throw new BadRequestException(`Order creation failed: ${e.message}`);
+    } catch (error: any) {
+      this.logger.error('Failed to create Razorpay order', error);
+      throw new BadRequestException(`Order creation failed: ${error.message}`);
     }
   }
 
-  async verifyPayment(user: User, razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string, mode: 'public' | 'zk') {
-    this.logger.log(`Verifying payment for Order ${razorpayOrderId}, Payment ${razorpayPaymentId}`);
-
+  async verifyPayment(
+    user: User,
+    razorpayOrderId: string,
+    razorpayPaymentId: string,
+    razorpaySignature: string,
+    mode: 'public' | 'zk',
+  ) {
     if (!process.env.RAZORPAY_KEY_SECRET) {
       throw new InternalServerErrorException('Razorpay secret missing');
     }
 
     const generatedSignature = crypto
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      .update(razorpayOrderId + '|' + razorpayPaymentId)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
       .digest('hex');
 
     if (generatedSignature !== razorpaySignature) {
-      this.logger.error(`Signature Mismatch: Generated ${generatedSignature} vs Received ${razorpaySignature}`);
+      this.logger.error(`Signature mismatch for order ${razorpayOrderId}`);
       throw new BadRequestException('Invalid payment signature');
     }
 
-    this.logger.log('Payment Signature Verified. Proceeding to fulfillment.');
-
-    // FULFILLMENT (Send XLM)
-    // 1 INR ~ 0.1 XLM (Roughly)
-    // We should fetch the order amount from Razorpay or DB.
-    // For MVP, we'll fetch order details from Razorpay to get the amount paid.
+    if (!this.razorpay) {
+      throw new InternalServerErrorException('Payment gateway not configured');
+    }
 
     let amountPaidInRupees = 0;
     try {
       const order = await this.razorpay.orders.fetch(razorpayOrderId);
-      if (order.status !== 'paid' && order.status !== 'attempted') {
-        this.logger.warn(`Razorpay Order Status is ${order.status}`);
-      }
       amountPaidInRupees = Number(order.amount) / 100;
-    } catch (e) {
-      this.logger.warn('Failed to fetch order details, relying on passed context (risky in prod)', e);
-      // Fallback or fail
+    } catch (error) {
+      this.logger.warn('Failed to fetch order details during verification', error);
     }
 
-    // Exchange Rate: Simple fixed rate for demo: 1 INR = 0.1 XLM
-    // Example: 100 INR = 10 XLM
-    const xlmAmount = (amountPaidInRupees * 0.1).toFixed(7);
+    const grossXlm = amountPaidInRupees * this.buyRateInrToXlm;
+    const feeXlm = grossXlm * (this.buyFeePercent / 100);
+    const netXlm = (grossXlm - feeXlm).toFixed(7);
 
-    return this.processBuy(user, xlmAmount, mode, razorpayOrderId);
+    return this.processBuy(user, netXlm, mode, razorpayOrderId);
   }
 
   async processBuy(user: User, amount: string, mode: 'public' | 'zk', orderId: string) {
-    this.logger.log(`Processing buy: Sending ${amount} XLM to ${user.username} (Mode: ${mode})`);
+    this.logger.log(`Processing buy order ${orderId} for ${user.username} in ${mode} mode`);
 
     try {
       const sourceSecret = this.adminSecret;
-      // Ensure we have a valid secret (Testnet)
-      if (!sourceSecret || sourceSecret.length !== 56) {
-        throw new Error('Invalid Admin Secret for Fulfiller Wallet');
+      if (!sourceSecret || sourceSecret.length < 10) {
+        throw new Error('Invalid admin secret for fulfiller wallet');
       }
 
       const sourceKeypair = Keypair.fromSecret(sourceSecret);
       const sourceAccount = await this.server.loadAccount(sourceKeypair.publicKey());
-
       const isMainnet = isMainnetContext();
+
       const tx = new TransactionBuilder(sourceAccount, {
         fee: '100',
         networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
-        .addOperation(Operation.payment({
-          destination: user.stellarPublicKey,
-          asset: Asset.native(),
-          amount: amount,
-        }))
+        .addOperation(
+          Operation.payment({
+            destination: user.stellarPublicKey,
+            asset: Asset.native(),
+            amount,
+          }),
+        )
         .setTimeout(30)
         .build();
 
       tx.sign(sourceKeypair);
       const result = await this.server.submitTransaction(tx);
 
-      this.logger.log(`Transfer successful: ${result.hash}`);
-
       return {
         status: 'SUCCESS',
         txHash: result.hash,
-        message: `Successfully sent ${amount} XLM to your public wallet.`
+        mode,
+        message:
+          mode === 'zk'
+            ? `Payment verified. ${amount} XLM has been fulfilled and can now be moved into your private workflow.`
+            : `Payment verified. ${amount} XLM has been sent to your public wallet.`,
       };
-
-    } catch (e: any) {
-      this.logger.error('Transfer failed', e);
-      // Even if transfer fails, payment success is recorded. 
-      // In prod, we'd save "Pending Fulfillment" status in DB and retry.
-      throw new BadRequestException(`Payment verified but Transfer failed: ${e.message}`);
+    } catch (error: any) {
+      this.logger.error('Transfer failed during fiat buy fulfillment', error);
+      throw new BadRequestException(`Payment verified but transfer failed: ${error.message}`);
     }
   }
 
-  async initiatePayout(user: User, amount: string, accountDetails: any) {
+  async initiatePayout(user: User, amount: string, accountDetails: SellFiatDto['accountDetails']) {
     this.logger.log(`Initiating payout of ${amount} XLM for ${user.username}`);
 
-    // DEDUCT XLM FROM USER (Send to Admin)
     try {
       const adminKeypair = Keypair.fromSecret(this.adminSecret);
       const adminPublicKey = adminKeypair.publicKey();
-
-      this.logger.log(`Transferring ${amount} XLM from ${user.username} to Admin (${adminPublicKey})...`);
       const txHash = await this.usersService.sendPublic(user._id.toString(), adminPublicKey, amount, 'native');
-      this.logger.log(`Deduction successful: ${txHash}`);
+      const preview = await this.previewSell(user, {
+        amount: Number(amount),
+        accountDetails,
+      });
 
-      // Mock Payout for Razorpay (requires Payouts account)
       return {
         status: 'PENDING',
-        message: 'Payout initiated. XLM deducted. Funds will be credited to your bank account shortly.',
-        txHash: txHash,
-        payoutId: `payout_${Date.now()}`
+        message: 'Payout initiated. XLM was deducted and the payout is now waiting in the fiat queue.',
+        txHash,
+        payoutId: `payout_${Date.now()}`,
+        preview: {
+          grossInr: preview.payout.grossInr,
+          netInr: preview.payout.netInr,
+          holdMinutes: preview.payout.estimatedHoldMinutes,
+        },
       };
-    } catch (e: any) {
-      this.logger.error('Payout failed during XLM deduction', e);
-      throw new BadRequestException(`Payout failed: ${e.message}`);
+    } catch (error: any) {
+      this.logger.error('Payout failed during XLM deduction', error);
+      throw new BadRequestException(`Payout failed: ${error.message}`);
     }
+  }
+
+  private normalizeBuyDto(dto: CreateOrderDto) {
+    return {
+      amount: dto.amount,
+      currency: dto.currency || 'INR',
+      mode: dto.mode,
+    };
+  }
+
+  private maskAccountNumber(accountNo: string) {
+    if (accountNo.length <= 4) {
+      return accountNo;
+    }
+    return `${'*'.repeat(Math.max(accountNo.length - 4, 0))}${accountNo.slice(-4)}`;
   }
 }
