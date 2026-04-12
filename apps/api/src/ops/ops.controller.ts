@@ -20,6 +20,11 @@ export class OpsController {
     return this.opsService.getStats();
   }
 
+  @Get('status/workspace')
+  getStatusWorkspace() {
+    return this.opsService.getStatusWorkspace();
+  }
+
   @Get('metrics')
   @Header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
   getMetrics() {
