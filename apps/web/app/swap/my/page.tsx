@@ -13,9 +13,13 @@ import {
   Clock3,
   Globe,
   Lock,
+  PauseCircle,
+  PlayCircle,
   RefreshCw,
   Shield,
   Sparkles,
+  Store,
+  TrendingUp,
   XCircle,
 } from 'lucide-react';
 
@@ -38,6 +42,8 @@ type ProofStatus =
   | 'ready';
 
 type ExecutionStatus = 'not_started' | 'ready' | 'processing' | 'confirmed' | 'failed';
+type OfferHealthTone = 'good' | 'caution' | 'risk';
+type QueuePressure = 'light' | 'moderate' | 'heavy';
 
 interface User {
   _id: string;
@@ -83,7 +89,6 @@ interface SwapAuditEntry {
   error?: string;
   metadata?: Record<string, unknown>;
   createdAt?: string;
-  updatedAt?: string;
 }
 
 interface SwapStatusDetails {
@@ -108,6 +113,103 @@ interface ApiTransactionResponse {
   message?: string;
   error?: string;
   txHash?: string;
+}
+
+interface MerchantOfferWorkspaceItem {
+  _id: string;
+  assetIn: 'USDC' | 'XLM';
+  assetOut: 'USDC' | 'XLM';
+  rate: number;
+  min: number;
+  max: number;
+  active: boolean;
+  openBuyerRequests: number;
+  stalledExecutions: number;
+  healthTone: OfferHealthTone;
+  healthSummary: string;
+  queuePressure: QueuePressure;
+  queueMessage: string;
+  latestSwapAt: string | null;
+  requestGuidance: {
+    confidenceScore: number;
+    backlogLevel: QueuePressure;
+    recommendedMode: 'public' | 'private';
+    notes: string[];
+  };
+  merchantMetrics: {
+    completionRate: number;
+    pendingAsSeller: number;
+    activeAsSeller: number;
+    completedAsSeller: number;
+  };
+  offerMetrics: {
+    openRequests: number;
+    activeExecutions: number;
+    completedSwaps: number;
+    failedSwaps: number;
+  };
+}
+
+interface MerchantWorkspace {
+  merchant: {
+    id: string;
+    username?: string;
+    reputation: number;
+  };
+  summary: {
+    offers: {
+      total: number;
+      active: number;
+      paused: number;
+    };
+    queue: {
+      requested: number;
+      proofsPending: number;
+      proofsReady: number;
+      executing: number;
+      completed: number;
+      failed: number;
+    };
+    completionRate: number;
+    averageTicketSize: number;
+    lastCompletedAt: string | null;
+  };
+  queueHealth: {
+    pressure: QueuePressure;
+    tone: OfferHealthTone;
+    message: string;
+    staleFailures: number;
+  };
+  offerBoard: MerchantOfferWorkspaceItem[];
+  actionQueue: Array<{
+    swapId: string;
+    action: 'accept_request' | 'prepare_proof' | 'execute_public' | 'execute_private' | 'review_failure';
+    label: string;
+    detail: string;
+    severity: 'info' | 'caution' | 'critical';
+    mode: 'public' | 'private';
+    offerId?: string;
+    status: string;
+    createdAt?: string;
+  }>;
+  pairCoverage: Array<{
+    pair: string;
+    activeOffers: number;
+    openRequests: number;
+    completedSwaps: number;
+    recommendation: string;
+  }>;
+  recentOutcomes: Array<{
+    swapId: string;
+    offerId?: string;
+    status: string;
+    amountIn: number;
+    amountOut: number;
+    txHash?: string;
+    completedAt?: string;
+    failedAt?: string;
+    counterparty?: string;
+  }>;
 }
 
 const statusVariantMap: Record<SwapStatus, 'warning' | 'default' | 'success' | 'error'> = {
@@ -136,7 +238,7 @@ const executionLabelMap: Record<ExecutionStatus, string> = {
   failed: 'Execution failed',
 };
 
-function formatRelativeTimestamp(value?: string) {
+function formatRelativeTimestamp(value?: string | null) {
   if (!value) {
     return 'Not available';
   }
@@ -146,7 +248,7 @@ function formatRelativeTimestamp(value?: string) {
     return 'Not available';
   }
 
-  return `${date.toLocaleString()}`;
+  return date.toLocaleString();
 }
 
 function getAssetNeedForProof(swap: SwapSummary) {
@@ -165,6 +267,29 @@ function getSwapDirectionLabel(swap: SwapSummary) {
     return `Sell ${swap.amountOut} USDC for ${swap.amountIn} XLM`;
   }
   return `Buy ${swap.amountOut} USDC with ${swap.amountIn} XLM`;
+}
+
+function getToneVariant(tone: OfferHealthTone | 'info') {
+  if (tone === 'good') {
+    return 'success' as const;
+  }
+  if (tone === 'caution') {
+    return 'warning' as const;
+  }
+  if (tone === 'risk') {
+    return 'error' as const;
+  }
+  return 'default' as const;
+}
+
+function getSeverityVariant(severity: 'info' | 'caution' | 'critical') {
+  if (severity === 'critical') {
+    return 'error' as const;
+  }
+  if (severity === 'caution') {
+    return 'warning' as const;
+  }
+  return 'default' as const;
 }
 
 function AuditTimeline({ audits }: { audits: SwapAuditEntry[] }) {
@@ -251,12 +376,7 @@ function ActiveSwapCard({
     if (isPrivate) {
       if (proofState === 'ready') {
         return (
-          <Button
-            onClick={onExecutePrivate}
-            isLoading={actionLoading === swap._id}
-            className="w-full"
-            variant="primary"
-          >
+          <Button onClick={onExecutePrivate} isLoading={actionLoading === swap._id} className="w-full" variant="primary">
             <Shield className="mr-2 h-4 w-4" />
             Execute Private Swap
           </Button>
@@ -265,12 +385,7 @@ function ActiveSwapCard({
 
       if (!swap.myProofSubmitted) {
         return (
-          <Button
-            onClick={onPrepareProof}
-            isLoading={actionLoading === swap._id}
-            className="w-full"
-            variant="primary"
-          >
+          <Button onClick={onPrepareProof} isLoading={actionLoading === swap._id} className="w-full" variant="primary">
             <Shield className="mr-2 h-4 w-4" />
             Prepare My Proof
           </Button>
@@ -286,12 +401,7 @@ function ActiveSwapCard({
 
     if (swap.participantRole === 'bob' && executionState !== 'confirmed') {
       return (
-        <Button
-          onClick={onExecutePublic}
-          isLoading={actionLoading === swap._id}
-          className="w-full"
-          variant="primary"
-        >
+        <Button onClick={onExecutePublic} isLoading={actionLoading === swap._id} className="w-full" variant="primary">
           <Globe className="mr-2 h-4 w-4" />
           Execute Public Swap
         </Button>
@@ -365,6 +475,84 @@ function ActiveSwapCard({
   );
 }
 
+function OfferBoardCard({
+  offer,
+  updating,
+  onToggle,
+}: {
+  offer: MerchantOfferWorkspaceItem;
+  updating: boolean;
+  onToggle: (offerId: string, nextActive: boolean) => void;
+}) {
+  return (
+    <Card variant="glass" className="border border-white/5 bg-slate-900/70">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={offer.active ? 'success' : 'default'}>{offer.active ? 'LIVE' : 'PAUSED'}</Badge>
+            <Badge variant={getToneVariant(offer.healthTone)}>{offer.healthTone.toUpperCase()}</Badge>
+            <Badge variant={offer.requestGuidance.recommendedMode === 'private' ? 'success' : 'warning'}>
+              {offer.requestGuidance.recommendedMode.toUpperCase()} BIAS
+            </Badge>
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-white">
+              {offer.assetIn} to {offer.assetOut}
+            </h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Rate {offer.rate} | Ticket {offer.min} to {offer.max}
+            </p>
+          </div>
+          <p className="max-w-2xl text-sm leading-6 text-slate-400">{offer.healthSummary}</p>
+        </div>
+
+        <div className="flex flex-col gap-3 md:items-end">
+          <Button
+            variant={offer.active ? 'ghost' : 'primary'}
+            onClick={() => onToggle(offer._id, !offer.active)}
+            isLoading={updating}
+          >
+            {offer.active ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+            {offer.active ? 'Pause listing' : 'Reactivate listing'}
+          </Button>
+          <p className="text-xs text-slate-500">Latest linked flow: {formatRelativeTimestamp(offer.latestSwapAt)}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Queue pressure</p>
+          <p className="mt-2 text-lg font-semibold text-white">{offer.queuePressure.toUpperCase()}</p>
+          <p className="mt-1 text-xs text-slate-400">{offer.queueMessage}</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Open requests</p>
+          <p className="mt-2 text-lg font-semibold text-white">{offer.openBuyerRequests}</p>
+          <p className="mt-1 text-xs text-slate-400">Buyer intake still waiting to be cleared.</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Active executions</p>
+          <p className="mt-2 text-lg font-semibold text-white">{offer.offerMetrics.activeExecutions}</p>
+          <p className="mt-1 text-xs text-slate-400">Swaps already beyond request intake.</p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Seller completion</p>
+          <p className="mt-2 text-lg font-semibold text-white">{offer.merchantMetrics.completionRate}%</p>
+          <p className="mt-1 text-xs text-slate-400">Trust signal based on seller-side outcomes.</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        {offer.requestGuidance.notes.slice(0, 2).map((note) => (
+          <div key={note} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm text-slate-300">
+            {note}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 export default function MySwapsPage() {
   const { isPrivate } = usePrivacy();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -372,8 +560,10 @@ export default function MySwapsPage() {
   const [allSwaps, setAllSwaps] = useState<SwapSummary[]>([]);
   const [recentActivity, setRecentActivity] = useState<SwapSummary[]>([]);
   const [statusMap, setStatusMap] = useState<Record<string, SwapStatusDetails>>({});
+  const [merchantWorkspace, setMerchantWorkspace] = useState<MerchantWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [offerLoading, setOfferLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [processStep, setProcessStep] = useState('');
@@ -401,27 +591,30 @@ export default function MySwapsPage() {
 
   const fetchData = async () => {
     try {
-      const [userRes, pendingRes, myRes, recentRes] = await Promise.all([
+      const [userRes, pendingRes, myRes, recentRes, workspaceRes] = await Promise.all([
         fetch(`${API_URL}/users/me`, { credentials: 'include' }),
         fetch(`${API_URL}/swap/pending`, { credentials: 'include' }),
         fetch(`${API_URL}/swap/my`, { credentials: 'include' }),
         fetch(`${API_URL}/swap/activity/recent?limit=6`, { credentials: 'include' }),
+        fetch(`${API_URL}/offers/workspace`, { credentials: 'include' }),
       ]);
 
-      const [userData, pendingData, myData, recentData] = await Promise.all([
+      const [userData, pendingData, myData, recentData, workspaceData] = await Promise.all([
         userRes.ok ? userRes.json() : null,
         pendingRes.ok ? pendingRes.json() : [],
         myRes.ok ? myRes.json() : [],
         recentRes.ok ? recentRes.json() : [],
+        workspaceRes.ok ? workspaceRes.json() : null,
       ]);
 
       setCurrentUser(userData);
       setPendingSwaps(Array.isArray(pendingData) ? pendingData : []);
       setAllSwaps(Array.isArray(myData) ? myData : []);
       setRecentActivity(Array.isArray(recentData) ? recentData : []);
+      setMerchantWorkspace(workspaceData);
       await fetchStatuses(Array.isArray(myData) ? myData : []);
     } catch {
-      setError('Failed to load swaps.');
+      setError('Failed to load swap desk.');
     } finally {
       setLoading(false);
     }
@@ -594,6 +787,31 @@ export default function MySwapsPage() {
     }
   };
 
+  const handleToggleOffer = async (offerId: string, nextActive: boolean) => {
+    setOfferLoading(offerId);
+    setError('');
+    setSuccess('');
+
+    try {
+      const res = await fetch(`${API_URL}/offers/${offerId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ active: nextActive }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || 'Failed to update offer');
+      }
+      setSuccess(nextActive ? 'Offer reactivated and visible to the market.' : 'Offer paused to reduce additional seller queue pressure.');
+      await fetchData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update offer');
+    } finally {
+      setOfferLoading(null);
+    }
+  };
+
   const activeSwaps = useMemo(
     () =>
       allSwaps.filter((swap) =>
@@ -621,14 +839,14 @@ export default function MySwapsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-6xl p-4 md:p-8">
+    <main className="mx-auto max-w-7xl p-4 md:p-8">
       <div className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h1 className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-3xl font-bold text-transparent">
-            My Swaps
+            Seller Swap Desk
           </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Signed in as <span className="text-indigo-300">@{currentUser?.username || 'Unknown'}</span>
+            Signed in as <span className="text-indigo-300">@{currentUser?.username || merchantWorkspace?.merchant.username || 'Unknown'}</span>
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -665,6 +883,151 @@ export default function MySwapsPage() {
           <p className="text-green-100">{success}</p>
         </Card>
       )}
+
+      <section className="mb-8 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card variant="neon">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Seller command center</p>
+              <h2 className="mt-2 text-2xl font-semibold text-white">Board health and queue readiness</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">{merchantWorkspace?.queueHealth.message}</p>
+            </div>
+            <Badge variant={getToneVariant(merchantWorkspace?.queueHealth.tone ?? 'caution')}>
+              {(merchantWorkspace?.queueHealth.pressure ?? 'moderate').toUpperCase()} PRESSURE
+            </Badge>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-4">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Live offers</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{merchantWorkspace?.summary.offers.active ?? 0}</p>
+              <p className="mt-2 text-xs text-slate-400">Paused: {merchantWorkspace?.summary.offers.paused ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Incoming requests</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{merchantWorkspace?.summary.queue.requested ?? 0}</p>
+              <p className="mt-2 text-xs text-slate-400">Proof queue: {merchantWorkspace?.summary.queue.proofsPending ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Execution ready</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{merchantWorkspace?.summary.queue.proofsReady ?? 0}</p>
+              <p className="mt-2 text-xs text-slate-400">Executing: {merchantWorkspace?.summary.queue.executing ?? 0}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Seller completion</p>
+              <p className="mt-2 text-3xl font-semibold text-white">{merchantWorkspace?.summary.completionRate ?? 0}%</p>
+              <p className="mt-2 text-xs text-slate-400">
+                Avg ticket: {merchantWorkspace?.summary.averageTicketSize ?? 0}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card variant="glass" className="border border-white/5 bg-slate-900/80">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-yellow-400" />
+            <h2 className="text-lg font-semibold text-white">Action queue</h2>
+          </div>
+          <div className="mt-5 space-y-3">
+            {merchantWorkspace?.actionQueue.length ? (
+              merchantWorkspace.actionQueue.map((entry) => (
+                <div key={`${entry.swapId}-${entry.action}`} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">{entry.label}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">{entry.detail}</p>
+                    </div>
+                    <Badge variant={getSeverityVariant(entry.severity)}>{entry.mode.toUpperCase()}</Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">{formatRelativeTimestamp(entry.createdAt)}</p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500">
+                No urgent seller actions right now.
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 flex items-center gap-2">
+          <Store className="h-5 w-5 text-indigo-400" />
+          <h2 className="text-xl font-semibold text-white">Offer inventory</h2>
+        </div>
+        {merchantWorkspace?.offerBoard.length ? (
+          <div className="grid gap-5">
+            {merchantWorkspace.offerBoard.map((offer) => (
+              <OfferBoardCard
+                key={offer._id}
+                offer={offer}
+                updating={offerLoading === offer._id}
+                onToggle={handleToggleOffer}
+              />
+            ))}
+          </div>
+        ) : (
+          <Card variant="glass" className="py-8 text-center text-slate-500">
+            You do not have any offers yet. Publish one from the listing planner to build your seller board.
+          </Card>
+        )}
+      </section>
+
+      <section className="mb-8 grid gap-4 lg:grid-cols-2">
+        <Card variant="glass">
+          <div className="mb-4 flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-white">Pair coverage</h2>
+          </div>
+          <div className="space-y-3">
+            {merchantWorkspace?.pairCoverage.map((pair) => (
+              <div key={pair.pair} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-white">{pair.pair}</p>
+                  <Badge variant={pair.activeOffers > 0 ? 'success' : 'default'}>{pair.activeOffers} active</Badge>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  Open requests: {pair.openRequests} | Completed swaps: {pair.completedSwaps}
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-300">{pair.recommendation}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card variant="glass">
+          <div className="mb-4 flex items-center gap-2">
+            <Clock3 className="h-5 w-5 text-yellow-400" />
+            <h2 className="text-lg font-semibold text-white">Recent seller outcomes</h2>
+          </div>
+          <div className="space-y-3">
+            {merchantWorkspace?.recentOutcomes.length ? (
+              merchantWorkspace.recentOutcomes.map((outcome) => (
+                <div key={outcome.swapId} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {outcome.amountIn} XLM for {outcome.amountOut} USDC
+                      </p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        Counterparty: @{outcome.counterparty || 'Unknown'} | {formatRelativeTimestamp(outcome.completedAt || outcome.failedAt)}
+                      </p>
+                    </div>
+                    <Badge variant={outcome.status === 'completed' ? 'success' : 'error'}>
+                      {outcome.status.toUpperCase()}
+                    </Badge>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500">
+                No seller outcomes have been recorded yet.
+              </div>
+            )}
+          </div>
+        </Card>
+      </section>
 
       <section className="mb-8 grid gap-4 md:grid-cols-4">
         <Card variant="glass">
@@ -704,16 +1067,14 @@ export default function MySwapsPage() {
                   <div>
                     <p className="text-sm text-slate-400">Buyer</p>
                     <p className="mt-1 text-lg font-medium text-white">@{swap.aliceId?.username || 'Unknown'}</p>
-                    <p className="mt-2 text-slate-300">{swap.amountIn} XLM for {swap.amountOut} USDC</p>
+                    <p className="mt-2 text-slate-300">
+                      {swap.amountIn} XLM for {swap.amountOut} USDC
+                    </p>
                     <p className="mt-2 text-xs text-slate-500">{formatRelativeTimestamp(swap.createdAt)}</p>
                   </div>
                   <div className="flex flex-col items-start gap-2 md:items-end">
                     <Badge variant="warning">REQUESTED</Badge>
-                    <Button
-                      onClick={() => handleAccept(swap._id)}
-                      isLoading={actionLoading === swap._id}
-                      variant="primary"
-                    >
+                    <Button onClick={() => handleAccept(swap._id)} isLoading={actionLoading === swap._id} variant="primary">
                       Accept Swap
                     </Button>
                   </div>
@@ -769,12 +1130,16 @@ export default function MySwapsPage() {
                   <div>
                     <p className="text-sm text-slate-400">Seller</p>
                     <p className="mt-1 text-lg font-medium text-white">@{swap.bobId?.username || 'Unknown'}</p>
-                    <p className="mt-2 text-slate-300">{swap.amountIn} XLM for {swap.amountOut} USDC</p>
+                    <p className="mt-2 text-slate-300">
+                      {swap.amountIn} XLM for {swap.amountOut} USDC
+                    </p>
                     <p className="mt-2 text-xs text-slate-500">{formatRelativeTimestamp(swap.createdAt)}</p>
                   </div>
                   <div className="flex flex-col items-start gap-2 md:items-end">
                     <Badge variant={statusVariantMap[swap.status]}>{swap.status.replaceAll('_', ' ').toUpperCase()}</Badge>
-                    <p className="max-w-xs text-xs text-slate-400">The seller must accept before either side can start proof collection or execution.</p>
+                    <p className="max-w-xs text-xs text-slate-400">
+                      The seller must accept before either side can start proof collection or execution.
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -810,11 +1175,17 @@ export default function MySwapsPage() {
         )}
       </section>
 
-      <div className="mt-8 flex gap-4">
+      <div className="mt-8 flex flex-wrap gap-4">
         <Link href="/swap">
           <Button variant="ghost">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Browse Offers
+          </Button>
+        </Link>
+        <Link href="/swap/create">
+          <Button variant="ghost">
+            <Store className="mr-2 h-4 w-4" />
+            Create Offer
           </Button>
         </Link>
         <Link href="/dashboard">

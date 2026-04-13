@@ -13,6 +13,12 @@ export class OffersController {
     return this.offersService.getMarketHighlights();
   }
 
+  @Get('workspace')
+  @UseGuards(SessionAuthGuard)
+  workspace(@Req() req: { user: { _id: Types.ObjectId } }) {
+    return this.offersService.getWorkspace(req.user._id);
+  }
+
   @Get()
   findAll(@Query() query: OfferQueryDto) {
     return this.offersService.findAll(query);
@@ -42,7 +48,7 @@ export class OffersController {
 
   @Put(':id')
   @UseGuards(SessionAuthGuard)
-  update(@Param('id') id: string, @Body() body: UpdateOfferDto) {
-    return this.offersService.update(id, body);
+  update(@Param('id') id: string, @Body() body: UpdateOfferDto, @Req() req: { user: { _id: Types.ObjectId } }) {
+    return this.offersService.update(id, req.user._id, body);
   }
 }

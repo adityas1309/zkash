@@ -4,6 +4,7 @@ import { Model, Types } from 'mongoose';
 import { CreateOfferDto, OfferQueryDto, UpdateOfferDto } from './dto/offer.dto';
 import { Offer } from '../schemas/offer.schema';
 import { Swap } from '../schemas/swap.schema';
+import { User } from '../schemas/user.schema';
 
 interface OfferDocumentView {
   _id: Types.ObjectId;
@@ -143,11 +144,110 @@ export interface OfferPreviewView {
   };
 }
 
+interface QueueStatusCounts {
+  requested: number;
+  proofsPending: number;
+  proofsReady: number;
+  executing: number;
+  completed: number;
+  failed: number;
+}
+
+interface MerchantOfferWorkspaceItem extends EnrichedOffer {
+  openBuyerRequests: number;
+  stalledExecutions: number;
+  healthTone: 'good' | 'caution' | 'risk';
+  healthSummary: string;
+  queuePressure: 'light' | 'moderate' | 'heavy';
+  queueMessage: string;
+  latestSwapAt: string | null;
+}
+
+interface SellerActionView {
+  swapId: string;
+  action: 'accept_request' | 'prepare_proof' | 'execute_public' | 'execute_private' | 'review_failure';
+  label: string;
+  detail: string;
+  severity: 'info' | 'caution' | 'critical';
+  mode: 'public' | 'private';
+  offerId?: string;
+  status: string;
+  createdAt?: string;
+}
+
+export interface MerchantWorkspaceView {
+  merchant: {
+    id: string;
+    username?: string;
+    reputation: number;
+  };
+  summary: {
+    offers: {
+      total: number;
+      active: number;
+      paused: number;
+    };
+    queue: QueueStatusCounts;
+    completionRate: number;
+    averageTicketSize: number;
+    lastCompletedAt: string | null;
+  };
+  queueHealth: {
+    pressure: 'light' | 'moderate' | 'heavy';
+    tone: 'good' | 'caution' | 'risk';
+    message: string;
+    staleFailures: number;
+  };
+  offerBoard: MerchantOfferWorkspaceItem[];
+  actionQueue: SellerActionView[];
+  pairCoverage: Array<{
+    pair: string;
+    activeOffers: number;
+    openRequests: number;
+    completedSwaps: number;
+    recommendation: string;
+  }>;
+  recentOutcomes: Array<{
+    swapId: string;
+    offerId?: string;
+    status: string;
+    amountIn: number;
+    amountOut: number;
+    txHash?: string;
+    completedAt?: string;
+    failedAt?: string;
+    counterparty?: string;
+  }>;
+}
+
+interface MerchantWorkspaceSwapRecord {
+  _id: Types.ObjectId;
+  offerId?: Types.ObjectId;
+  status: Swap['status'];
+  proofStatus?: Swap['proofStatus'];
+  executionStatus?: Swap['executionStatus'];
+  amountIn?: number;
+  amountOut?: number;
+  txHash?: string;
+  lastError?: string;
+  failedAt?: Date | string;
+  completedAt?: Date | string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+  aliceId?: Types.ObjectId | { username?: string };
+}
+
+interface LatestSwapTimestampRecord {
+  updatedAt?: Date | string;
+  createdAt?: Date | string;
+}
+
 @Injectable()
 export class OffersService {
   constructor(
     @InjectModel(Offer.name) private offerModel: Model<Offer>,
     @InjectModel(Swap.name) private swapModel: Model<Swap>,
+    @InjectModel(User.name) private userModel: Model<User>,
   ) {}
 
   async create(merchantId: Types.ObjectId, data: CreateOfferDto) {
@@ -367,9 +467,108 @@ export class OffersService {
     };
   }
 
-  async update(id: string, data: UpdateOfferDto) {
+  async update(id: string, data: UpdateOfferDto): Promise<EnrichedOffer>;
+  async update(id: string, merchantId: Types.ObjectId, data: UpdateOfferDto): Promise<EnrichedOffer>;
+  async update(id: string, merchantOrData: Types.ObjectId | UpdateOfferDto, maybeData?: UpdateOfferDto) {
+    const offer = await this.offerModel.findById(id).exec();
+    if (!offer) {
+      throw new NotFoundException('Offer not found');
+    }
+
+    const merchantId = maybeData ? merchantOrData as Types.ObjectId : undefined;
+    const data = maybeData ?? merchantOrData as UpdateOfferDto;
+
     this.validateOfferPayload(data, true);
-    return this.offerModel.findByIdAndUpdate(id, data, { new: true }).exec();
+    if (merchantId && offer.merchantId.toString() !== merchantId.toString()) {
+      throw new BadRequestException('You can only update your own offers');
+    }
+
+    Object.assign(offer, data);
+    await offer.save();
+
+    const hydrated = await this.offerModel
+      .findById(offer._id)
+      .populate('merchantId', 'username reputation')
+      .lean()
+      .exec();
+
+    if (!hydrated) {
+      throw new NotFoundException('Offer not found after update');
+    }
+
+    return this.enrichOffer(hydrated as unknown as OfferDocumentView);
+  }
+
+  async getWorkspace(merchantId: Types.ObjectId): Promise<MerchantWorkspaceView> {
+    const merchant = await this.userModel.findById(merchantId).select('username reputation').lean().exec();
+    if (!merchant) {
+      throw new NotFoundException('Merchant not found');
+    }
+
+    const rawOffers = await this.offerModel
+      .find({ merchantId })
+      .populate('merchantId', 'username reputation')
+      .sort({ active: -1, updatedAt: -1, createdAt: -1 })
+      .lean()
+      .exec();
+
+    const offerIds = rawOffers.map((offer) => offer._id);
+    const relatedSwaps: MerchantWorkspaceSwapRecord[] = offerIds.length
+      ? await this.swapModel
+          .find({ offerId: { $in: offerIds } })
+          .populate('aliceId', 'username')
+          .sort({ updatedAt: -1, createdAt: -1 })
+          .lean()
+          .exec() as MerchantWorkspaceSwapRecord[]
+      : [];
+
+    const [queueCounts, merchantMetrics, enrichedOffers] = await Promise.all([
+      this.getQueueCountsForMerchant(merchantId),
+      this.getMerchantMetrics(merchantId, new Types.ObjectId()),
+      Promise.all(rawOffers.map((offer) => this.enrichMerchantOfferWorkspaceItem(offer as unknown as OfferDocumentView))),
+    ]);
+
+    const queueHealth = this.buildQueueHealth(queueCounts, relatedSwaps);
+
+    return {
+      merchant: {
+        id: merchantId.toString(),
+        username: merchant.username,
+        reputation: merchant.reputation ?? 0,
+      },
+      summary: {
+        offers: {
+          total: rawOffers.length,
+          active: rawOffers.filter((offer) => offer.active).length,
+          paused: rawOffers.filter((offer) => !offer.active).length,
+        },
+        queue: queueCounts,
+        completionRate: merchantMetrics.completionRate,
+        averageTicketSize: await this.getAverageTicketSizeForMerchant(merchantId),
+        lastCompletedAt: merchantMetrics.lastCompletedAt,
+      },
+      queueHealth,
+      offerBoard: enrichedOffers,
+      actionQueue: this.buildSellerActionQueue(relatedSwaps),
+      pairCoverage: await this.buildPairCoverage(rawOffers),
+      recentOutcomes: relatedSwaps
+        .filter((swap) => ['completed', 'failed'].includes(swap.status))
+        .slice(0, 8)
+        .map((swap) => ({
+          swapId: swap._id.toString(),
+          offerId: swap.offerId?.toString(),
+          status: swap.status,
+          amountIn: Number(swap.amountIn) || 0,
+          amountOut: Number(swap.amountOut) || 0,
+          txHash: swap.txHash,
+          completedAt: this.toIso(swap.completedAt),
+          failedAt: this.toIso(swap.failedAt),
+          counterparty:
+            typeof swap.aliceId === 'object' && swap.aliceId && 'username' in swap.aliceId
+              ? String(swap.aliceId.username ?? '')
+              : undefined,
+        })),
+    };
   }
 
   private buildOfferQuery(query: OfferQueryDto) {
@@ -431,6 +630,37 @@ export class OffersService {
       merchantMetrics,
       offerMetrics,
       requestGuidance: this.buildRequestGuidance(offer, merchantMetrics, offerMetrics),
+    };
+  }
+
+  private async enrichMerchantOfferWorkspaceItem(offer: OfferDocumentView): Promise<MerchantOfferWorkspaceItem> {
+    const [enriched, queueCounts, latestSwapDoc] = await Promise.all([
+      this.enrichOffer(offer),
+      Promise.all([
+        this.swapModel.countDocuments({ offerId: offer._id, status: 'requested' }).exec(),
+        this.swapModel.countDocuments({ offerId: offer._id, status: { $in: ['proofs_ready', 'executing'] } }).exec(),
+      ]),
+      this.swapModel
+        .findOne({ offerId: offer._id })
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .select('updatedAt createdAt')
+        .lean()
+        .exec() as Promise<LatestSwapTimestampRecord | null>,
+    ]);
+
+    const [openBuyerRequests, stalledExecutions] = queueCounts;
+    const pressure = this.describeQueuePressure(openBuyerRequests, stalledExecutions);
+    const healthTone = this.describeOfferHealthTone(enriched, openBuyerRequests, stalledExecutions);
+
+    return {
+      ...enriched,
+      openBuyerRequests,
+      stalledExecutions,
+      healthTone,
+      healthSummary: this.describeOfferHealthSummary(enriched, openBuyerRequests, stalledExecutions),
+      queuePressure: pressure,
+      queueMessage: this.describeQueueMessage(pressure, openBuyerRequests, stalledExecutions),
+      latestSwapAt: this.toIso(latestSwapDoc?.updatedAt) ?? this.toIso(latestSwapDoc?.createdAt) ?? null,
     };
   }
 
@@ -554,6 +784,263 @@ export class OffersService {
         ? new Date(recentCompletedDocs[0].completedAt).toISOString()
         : null,
     };
+  }
+
+  private async getQueueCountsForMerchant(merchantId: Types.ObjectId): Promise<QueueStatusCounts> {
+    const [requested, proofsPending, proofsReady, executing, completed, failed] = await Promise.all([
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'requested' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'proofs_pending' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'proofs_ready' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'executing' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'completed' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'failed' }).exec(),
+    ]);
+
+    return {
+      requested,
+      proofsPending,
+      proofsReady,
+      executing,
+      completed,
+      failed,
+    };
+  }
+
+  private buildQueueHealth(
+    counts: QueueStatusCounts,
+    swaps: MerchantWorkspaceSwapRecord[],
+  ): MerchantWorkspaceView['queueHealth'] {
+    const pressure = this.describeQueuePressure(
+      counts.requested + counts.proofsPending,
+      counts.proofsReady + counts.executing,
+    );
+    const staleFailures = swaps.filter((swap) => {
+      if (swap.status !== 'failed' || !swap.failedAt) {
+        return false;
+      }
+      return Date.now() - new Date(swap.failedAt).getTime() < 72 * 60 * 60 * 1000;
+    }).length;
+
+    const tone =
+      staleFailures >= 3 || pressure === 'heavy'
+        ? 'risk'
+        : staleFailures > 0 || pressure === 'moderate'
+          ? 'caution'
+          : 'good';
+
+    const message =
+      tone === 'risk'
+        ? 'Seller queue is carrying either too many unresolved requests or repeated recent failures. Slow the board down and clear execution blockers.'
+        : tone === 'caution'
+          ? 'Seller queue is active and worth watching. Keep proofs and execution moving before more requests pile up.'
+          : 'Seller queue is healthy. Requests and execution pressure are light enough to keep offers discoverable.';
+
+    return {
+      pressure,
+      tone,
+      message,
+      staleFailures,
+    };
+  }
+
+  private async buildPairCoverage(rawOffers: Array<{ assetIn: 'USDC' | 'XLM'; assetOut: 'USDC' | 'XLM'; active: boolean }>) {
+    const pairs: Array<{ assetIn: 'USDC' | 'XLM'; assetOut: 'USDC' | 'XLM' }> = [
+      { assetIn: 'XLM', assetOut: 'USDC' },
+      { assetIn: 'USDC', assetOut: 'XLM' },
+    ];
+
+    return Promise.all(
+      pairs.map(async (pair) => {
+        const pairMetrics = await this.getPairMetrics(pair.assetIn, pair.assetOut);
+        const ownActiveOffers = rawOffers.filter(
+          (offer) => offer.active && offer.assetIn === pair.assetIn && offer.assetOut === pair.assetOut,
+        ).length;
+
+        return {
+          pair: `${pair.assetIn}/${pair.assetOut}`,
+          activeOffers: ownActiveOffers,
+          openRequests: pairMetrics.pairOpenRequests,
+          completedSwaps: pairMetrics.pairCompletedSwaps,
+          recommendation:
+            ownActiveOffers === 0 && pairMetrics.pairOpenRequests > 0
+              ? 'Demand exists on this pair but you have no active listing covering it right now.'
+              : ownActiveOffers > 0 && pairMetrics.pairOpenRequests === 0
+                ? 'You already cover this pair, but demand is quiet. Tighten rate or adjust the band before adding more inventory.'
+                : ownActiveOffers > 0
+                  ? 'This pair is covered. Focus on execution quality and backlog rather than creating overlapping listings.'
+                  : 'This pair is currently uncovered and quiet. Only publish here if you want strategic optionality rather than immediate flow.',
+        };
+      }),
+    );
+  }
+
+  private buildSellerActionQueue(
+    swaps: MerchantWorkspaceSwapRecord[],
+  ): SellerActionView[] {
+    const actions: SellerActionView[] = [];
+
+    for (const swap of swaps) {
+        if (swap.status === 'requested') {
+          actions.push({
+            swapId: swap._id.toString(),
+            offerId: swap.offerId?.toString(),
+            action: 'accept_request' as const,
+            label: 'Accept buyer request',
+            detail: 'A buyer is waiting for seller acceptance before the lifecycle can move into proof collection or execution.',
+            severity: 'caution' as const,
+            mode: 'public' as const,
+            status: swap.status,
+            createdAt: this.toIso(swap.createdAt),
+          });
+          continue;
+        }
+
+        if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_bob') {
+          actions.push({
+            swapId: swap._id.toString(),
+            offerId: swap.offerId?.toString(),
+            action: 'prepare_proof' as const,
+            label: 'Prepare seller proof',
+            detail: 'The buyer proof is already present. This swap is waiting on the seller-side exact note proof.',
+            severity: 'caution' as const,
+            mode: 'private' as const,
+            status: swap.status,
+            createdAt: this.toIso(swap.updatedAt),
+          });
+          continue;
+        }
+
+        if (swap.status === 'proofs_ready') {
+          actions.push({
+            swapId: swap._id.toString(),
+            offerId: swap.offerId?.toString(),
+            action: 'execute_private' as const,
+            label: 'Execute private settlement',
+            detail: 'Both proofs are ready. The private swap is waiting for the executor to finalize the settlement.',
+            severity: 'critical' as const,
+            mode: 'private' as const,
+            status: swap.status,
+            createdAt: this.toIso(swap.updatedAt),
+          });
+          continue;
+        }
+
+        if (swap.status === 'executing') {
+          actions.push({
+            swapId: swap._id.toString(),
+            offerId: swap.offerId?.toString(),
+            action: 'execute_public' as const,
+            label: 'Watch execution outcome',
+            detail: 'The swap is already in execution. Use the status view to confirm whether settlement clears or needs intervention.',
+            severity: 'info' as const,
+            mode: 'public' as const,
+            status: swap.status,
+            createdAt: this.toIso(swap.updatedAt),
+          });
+          continue;
+        }
+
+        if (swap.status === 'failed') {
+          actions.push({
+            swapId: swap._id.toString(),
+            offerId: swap.offerId?.toString(),
+            action: 'review_failure' as const,
+            label: 'Review failed execution',
+            detail: swap.lastError || 'A recent swap failed and should be reviewed before more buyer flow is accepted.',
+            severity: 'critical' as const,
+            mode: swap.proofStatus === 'ready' ? 'private' : 'public',
+            status: swap.status,
+            createdAt: this.toIso(swap.updatedAt),
+          });
+        }
+    }
+
+    return actions.slice(0, 8);
+  }
+
+  private async getAverageTicketSizeForMerchant(merchantId: Types.ObjectId): Promise<number> {
+    const swaps = await this.swapModel
+      .find({ bobId: merchantId, status: 'completed' })
+      .select('amountIn amountOut')
+      .lean()
+      .exec();
+
+    if (!swaps.length) {
+      return 0;
+    }
+
+    const total = swaps.reduce((sum, swap) => sum + Math.max(Number(swap.amountIn) || 0, Number(swap.amountOut) || 0), 0);
+    return Number((total / swaps.length).toFixed(2));
+  }
+
+  private describeQueuePressure(openRequests: number, inFlightExecutions: number): 'light' | 'moderate' | 'heavy' {
+    const pressureScore = openRequests * 2 + inFlightExecutions * 3;
+    if (pressureScore >= 12) {
+      return 'heavy';
+    }
+    if (pressureScore >= 5) {
+      return 'moderate';
+    }
+    return 'light';
+  }
+
+  private describeOfferHealthTone(
+    offer: EnrichedOffer,
+    openBuyerRequests: number,
+    stalledExecutions: number,
+  ): 'good' | 'caution' | 'risk' {
+    if (!offer.active) {
+      return 'caution';
+    }
+    if (openBuyerRequests >= 3 || stalledExecutions >= 2) {
+      return 'risk';
+    }
+    if (offer.requestGuidance.backlogLevel === 'heavy' || offer.offerMetrics.failedSwaps > offer.offerMetrics.completedSwaps) {
+      return 'caution';
+    }
+    return 'good';
+  }
+
+  private describeOfferHealthSummary(
+    offer: EnrichedOffer,
+    openBuyerRequests: number,
+    stalledExecutions: number,
+  ) {
+    if (!offer.active) {
+      return 'This listing is paused, so it is not accepting new flow until you reactivate it.';
+    }
+    if (openBuyerRequests >= 3) {
+      return 'Buyer demand is stacking up faster than the seller queue is clearing. Accept or pause before more requests arrive.';
+    }
+    if (stalledExecutions >= 2) {
+      return 'Multiple swaps tied to this offer are already waiting on proofs or execution. Clear them before widening distribution.';
+    }
+    if (offer.requestGuidance.backlogLevel === 'heavy') {
+      return 'Queue pressure on this listing is trending high. It is still usable, but only if seller-side responsiveness stays tight.';
+    }
+    return 'This listing looks operationally healthy and ready to keep attracting flow.';
+  }
+
+  private describeQueueMessage(
+    pressure: 'light' | 'moderate' | 'heavy',
+    openBuyerRequests: number,
+    stalledExecutions: number,
+  ) {
+    if (pressure === 'heavy') {
+      return `${openBuyerRequests} buyer requests and ${stalledExecutions} execution-stage swaps are already attached to this listing.`;
+    }
+    if (pressure === 'moderate') {
+      return `There is visible activity here, with ${openBuyerRequests} open requests and ${stalledExecutions} swaps already past intake.`;
+    }
+    return 'This listing has room for more flow without overwhelming seller-side execution.';
+  }
+
+  private toIso(value?: Date | string | null): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
   }
 
   private async getPairMetrics(assetIn: 'USDC' | 'XLM', assetOut: 'USDC' | 'XLM'): Promise<PairMetricsView> {
