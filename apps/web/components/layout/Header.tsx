@@ -4,13 +4,15 @@ import Link from "next/link";
 import Image from "next/image";
 import { useUser } from "@/hooks/useUser";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 
 export function Header() {
-  const { user, loading } = useUser();
+  const { user, loading, workspace } = useUser();
+  const nextAction = workspace.nextActions[0];
 
   return (
     <header className="fixed top-8 left-1/2 -translate-x-1/2 z-50 w-full max-w-3xl px-4 sm:px-0">
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-6 h-16 flex items-center justify-between shadow-lg">
+      <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-[28px] px-6 py-4 shadow-lg">
         <Link href="/dashboard" className="flex items-center gap-3 group">
           <div className="relative w-8 h-8 group-hover:scale-105 transition-transform duration-300">
             <Image
@@ -25,26 +27,64 @@ export function Header() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="mt-4 flex flex-col gap-3 sm:mt-0 sm:flex-row sm:items-center sm:justify-between">
+          <div className="hidden min-w-0 flex-1 sm:block">
+            {!loading && (
+              <>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={
+                      workspace.readiness.tone === "ready"
+                        ? "success"
+                        : workspace.readiness.tone === "attention"
+                          ? "warning"
+                          : "default"
+                    }
+                  >
+                    {workspace.network.label}
+                  </Badge>
+                  {user && (
+                    <Badge
+                      variant={
+                        workspace.ops.status === "ready" ? "success" : "warning"
+                      }
+                    >
+                      {workspace.ops.status === "ready" ? "Ops Ready" : "Ops Degraded"}
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-2 truncate text-xs text-slate-300">
+                  {user ? nextAction || "Workspace is ready for the next flow." : "Sign in to generate your wallet and readiness checklist."}
+                </p>
+              </>
+            )}
+          </div>
+
           {!loading &&
             (user ? (
-              <Link href="/dashboard">
-                <Button
-                  size="sm"
-                  className="hidden sm:flex rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
-                >
-                  Dashboard
-                </Button>
-              </Link>
+              <div className="flex items-center gap-3">
+                <Link href="/status">
+                  <Button
+                    size="sm"
+                    className="hidden sm:flex rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
+                  >
+                    Status
+                  </Button>
+                </Link>
+                <Link href="/dashboard">
+                  <Button
+                    size="sm"
+                    className="rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
+                  >
+                    Dashboard
+                  </Button>
+                </Link>
+              </div>
             ) : (
-              <Link
-                href={
-                  (process.env.NEXT_PUBLIC_API_URL ?? "/api") + "/auth/google"
-                }
-              >
+              <Link href="/auth/google">
                 <Button
                   size="sm"
-                  className="hidden sm:flex rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
+                  className="rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
                 >
                   Sign In
                 </Button>

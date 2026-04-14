@@ -8,6 +8,12 @@ import { SessionAuthGuard } from './guards/session.guard';
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
   constructor(private readonly authService: AuthService) { }
+
+  @Get('workspace')
+  async workspace(@Req() req: any) {
+    return this.authService.getAuthWorkspace(req.user?._id?.toString());
+  }
+
   @Get('google')
   @UseGuards(AuthGuard('google'))
   googleAuth() {
