@@ -1471,6 +1471,176 @@ export class UsersService {
       .slice(0, 60);
   }
 
+  async getHistoryWorkspace(userId: string) {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const [timeline, walletWorkspace] = await Promise.all([
+      this.getHistory(userId),
+      this.getWalletWorkspace(userId),
+    ]);
+
+    const latestEntries = timeline.slice(0, 12);
+    const completed = timeline.filter((item) => item.state === 'success');
+    const pending = timeline.filter((item) => item.state === 'pending' || item.state === 'queued');
+    const failed = timeline.filter((item) => item.state === 'failed' || item.state === 'retryable');
+    const privateEntries = timeline.filter((item) => item.privateFlow);
+    const sponsored = timeline.filter((item) => item.sponsorship?.sponsored);
+
+    const categoryBreakdown = ['wallet', 'private', 'swap', 'system'].map((category) => {
+      const entries = timeline.filter((item) => item.category === category);
+      return {
+        category,
+        count: entries.length,
+        completed: entries.filter((item) => item.state === 'success').length,
+        pending: entries.filter((item) => item.state === 'pending' || item.state === 'queued').length,
+        failed: entries.filter((item) => item.state === 'failed' || item.state === 'retryable').length,
+        latestAt: entries[0]?.date,
+      };
+    });
+
+    const failureBucketsMap = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        count: number;
+        entries: typeof latestEntries;
+      }
+    >();
+
+    for (const entry of failed) {
+      const key = this.classifyHistoryFailure(entry);
+      const label = this.describeFailureBucket(key);
+      if (!failureBucketsMap.has(key)) {
+        failureBucketsMap.set(key, {
+          key,
+          label,
+          count: 0,
+          entries: [],
+        });
+      }
+      const bucket = failureBucketsMap.get(key)!;
+      bucket.count += 1;
+      bucket.entries.push(entry as any);
+    }
+
+    const counterpartiesMap = new Map<
+      string,
+      {
+        counterparty: string;
+        interactions: number;
+        privateFlows: number;
+        swapFlows: number;
+        latestAt?: string | Date;
+      }
+    >();
+
+    for (const entry of timeline) {
+      const counterparty = entry.participants?.counterparty;
+      if (!counterparty) {
+        continue;
+      }
+      const existing = counterpartiesMap.get(counterparty) ?? {
+        counterparty,
+        interactions: 0,
+        privateFlows: 0,
+        swapFlows: 0,
+        latestAt: entry.date,
+      };
+      existing.interactions += 1;
+      existing.privateFlows += entry.privateFlow ? 1 : 0;
+      existing.swapFlows += entry.category === 'swap' ? 1 : 0;
+      const currentLatest = existing.latestAt ? new Date(existing.latestAt).getTime() : 0;
+      const candidateLatest = entry.date ? new Date(entry.date).getTime() : 0;
+      existing.latestAt = currentLatest > candidateLatest ? existing.latestAt : entry.date;
+      counterpartiesMap.set(counterparty, existing);
+    }
+
+    const actionQueue = [
+      pending.find((item) => item.operation === 'pending_withdrawal'),
+      pending.find((item) => item.operation === 'swap_lifecycle' || item.operation.startsWith('swap_')),
+      failed.find((item) => item.state === 'retryable'),
+      pending.find((item) => item.indexing?.status === 'pending' || item.indexing?.status === 'lagging'),
+      !walletWorkspace.balances.private.usdc && !walletWorkspace.balances.private.xlm
+        ? {
+            id: 'synthetic:first_private_deposit',
+            source: 'audit',
+            category: 'private',
+            operation: 'first_private_deposit',
+            title: 'Seed the first private balance',
+            detail: 'No private balance activity is present yet, so the first deposit will unlock the full shielded history trail.',
+            state: 'queued',
+            amountDisplay: 'Not started',
+            sponsorship: { attempted: false, sponsored: false },
+            privateFlow: true,
+            date: new Date().toISOString(),
+            statusLabel: 'Suggested next action',
+          } as any
+        : undefined,
+    ]
+      .filter(Boolean)
+      .slice(0, 4)
+      .map((item: any) => ({
+        id: item.id,
+        operation: item.operation,
+        title: item.title,
+        detail: item.detail,
+        state: item.state,
+        category: item.category,
+      }));
+
+    const velocity = this.computeHistoryVelocity(timeline);
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        total: timeline.length,
+        completed: completed.length,
+        pending: pending.length,
+        failed: failed.length,
+        privateFlows: privateEntries.length,
+        sponsored: sponsored.length,
+      },
+      velocity,
+      categoryBreakdown,
+      failureBuckets: Array.from(failureBucketsMap.values())
+        .sort((left, right) => right.count - left.count)
+        .map((bucket) => ({
+          key: bucket.key,
+          label: bucket.label,
+          count: bucket.count,
+          latestEntry: bucket.entries[0]
+            ? {
+                id: bucket.entries[0].id,
+                title: bucket.entries[0].title,
+                detail: bucket.entries[0].detail,
+                date: bucket.entries[0].date,
+              }
+            : undefined,
+        })),
+      counterparties: Array.from(counterpartiesMap.values())
+        .sort((left, right) => right.interactions - left.interactions)
+        .slice(0, 6),
+      actionQueue,
+      walletSignals: {
+        pendingWithdrawals: walletWorkspace.pending.count,
+        privateUsdc: walletWorkspace.balances.private.usdc,
+        privateXlm: walletWorkspace.balances.private.xlm,
+        publicUsdc: walletWorkspace.balances.public.usdc,
+        publicXlm: walletWorkspace.balances.public.xlm,
+      },
+      latestEntries,
+      timeline,
+    };
+  }
+
   private describeAuditTitle(operation: string) {
     switch (operation) {
       case 'public_send':
@@ -1537,5 +1707,77 @@ export class UsersService {
       return 'Executing on-chain';
     }
     return 'Swap updated';
+  }
+
+  private classifyHistoryFailure(entry: {
+    operation: string;
+    detail: string;
+    indexing?: { status?: string; detail?: string };
+    state: string;
+  }) {
+    const detail = `${entry.detail} ${entry.indexing?.detail ?? ''}`.toLowerCase();
+    if (detail.includes('index') || entry.indexing?.status === 'pending' || entry.indexing?.status === 'lagging') {
+      return 'indexing_delay';
+    }
+    if (detail.includes('proof')) {
+      return 'proof_readiness';
+    }
+    if (detail.includes('trustline') || detail.includes('balance') || detail.includes('fee')) {
+      return 'wallet_readiness';
+    }
+    if (entry.operation.startsWith('swap')) {
+      return 'swap_execution';
+    }
+    return 'transaction_failure';
+  }
+
+  private describeFailureBucket(bucket: string) {
+    switch (bucket) {
+      case 'indexing_delay':
+        return 'Waiting on indexing or chain follow-up';
+      case 'proof_readiness':
+        return 'Proof preparation or note-shape blockers';
+      case 'wallet_readiness':
+        return 'Wallet readiness blockers';
+      case 'swap_execution':
+        return 'Swap execution blockers';
+      default:
+        return 'General transaction failures';
+    }
+  }
+
+  private computeHistoryVelocity(timeline: Array<{ date: string | Date | undefined; state: string }>) {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const recent24h = timeline.filter((item) => {
+      const timestamp = new Date(item.date ?? 0).getTime();
+      return now - timestamp <= dayMs;
+    });
+    const recent7d = timeline.filter((item) => {
+      const timestamp = new Date(item.date ?? 0).getTime();
+      return now - timestamp <= 7 * dayMs;
+    });
+
+    const successful24h = recent24h.filter((item) => item.state === 'success').length;
+    const successful7d = recent7d.filter((item) => item.state === 'success').length;
+
+    return {
+      last24h: {
+        total: recent24h.length,
+        successful: successful24h,
+        pending: recent24h.filter((item) => item.state === 'pending' || item.state === 'queued').length,
+      },
+      last7d: {
+        total: recent7d.length,
+        successful: successful7d,
+        dailyAverage: Number((recent7d.length / 7).toFixed(2)),
+      },
+      momentum:
+        recent24h.length >= 8
+          ? 'high'
+          : recent24h.length >= 3
+            ? 'moderate'
+            : 'light',
+    };
   }
 }

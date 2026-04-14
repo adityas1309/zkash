@@ -201,4 +201,11 @@ export class UsersController {
   async getHistory(@Req() req: any) {
     return this.usersService.getHistory(req.user._id);
   }
+
+  @Get('history/workspace')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getHistoryWorkspace(@Req() req: any) {
+    return this.usersService.getHistoryWorkspace(req.user._id);
+  }
 }

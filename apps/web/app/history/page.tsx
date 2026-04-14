@@ -18,6 +18,9 @@ import {
   RefreshCw,
   Shield,
   Sparkles,
+  TrendingUp,
+  TriangleAlert,
+  Users,
   XCircle,
 } from "lucide-react";
 
@@ -56,6 +59,78 @@ interface HistoryEntry {
   statusLabel: string;
 }
 
+interface HistoryWorkspace {
+  user: {
+    username?: string;
+    stellarPublicKey?: string;
+    reputation?: number;
+  };
+  summary: {
+    total: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    privateFlows: number;
+    sponsored: number;
+  };
+  velocity: {
+    last24h: {
+      total: number;
+      successful: number;
+      pending: number;
+    };
+    last7d: {
+      total: number;
+      successful: number;
+      dailyAverage: number;
+    };
+    momentum: "high" | "moderate" | "light";
+  };
+  categoryBreakdown: Array<{
+    category: HistoryCategory;
+    count: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    latestAt?: string;
+  }>;
+  failureBuckets: Array<{
+    key: string;
+    label: string;
+    count: number;
+    latestEntry?: {
+      id: string;
+      title: string;
+      detail: string;
+      date: string;
+    };
+  }>;
+  counterparties: Array<{
+    counterparty: string;
+    interactions: number;
+    privateFlows: number;
+    swapFlows: number;
+    latestAt?: string;
+  }>;
+  actionQueue: Array<{
+    id: string;
+    operation: string;
+    title: string;
+    detail: string;
+    state: HistoryState;
+    category: HistoryCategory;
+  }>;
+  walletSignals: {
+    pendingWithdrawals: number;
+    privateUsdc: string;
+    privateXlm: string;
+    publicUsdc: string;
+    publicXlm: string;
+  };
+  latestEntries: HistoryEntry[];
+  timeline: HistoryEntry[];
+}
+
 function getStateVariant(state: HistoryState) {
   if (state === "success") {
     return "success" as const;
@@ -82,7 +157,10 @@ function getCategoryVariant(category: HistoryCategory) {
   return "error" as const;
 }
 
-function formatTimestamp(value: string) {
+function formatTimestamp(value?: string) {
+  if (!value) {
+    return "Unknown time";
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return "Unknown time";
@@ -117,35 +195,33 @@ function MetricCard({
 
 export default function HistoryPage() {
   const { isPrivate, togglePrivacy } = usePrivacy();
-  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [workspace, setWorkspace] = useState<HistoryWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<"all" | HistoryCategory>("all");
   const [stateFilter, setStateFilter] = useState<"all" | HistoryState>("all");
+  const [focusMode, setFocusMode] = useState<"timeline" | "recovery" | "relationships">("timeline");
 
-  const fetchHistory = async () => {
+  const fetchHistoryWorkspace = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/users/history`, { credentials: "include" });
-      const data = await response.json().catch(() => []);
-      if (Array.isArray(data)) {
-        setHistory(data);
-      } else {
-        setHistory([]);
-      }
+      const response = await fetch(`${API_URL}/users/history/workspace`, { credentials: "include" });
+      const data = await response.json().catch(() => null);
+      setWorkspace(data);
     } catch (error) {
-      console.error("[HistoryPage] Failed to fetch history", error);
-      setHistory([]);
+      console.error("[HistoryPage] Failed to fetch history workspace", error);
+      setWorkspace(null);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
+    fetchHistoryWorkspace();
   }, []);
 
   const filteredHistory = useMemo(() => {
-    return history.filter((item) => {
+    const timeline = workspace?.timeline ?? [];
+    return timeline.filter((item) => {
       if (categoryFilter !== "all" && item.category !== categoryFilter) {
         return false;
       }
@@ -154,16 +230,9 @@ export default function HistoryPage() {
       }
       return true;
     });
-  }, [categoryFilter, history, stateFilter]);
+  }, [categoryFilter, stateFilter, workspace]);
 
-  const summary = useMemo(() => {
-    return {
-      completed: history.filter((item) => item.state === "success").length,
-      pending: history.filter((item) => item.state === "pending" || item.state === "queued").length,
-      privateFlows: history.filter((item) => item.privateFlow).length,
-      sponsored: history.filter((item) => item.sponsorship?.sponsored).length,
-    };
-  }, [history]);
+  const summary = workspace?.summary;
 
   if (loading) {
     return (
@@ -173,126 +242,360 @@ export default function HistoryPage() {
     );
   }
 
+  if (!workspace) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center px-6">
+        <Card variant="glass" className="max-w-xl py-12 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <AlertCircle className="h-12 w-12 text-slate-500" />
+            <p className="text-lg text-slate-300">History workspace could not be loaded.</p>
+            <button
+              onClick={() => fetchHistoryWorkspace()}
+              className="inline-flex items-center rounded-xl border border-white/10 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto mb-8 flex min-h-[50vh] max-w-[1450px] flex-col rounded-[32px] border border-white/5 bg-slate-900/30 p-8 text-white selection:bg-indigo-500/30 lg:p-12">
+    <div className="mx-auto mb-8 flex min-h-[50vh] max-w-[1500px] flex-col rounded-[32px] border border-white/5 bg-slate-900/30 p-8 text-white selection:bg-indigo-500/30 lg:p-12">
       <div className="absolute right-8 top-6 z-20">
         <PrivacyToggle checked={isPrivate} onCheckedChange={togglePrivacy} />
       </div>
 
-      <main className="relative z-10 mx-auto w-full max-w-6xl space-y-8 pt-4">
+      <main className="relative z-10 mx-auto w-full max-w-7xl space-y-8 pt-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Unified Activity Timeline</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Activity Intelligence Workspace</p>
             <h1 className="mt-2 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-3xl font-bold text-transparent">
-              Transaction History
+              History & Recovery Desk
             </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              This timeline merges transaction audits, private notes, withdrawals, and swap lifecycle updates so you
-              can see what actually happened instead of guessing from partial rows.
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+              This workspace shows not just what happened, but what is blocked, who you interact with most, where failures cluster,
+              and which items should be resolved next.
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => fetchHistory()}
+              onClick={() => fetchHistoryWorkspace()}
               className="inline-flex items-center rounded-xl border border-white/10 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </button>
             <Link
+              href="/status"
+              className="inline-flex items-center rounded-xl border border-white/10 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
+            >
+              Status Workspace
+            </Link>
+            <Link
               href="/dashboard"
               className="inline-flex items-center rounded-xl border border-white/10 bg-slate-900/70 px-4 py-2 text-sm text-slate-200 transition-colors hover:bg-slate-800"
             >
-              Back to Dashboard
+              Dashboard
             </Link>
           </div>
         </div>
 
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <MetricCard
+            title="Total events"
+            value={String(summary?.total ?? 0)}
+            detail="Full merged history volume across wallet, private, and swap flows."
+            icon={<Layers3 className="h-5 w-5" />}
+          />
           <MetricCard
             title="Completed"
-            value={String(summary.completed)}
-            detail="Audit and lifecycle events that ended in a successful state."
+            value={String(summary?.completed ?? 0)}
+            detail="Operations that reached a successful terminal state."
             icon={<CheckCircle className="h-5 w-5" />}
           />
           <MetricCard
             title="Pending"
-            value={String(summary.pending)}
-            detail="Operations still waiting on acceptance, execution, or indexing follow-up."
+            value={String(summary?.pending ?? 0)}
+            detail="Items still waiting on proofs, retries, withdrawals, or indexing."
             icon={<Clock3 className="h-5 w-5" />}
           />
           <MetricCard
+            title="Failures"
+            value={String(summary?.failed ?? 0)}
+            detail="Failures and retryable blockers clustered from the same history stream."
+            icon={<XCircle className="h-5 w-5" />}
+          />
+          <MetricCard
             title="Private flows"
-            value={String(summary.privateFlows)}
-            detail="Deposits, withdrawals, private transfers, or swap legs involving shielded state."
+            value={String(summary?.privateFlows ?? 0)}
+            detail="Entries touching deposits, notes, withdrawals, or shielded execution."
             icon={<Shield className="h-5 w-5" />}
           />
           <MetricCard
             title="Sponsored"
-            value={String(summary.sponsored)}
-            detail="Entries where the backend recorded successful fee sponsorship."
+            value={String(summary?.sponsored ?? 0)}
+            detail="Events where fee sponsorship was successfully applied."
             icon={<Sparkles className="h-5 w-5" />}
           />
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-[0.28fr_0.72fr]">
-          <Card variant="glass">
-            <div className="mb-5 flex items-center gap-2">
-              <Filter className="h-4 w-4 text-indigo-300" />
-              <p className="text-sm font-medium text-white">Timeline filters</p>
+        <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card variant="neon">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Velocity</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Activity momentum and readiness signals</h2>
+              </div>
+              <Badge
+                variant={
+                  workspace.velocity.momentum === "high"
+                    ? "success"
+                    : workspace.velocity.momentum === "moderate"
+                      ? "warning"
+                      : "default"
+                }
+              >
+                {workspace.velocity.momentum.toUpperCase()} MOMENTUM
+              </Badge>
             </div>
-
-            <div className="space-y-4">
-              <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">Category</span>
-                <select
-                  value={categoryFilter}
-                  onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
-                >
-                  <option value="all">All categories</option>
-                  <option value="wallet">Wallet</option>
-                  <option value="private">Private</option>
-                  <option value="swap">Swap</option>
-                  <option value="system">System</option>
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">State</span>
-                <select
-                  value={stateFilter}
-                  onChange={(event) => setStateFilter(event.target.value as typeof stateFilter)}
-                  className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
-                >
-                  <option value="all">All states</option>
-                  <option value="success">Success</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
-                  <option value="retryable">Retryable</option>
-                  <option value="queued">Queued</option>
-                </select>
-              </label>
-
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Visible entries</p>
-                <p className="mt-2 text-3xl font-semibold text-white">{filteredHistory.length}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Filters help isolate swap-only flows, private indexing delays, or sponsored wallet activity.
+                <p className="text-xs uppercase tracking-wide text-slate-500">Last 24h</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{workspace.velocity.last24h.total}</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {workspace.velocity.last24h.successful} successful, {workspace.velocity.last24h.pending} still waiting.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Last 7d</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{workspace.velocity.last7d.total}</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {workspace.velocity.last7d.successful} successful with {workspace.velocity.last7d.dailyAverage} avg/day.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Wallet signals</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {workspace.walletSignals.privateXlm} XLM private / {workspace.walletSignals.pendingWithdrawals} queued
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  Private and withdrawal signals help explain why the history feed is moving or stalling.
                 </p>
               </div>
             </div>
           </Card>
 
-          <div className="space-y-4">
+          <Card variant="glass">
+            <div className="flex items-center gap-2">
+              <TriangleAlert className="h-5 w-5 text-yellow-400" />
+              <h2 className="text-xl font-semibold text-white">Action queue</h2>
+            </div>
+            <div className="mt-5 grid gap-3">
+              {workspace.actionQueue.length ? (
+                workspace.actionQueue.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-white">{item.title}</p>
+                      <Badge variant={getStateVariant(item.state)}>{item.state.toUpperCase()}</Badge>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Badge variant={getCategoryVariant(item.category)}>{item.category.toUpperCase()}</Badge>
+                      <span className="text-xs uppercase tracking-wide text-slate-500">
+                        {item.operation.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500">
+                  No unresolved action items are standing out in the current history stream.
+                </div>
+              )}
+            </div>
+          </Card>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[0.28fr_0.72fr]">
+          <div className="space-y-6">
+            <Card variant="glass">
+              <div className="mb-5 flex items-center gap-2">
+                <Filter className="h-4 w-4 text-indigo-300" />
+                <p className="text-sm font-medium text-white">Timeline filters</p>
+              </div>
+
+              <div className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">Category</span>
+                  <select
+                    value={categoryFilter}
+                    onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
+                  >
+                    <option value="all">All categories</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="private">Private</option>
+                    <option value="swap">Swap</option>
+                    <option value="system">System</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">State</span>
+                  <select
+                    value={stateFilter}
+                    onChange={(event) => setStateFilter(event.target.value as typeof stateFilter)}
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
+                  >
+                    <option value="all">All states</option>
+                    <option value="success">Success</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                    <option value="retryable">Retryable</option>
+                    <option value="queued">Queued</option>
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">View focus</span>
+                  <select
+                    value={focusMode}
+                    onChange={(event) => setFocusMode(event.target.value as typeof focusMode)}
+                    className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
+                  >
+                    <option value="timeline">Timeline</option>
+                    <option value="recovery">Recovery blockers</option>
+                    <option value="relationships">Counterparties</option>
+                  </select>
+                </label>
+
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <p className="text-xs uppercase tracking-wide text-slate-500">Visible entries</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">{filteredHistory.length}</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Filters isolate the exact slice you need, while the focus mode swaps the right-hand intelligence panel.
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            <Card variant="glass">
+              <div className="mb-4 flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-300" />
+                <p className="text-sm font-medium text-white">Category breakdown</p>
+              </div>
+              <div className="space-y-3">
+                {workspace.categoryBreakdown.map((bucket) => (
+                  <div key={bucket.category} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge variant={getCategoryVariant(bucket.category)}>{bucket.category.toUpperCase()}</Badge>
+                      <span className="text-sm font-medium text-white">{bucket.count}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-400">
+                      {bucket.completed} completed, {bucket.pending} pending, {bucket.failed} blocked
+                    </p>
+                    <p className="mt-2 text-xs text-slate-500">Latest: {formatTimestamp(bucket.latestAt)}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            {focusMode === "recovery" && (
+              <Card variant="glass">
+                <div className="mb-4 flex items-center gap-2">
+                  <TriangleAlert className="h-5 w-5 text-yellow-400" />
+                  <h2 className="text-xl font-semibold text-white">Recovery blockers</h2>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {workspace.failureBuckets.length ? (
+                    workspace.failureBuckets.map((bucket) => (
+                      <div key={bucket.key} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-white">{bucket.label}</p>
+                          <Badge variant="warning">{bucket.count}</Badge>
+                        </div>
+                        {bucket.latestEntry ? (
+                          <>
+                            <p className="mt-2 text-sm text-slate-300">{bucket.latestEntry.title}</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">{bucket.latestEntry.detail}</p>
+                            <p className="mt-2 text-xs text-slate-500">{formatTimestamp(bucket.latestEntry.date)}</p>
+                          </>
+                        ) : (
+                          <p className="mt-2 text-sm text-slate-500">No sample entry recorded.</p>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500 md:col-span-2">
+                      No blocker clusters are standing out right now.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {focusMode === "relationships" && (
+              <Card variant="glass">
+                <div className="mb-4 flex items-center gap-2">
+                  <Users className="h-5 w-5 text-indigo-300" />
+                  <h2 className="text-xl font-semibold text-white">Top counterparties</h2>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {workspace.counterparties.length ? (
+                    workspace.counterparties.map((counterparty) => (
+                      <div key={counterparty.counterparty} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-white">@{counterparty.counterparty}</p>
+                          <Badge variant="default">{counterparty.interactions} touches</Badge>
+                        </div>
+                        <p className="mt-2 text-sm text-slate-300">
+                          {counterparty.privateFlows} private flows and {counterparty.swapFlows} swap-related events.
+                        </p>
+                        <p className="mt-2 text-xs text-slate-500">Latest interaction: {formatTimestamp(counterparty.latestAt)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500 md:col-span-2">
+                      Counterparty relationships will appear here once transfer and swap history builds up.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {focusMode === "timeline" && workspace.latestEntries.length > 0 && (
+              <Card variant="glass">
+                <div className="mb-4 flex items-center gap-2">
+                  <Layers3 className="h-5 w-5 text-indigo-300" />
+                  <h2 className="text-xl font-semibold text-white">Latest critical entries</h2>
+                </div>
+                <div className="grid gap-3">
+                  {workspace.latestEntries.slice(0, 5).map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-white">{item.title}</p>
+                        <Badge variant={getStateVariant(item.state)}>{item.statusLabel}</Badge>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
+                      <p className="mt-2 text-xs text-slate-500">{formatTimestamp(item.date)}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+
             {filteredHistory.length === 0 ? (
               <Card variant="glass" className="py-12 text-center">
                 <div className="flex flex-col items-center gap-4">
                   <AlertCircle className="h-12 w-12 text-slate-500" />
                   <p className="text-lg text-slate-400">No history entries match the current filters.</p>
                   <p className="max-w-md text-sm text-slate-500">
-                    Try broadening the filters or generate new wallet, private, or swap activity to populate the
-                    timeline.
+                    Try broadening the filters or generate new wallet, private, or swap activity to populate the timeline.
                   </p>
                 </div>
               </Card>
