@@ -18,7 +18,7 @@ import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.context';
 import { MetricsService } from '../ops/metrics.service';
 import { AppLoggerService } from '../common/logging/app-logger.service';
-import { SponsorshipPreviewDto, WalletAsset } from '../common/dto/wallet.dto';
+import { SendPreviewDto, SponsorshipPreviewDto, WalletAsset } from '../common/dto/wallet.dto';
 import { SponsorshipService } from '../sponsorship/sponsorship.service';
 import { TransactionAuditService } from '../transactions/transaction-audit.service';
 
@@ -837,6 +837,226 @@ export class UsersService {
         recipient: body.recipient,
       }),
       asset: body.asset,
+    };
+  }
+
+  async getSendWorkspace(userId: string) {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const [balances, privateBalances, history] = await Promise.all([
+      this.getBalances(userId),
+      this.getPrivateBalance(userId),
+      this.getHistory(userId),
+    ]);
+
+    const privateNotesByAsset = await Promise.all(
+      (['USDC', 'XLM'] as const).map(async (asset) => {
+        const notes = await this.getSpendableNotes(userId, asset);
+        const sorted = notes
+          .map((note) => Number(note.value) / Number(UsersService.SCALE_FACTOR))
+          .sort((left, right) => right - left);
+        return [
+          asset,
+          {
+            count: notes.length,
+            largest: sorted[0] ?? 0,
+            exactFriendly: sorted.slice(0, 4),
+          },
+        ] as const;
+      }),
+    );
+
+    const counterparties = new Map<
+      string,
+      {
+        label: string;
+        interactions: number;
+        privateFlows: number;
+        latestAt?: string;
+      }
+    >();
+
+    for (const entry of history) {
+      const key = entry.participants?.counterparty;
+      if (!key) {
+        continue;
+      }
+      const existing = counterparties.get(key) ?? {
+        label: key,
+        interactions: 0,
+        privateFlows: 0,
+        latestAt: typeof entry.date === 'string' ? entry.date : undefined,
+      };
+      existing.interactions += 1;
+      existing.privateFlows += entry.privateFlow ? 1 : 0;
+      const candidateDate = typeof entry.date === 'string' ? entry.date : undefined;
+      existing.latestAt =
+        existing.latestAt && candidateDate && new Date(existing.latestAt).getTime() > new Date(candidateDate).getTime()
+          ? existing.latestAt
+          : candidateDate ?? existing.latestAt;
+      counterparties.set(key, existing);
+    }
+
+    const sponsorshipMatrix = await Promise.all(
+      (['USDC', 'XLM'] as const).flatMap((asset) =>
+        (['public_send', 'private_send'] as const).map(async (operation) => {
+          const preview = await this.previewSponsorship(userId, {
+            asset: asset as WalletAsset,
+            operation,
+            amount: 1,
+            recipient: operation === 'public_send' ? user.stellarPublicKey : undefined,
+          });
+          return [`${asset}:${operation}`, preview] as const;
+        }),
+      ),
+    );
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      balances: {
+        public: balances,
+        private: privateBalances,
+      },
+      privateNotes: Object.fromEntries(privateNotesByAsset),
+      sponsorship: Object.fromEntries(sponsorshipMatrix),
+      recentCounterparties: Array.from(counterparties.values())
+        .sort((left, right) => right.interactions - left.interactions)
+        .slice(0, 6),
+      guidance: [
+        Number(privateBalances.usdc) > 0 || Number(privateBalances.xlm) > 0
+          ? 'Private send works best when you already hold an exact-value note or a larger note that can be split first.'
+          : 'Private send will require a deposit into the shielded pool before an exact note can be prepared.',
+        Number(balances.xlm) > 0
+          ? 'Public sends are ready for XLM as long as the visible balance covers the requested amount and network fee.'
+          : 'Public XLM sends still need visible testnet funding before they can execute.',
+        Number(balances.usdc) > 0
+          ? 'USDC public sends can move immediately because the wallet already has visible USDC liquidity.'
+          : 'USDC public sends may still require trustline setup or top-up liquidity in the public wallet.',
+      ],
+    };
+  }
+
+  async previewSend(userId: string, body: SendPreviewDto) {
+    const user = await this.findById(userId);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const amount = Number(body.amount);
+    const [balances, privateBalances, recipientPreview, history] = await Promise.all([
+      this.getBalances(userId),
+      this.getPrivateBalance(userId),
+      this.resolveRecipientPreview(body.recipient),
+      this.getHistory(userId),
+    ]);
+
+    const amountBigInt = BigInt(Math.round(amount * Number(UsersService.SCALE_FACTOR)));
+    const spendableNotes = await this.getSpendableNotes(userId, body.asset);
+    const exactNote = spendableNotes.find((note) => note.value === amountBigInt);
+    const largerNote = spendableNotes.find((note) => note.value > amountBigInt);
+    const totalPrivate = spendableNotes.reduce((sum, note) => sum + note.value, 0n);
+    const totalPrivateDisplay = Number(totalPrivate) / Number(UsersService.SCALE_FACTOR);
+    const publicBalance = Number(body.asset === 'USDC' ? balances.usdc : balances.xlm);
+    const privateBalance = Number(body.asset === 'USDC' ? privateBalances.usdc : privateBalances.xlm);
+    const recentCounterpartyTouch = history.find(
+      (entry) => entry.participants?.counterparty?.toLowerCase() === recipientPreview.username?.toLowerCase(),
+    );
+
+    const publicSponsorship = await this.previewSponsorship(userId, {
+      asset: body.asset,
+      operation: 'public_send',
+      amount,
+      recipient: body.recipient,
+    });
+    const privateSponsorship = await this.previewSponsorship(userId, {
+      asset: body.asset,
+      operation: 'private_send',
+      amount,
+      recipient: body.recipient,
+    });
+
+    const publicRoute = {
+      mode: 'public',
+      available: publicBalance >= amount,
+      ready: publicBalance >= amount,
+      balance: publicBalance,
+      missingAmount: publicBalance >= amount ? 0 : Number((amount - publicBalance).toFixed(7)),
+      summary:
+        publicBalance >= amount
+          ? 'Visible balance is sufficient for a direct public send.'
+          : 'Public balance is lower than the requested amount, so this route needs a top-up first.',
+      sponsorship: publicSponsorship,
+      nextAction: publicBalance >= amount ? 'Send directly from the public wallet.' : `Fund ${body.asset} publicly before sending.`,
+    };
+
+    const privateRoute = {
+      mode: 'private',
+      available: privateBalance >= amount,
+      ready: !!exactNote,
+      exactNoteAvailable: !!exactNote,
+      canSplit: !!largerNote,
+      totalPrivateBalance: Number(totalPrivateDisplay.toFixed(7)),
+      noteCount: spendableNotes.length,
+      summary: exactNote
+        ? 'An exact private note is already available for proof generation.'
+        : largerNote
+          ? 'A larger private note exists, so the app can split it into the exact amount before sending.'
+          : totalPrivateDisplay >= amount
+            ? 'Private balance exists, but no single exact or larger note is ready. A merge or split flow may be required.'
+            : 'Private balance is lower than the requested amount, so a deposit is required first.',
+      sponsorship: privateSponsorship,
+      nextAction: exactNote
+        ? 'Generate the proof and submit the private send.'
+        : largerNote
+          ? 'Split the larger note, then retry the private send.'
+          : totalPrivateDisplay >= amount
+            ? 'Re-shape private notes before attempting the send.'
+            : `Deposit ${body.asset} into the shielded pool before attempting this route.`,
+    };
+
+    const recommendedMode =
+      privateRoute.ready
+        ? 'private'
+        : publicRoute.ready
+          ? 'public'
+          : privateRoute.canSplit
+            ? 'private'
+            : 'public';
+
+    return {
+      recipient: recipientPreview,
+      amount,
+      asset: body.asset,
+      recentRelationship: recentCounterpartyTouch
+        ? {
+            title: recentCounterpartyTouch.title,
+            privateFlow: recentCounterpartyTouch.privateFlow,
+            date: recentCounterpartyTouch.date,
+          }
+        : null,
+      recommendedMode,
+      routes: {
+        public: publicRoute,
+        private: privateRoute,
+      },
+      guidance: [
+        recipientPreview.resolved
+          ? `Recipient resolves to ${recipientPreview.displayLabel}.`
+          : 'Recipient does not currently resolve to a known username, so the send will rely on the raw Stellar address if valid.',
+        recommendedMode === 'private'
+          ? 'Private mode is the stronger fit because note readiness already exists or can be achieved locally.'
+          : 'Public mode is currently the cleaner path because visible balance is more ready than note preparation.',
+        recentCounterpartyTouch
+          ? 'This recipient already appears in your recent activity, which lowers lookup uncertainty.'
+          : 'This recipient has not appeared in your recent activity yet, so double-check the identifier before sending.',
+      ],
     };
   }
 
@@ -1707,6 +1927,27 @@ export class UsersService {
       return 'Executing on-chain';
     }
     return 'Swap updated';
+  }
+
+  private async resolveRecipientPreview(recipientIdentifier: string) {
+    const looksLikePublicKey = recipientIdentifier.startsWith('G') && recipientIdentifier.length === 56;
+    const byUsername = looksLikePublicKey ? null : await this.findByUsername(recipientIdentifier);
+    const byPublicKey = looksLikePublicKey ? await this.findByStellarPublicKey(recipientIdentifier) : null;
+    const resolvedUser = byUsername ?? byPublicKey;
+
+    return {
+      identifier: recipientIdentifier,
+      resolved: !!resolvedUser || looksLikePublicKey,
+      type: resolvedUser ? 'user' : looksLikePublicKey ? 'public_key' : 'unknown',
+      username: resolvedUser?.username,
+      stellarPublicKey: resolvedUser?.stellarPublicKey ?? (looksLikePublicKey ? recipientIdentifier : undefined),
+      reputation: resolvedUser?.reputation ?? null,
+      displayLabel: resolvedUser?.username
+        ? `@${resolvedUser.username}`
+        : looksLikePublicKey
+          ? `${recipientIdentifier.slice(0, 6)}...${recipientIdentifier.slice(-6)}`
+          : recipientIdentifier,
+    };
   }
 
   private classifyHistoryFailure(entry: {

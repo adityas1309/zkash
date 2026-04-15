@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/comm
 import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { SessionAuthGuard } from '../auth/guards/session.guard';
-import { BalanceActionDto, SendPaymentDto, SponsorshipPreviewDto } from '../common/dto/wallet.dto';
+import { BalanceActionDto, SendPaymentDto, SendPreviewDto, SponsorshipPreviewDto } from '../common/dto/wallet.dto';
 import { failureResponse, successResponse } from '../common/responses/transaction-response';
 
 @Controller('users')
@@ -54,6 +54,13 @@ export class UsersController {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async getWalletWorkspace(@Req() req: any) {
     return this.usersService.getWalletWorkspace(req.user._id);
+  }
+
+  @Get('send/workspace')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getSendWorkspace(@Req() req: any) {
+    return this.usersService.getSendWorkspace(req.user._id);
   }
 
   @Post('trustline')
@@ -193,6 +200,13 @@ export class UsersController {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async previewSponsorship(@Req() req: any, @Body() body: SponsorshipPreviewDto) {
     return this.usersService.previewSponsorship(req.user._id, body);
+  }
+
+  @Post('send/preview')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async previewSend(@Req() req: any, @Body() body: SendPreviewDto) {
+    return this.usersService.previewSend(req.user._id, body);
   }
 
   @Get('history')

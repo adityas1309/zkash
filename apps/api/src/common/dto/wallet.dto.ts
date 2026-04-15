@@ -65,3 +65,19 @@ export class SponsorshipPreviewDto {
   @IsString()
   recipient?: string;
 }
+
+export class SendPreviewDto {
+  @IsString()
+  @IsNotEmpty()
+  recipient: string;
+
+  @IsEnum(WalletAsset)
+  asset: WalletAsset;
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @IsPositive()
+  @Min(0.0000001)
+  @Max(1000000)
+  amount: number;
+}
