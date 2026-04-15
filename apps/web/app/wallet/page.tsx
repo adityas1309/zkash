@@ -8,6 +8,7 @@ import {
   Clock3,
   Droplet,
   ExternalLink,
+  Flag,
   Globe,
   Landmark,
   RefreshCw,
@@ -432,18 +433,27 @@ export default function WalletPage() {
               </Badge>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Link
-                href="/dashboard"
-                className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 transition hover:border-indigo-500 hover:bg-indigo-500/10"
-              >
-                <Send className="h-6 w-6 text-white" />
-                <p className="mt-3 font-medium text-white">Send Funds</p>
-                <p className="mt-1 text-xs leading-5 text-slate-400">Open the main transfer workspace.</p>
-              </Link>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Link
+                  href="/dashboard"
+                  className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 transition hover:border-indigo-500 hover:bg-indigo-500/10"
+                >
+                  <Send className="h-6 w-6 text-white" />
+                  <p className="mt-3 font-medium text-white">Send Funds</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">Open the main transfer workspace.</p>
+                </Link>
 
-              <button
-                onClick={handleXlmFaucet}
+                <Link
+                  href="/wallet/fund"
+                  className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 transition hover:border-amber-500 hover:bg-amber-500/10"
+                >
+                  <Flag className="h-6 w-6 text-white" />
+                  <p className="mt-3 font-medium text-white">Funding Desk</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">Open the staged setup workspace for faucet, trustline, and private seeding.</p>
+                </Link>
+
+                <button
+                  onClick={handleXlmFaucet}
                 disabled={faucetLoading}
                 className="rounded-2xl border border-slate-700 bg-slate-950/70 p-4 text-left transition hover:border-cyan-500 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >

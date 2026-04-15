@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -80,4 +81,13 @@ export class SendPreviewDto {
   @Min(0.0000001)
   @Max(1000000)
   amount: number;
+}
+
+export class FundingPlanDto {
+  @IsEnum(WalletAsset)
+  asset: WalletAsset;
+
+  @IsString()
+  @IsIn(['public_send', 'private_flow', 'swap_readiness', 'fiat_sell'])
+  target: 'public_send' | 'private_flow' | 'swap_readiness' | 'fiat_sell';
 }
