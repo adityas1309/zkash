@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/guards/session.guard';
-import { CreateOrderDto, SellFiatDto } from './dto/create-order.dto';
+import { CreateOrderDto, FiatPlanDto, SellFiatDto } from './dto/create-order.dto';
 import { VerifyPaymentDto } from './dto/verify-payment.dto';
 import { FiatService } from './fiat.service';
 
@@ -15,6 +15,12 @@ export class FiatController {
   }
 
   @UseGuards(SessionAuthGuard)
+  @Get('planning-workspace')
+  async getPlanningWorkspace(@Req() req: any) {
+    return this.fiatService.getPlanningWorkspace(req.user);
+  }
+
+  @UseGuards(SessionAuthGuard)
   @Post('preview-buy')
   async previewBuy(@Req() req: any, @Body() dto: CreateOrderDto) {
     return this.fiatService.previewBuy(req.user, dto);
@@ -24,6 +30,12 @@ export class FiatController {
   @Post('preview-sell')
   async previewSell(@Req() req: any, @Body() dto: SellFiatDto) {
     return this.fiatService.previewSell(req.user, dto);
+  }
+
+  @UseGuards(SessionAuthGuard)
+  @Post('plan')
+  async plan(@Req() req: any, @Body() dto: FiatPlanDto) {
+    return this.fiatService.planTrade(req.user, dto);
   }
 
   @UseGuards(SessionAuthGuard)

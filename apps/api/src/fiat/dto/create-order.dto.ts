@@ -41,3 +41,26 @@ export class SellFiatDto {
   @Type(() => BankAccountDetailsDto)
   accountDetails: BankAccountDetailsDto;
 }
+
+export class FiatPlanDto {
+  @IsString()
+  @IsIn(['buy', 'sell'])
+  action: 'buy' | 'sell';
+
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @IsPositive()
+  @Min(0.1)
+  @Max(1000000)
+  amount: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['public', 'zk'])
+  mode?: 'public' | 'zk';
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => BankAccountDetailsDto)
+  accountDetails?: BankAccountDetailsDto;
+}
