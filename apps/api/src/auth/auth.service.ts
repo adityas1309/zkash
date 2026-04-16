@@ -70,6 +70,95 @@ export interface AuthWorkspaceView {
   };
 }
 
+export interface AccountWorkspaceView {
+  session: {
+    authenticated: boolean;
+    provider: 'google';
+    network: {
+      mode: 'testnet' | 'mainnet';
+      label: string;
+    };
+    readiness: AuthWorkspaceView['readiness'];
+    memberSince?: string;
+  };
+  profile: {
+    id: string;
+    email: string;
+    username: string;
+    stellarPublicKey: string;
+    stellarKeyPreview: string;
+    reputation: number;
+  };
+  wallet: {
+    public: {
+      xlm: string;
+      usdc: string;
+      hasXlm: boolean;
+      hasUsdcTrustline: boolean;
+    };
+    private: {
+      xlm: string;
+      usdc: string;
+      hasShieldedBalance: boolean;
+    };
+    pendingWithdrawals: number;
+    composition: {
+      publicValueSignals: string[];
+      privateValueSignals: string[];
+    };
+  };
+  operations: {
+    status: 'ready' | 'degraded';
+    trackedPools: number;
+    laggingPools: number;
+    laggingPoolLabels: string[];
+    summary: string;
+  };
+  activity: {
+    total: number;
+    completed: number;
+    pending: number;
+    failed: number;
+    privateFlows: number;
+    sponsored: number;
+    velocity: {
+      last24h: {
+        total: number;
+        successful: number;
+        pending: number;
+      };
+      last7d: {
+        total: number;
+        successful: number;
+        dailyAverage: number;
+      };
+      momentum: string;
+    };
+    latestTitles: string[];
+  };
+  safety: {
+    checklist: AuthWorkspaceChecklistItem[];
+    recoveryActions: string[];
+    keyMaterial: Array<{
+      id: string;
+      label: string;
+      status: 'ready' | 'attention';
+      detail: string;
+    }>;
+  };
+  routes: Array<{
+    id: string;
+    label: string;
+    href: string;
+    readiness: 'ready' | 'attention' | 'blocked';
+    detail: string;
+  }>;
+  dangerZone: {
+    deleteConfirmationLabel: string;
+    deleteWarning: string[];
+  };
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -358,6 +447,197 @@ export class AuthService {
           available: true,
           url: 'https://faucet.circle.com/?network=stellar-testnet',
         },
+      },
+    };
+  }
+
+  async getAccountWorkspace(userId: string): Promise<AccountWorkspaceView> {
+    const [authWorkspace, walletWorkspace, historyWorkspace, ready, user] = await Promise.all([
+      this.getAuthWorkspace(userId),
+      this.usersService.getWalletWorkspace(userId),
+      this.usersService.getHistoryWorkspace(userId),
+      this.opsService.getReadiness(),
+      this.findById(userId),
+    ]);
+
+    if (!user || !authWorkspace.user) {
+      throw new Error('User not found');
+    }
+
+    const laggingPoolLabels = ready.lagging.map((pool) => pool.poolAddress ?? 'pool');
+    const publicSignals = [
+      Number(walletWorkspace.balances.public.xlm || 0) > 0
+        ? `Visible XLM already covers fees at ${walletWorkspace.balances.public.xlm}.`
+        : 'Visible XLM is still missing, so fees and setup actions remain fragile.',
+      Number(walletWorkspace.balances.public.usdc || 0) > 0
+        ? `Visible USDC balance is live at ${walletWorkspace.balances.public.usdc}.`
+        : authWorkspace.wallet.public.hasUsdcTrustline
+          ? 'USDC trustline appears ready, but stablecoin liquidity has not been funded yet.'
+          : 'USDC is still blocked on trustline or funding readiness.',
+    ];
+    const privateSignals = [
+      Number(walletWorkspace.balances.private.xlm || 0) > 0 || Number(walletWorkspace.balances.private.usdc || 0) > 0
+        ? `Private balances are seeded with ${walletWorkspace.balances.private.xlm} XLM and ${walletWorkspace.balances.private.usdc} USDC.`
+        : 'No shielded balance exists yet, so private sends and exact-note planning remain gated.',
+      walletWorkspace.pending.count > 0
+        ? `${walletWorkspace.pending.count} withdrawals are still queued for public settlement.`
+        : 'No pending withdrawals are waiting on public settlement.',
+    ];
+
+    const routeReadiness = [
+      {
+        id: 'wallet',
+        label: 'Wallet workspace',
+        href: '/wallet',
+        readiness: authWorkspace.wallet.public.hasXlm ? 'ready' as const : 'attention' as const,
+        detail: authWorkspace.wallet.public.hasXlm
+          ? 'Wallet controls are funded and ready for balance management.'
+          : 'Open wallet first to fund XLM and stabilize setup.',
+      },
+      {
+        id: 'funding',
+        label: 'Funding desk',
+        href: '/wallet/fund',
+        readiness: authWorkspace.wallet.public.hasXlm && authWorkspace.wallet.public.hasUsdcTrustline
+          ? 'ready' as const
+          : authWorkspace.wallet.public.hasXlm
+            ? 'attention' as const
+            : 'blocked' as const,
+        detail: authWorkspace.wallet.public.hasXlm && authWorkspace.wallet.public.hasUsdcTrustline
+          ? 'Funding prerequisites are mostly complete, so the desk is now about optimization.'
+          : 'Funding desk is the next stop for trustline, faucet, and private seeding work.',
+      },
+      {
+        id: 'status',
+        label: 'Status workspace',
+        href: '/status',
+        readiness: ready.status === 'ready' ? 'ready' as const : 'attention' as const,
+        detail: ready.status === 'ready'
+          ? 'Operational surfaces are healthy and safe to monitor.'
+          : 'Use status to inspect lagging pools and degraded readiness.',
+      },
+      {
+        id: 'history',
+        label: 'History desk',
+        href: '/history',
+        readiness: historyWorkspace.summary.total > 0 ? 'ready' as const : 'attention' as const,
+        detail: historyWorkspace.summary.total > 0
+          ? 'History already has enough signal to investigate activity patterns.'
+          : 'History will become more useful after your first funded or private actions.',
+      },
+      {
+        id: 'swap',
+        label: 'Swap market',
+        href: '/swap',
+        readiness: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
+          ? 'attention' as const
+          : 'blocked' as const,
+        detail: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
+          ? 'You can inspect markets now, but deeper execution improves after funding and note prep.'
+          : 'Swap routes are still blocked by missing wallet setup.',
+      },
+      {
+        id: 'fiat',
+        label: 'Fiat desk',
+        href: '/fiat',
+        readiness: authWorkspace.wallet.public.hasXlm ? 'attention' as const : 'blocked' as const,
+        detail: authWorkspace.wallet.public.hasXlm
+          ? 'Fiat planning is reachable, but route quality improves with more visible liquidity.'
+          : 'Fiat planning should wait until the public wallet is funded.',
+      },
+    ];
+
+    return {
+      session: {
+        authenticated: true,
+        provider: 'google',
+        network: authWorkspace.network,
+        readiness: authWorkspace.readiness,
+        memberSince: (user as any).createdAt ? new Date((user as any).createdAt).toISOString() : undefined,
+      },
+      profile: {
+        id: user._id.toString(),
+        email: user.email,
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        stellarKeyPreview: `${user.stellarPublicKey.slice(0, 6)}...${user.stellarPublicKey.slice(-6)}`,
+        reputation: user.reputation ?? 0,
+      },
+      wallet: {
+        public: authWorkspace.wallet.public,
+        private: authWorkspace.wallet.private,
+        pendingWithdrawals: walletWorkspace.pending.count,
+        composition: {
+          publicValueSignals: publicSignals,
+          privateValueSignals: privateSignals,
+        },
+      },
+      operations: {
+        status: authWorkspace.ops.status,
+        trackedPools: authWorkspace.ops.trackedPools,
+        laggingPools: authWorkspace.ops.laggingPools,
+        laggingPoolLabels,
+        summary:
+          authWorkspace.ops.status === 'ready'
+            ? `${authWorkspace.ops.trackedPools} tracked pools are healthy with no lagging sync lanes.`
+            : `${authWorkspace.ops.laggingPools} pool lanes are lagging, so private balance and audit freshness may be delayed.`,
+      },
+      activity: {
+        total: historyWorkspace.summary.total,
+        completed: historyWorkspace.summary.completed,
+        pending: historyWorkspace.summary.pending,
+        failed: historyWorkspace.summary.failed,
+        privateFlows: historyWorkspace.summary.privateFlows,
+        sponsored: historyWorkspace.summary.sponsored,
+        velocity: historyWorkspace.velocity,
+        latestTitles: historyWorkspace.latestEntries.slice(0, 5).map((entry: any) => entry.title),
+      },
+      safety: {
+        checklist: authWorkspace.checklist,
+        recoveryActions: [
+          ...authWorkspace.nextActions,
+          walletWorkspace.pending.count > 0
+            ? 'Process queued withdrawals to bring pending private funds back into the visible wallet.'
+            : 'Withdrawal queue is clear, so recovery effort can stay focused on new funding and trustline work.',
+          ready.status !== 'ready'
+            ? 'Open the status workspace before assuming new private activity has been fully indexed.'
+            : 'Indexer and sponsorship readiness are healthy enough for normal product use.',
+        ].slice(0, 5),
+        keyMaterial: [
+          {
+            id: 'google',
+            label: 'Google-linked session',
+            status: user.googleId ? 'ready' : 'attention',
+            detail: user.googleId
+              ? 'The account is linked to a Google identity that can derive wallet decryption material.'
+              : 'Google identity link is missing, which would break normal key recovery.',
+          },
+          {
+            id: 'stellar',
+            label: 'Stellar signing key',
+            status: user.stellarSecretKeyEncrypted ? 'ready' : 'attention',
+            detail: user.stellarSecretKeyEncrypted
+              ? 'The Stellar signing key is stored in encrypted form and used only for authenticated wallet actions.'
+              : 'Encrypted Stellar key material is missing.',
+          },
+          {
+            id: 'zk',
+            label: 'Shielded note keys',
+            status: user.zkSpendingKeyEncrypted && user.zkViewKeyEncrypted ? 'ready' : 'attention',
+            detail: user.zkSpendingKeyEncrypted && user.zkViewKeyEncrypted
+              ? 'Spending and viewing keys are provisioned for private-flow note access.'
+              : 'One or more private-flow keys are missing.',
+          },
+        ],
+      },
+      routes: routeReadiness,
+      dangerZone: {
+        deleteConfirmationLabel: user.username,
+        deleteWarning: [
+          'Deleting the account removes the mapped user record and ends the current session immediately.',
+          'This action is intended for personal testnet cleanup and should only be used when you truly want to remove the account.',
+          'Type your username exactly before the delete endpoint will execute.',
+        ],
       },
     };
   }

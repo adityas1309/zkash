@@ -1,8 +1,9 @@
-import { Controller, Get, Req, Res, UseGuards, Logger } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, Res, UseGuards, Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SessionAuthGuard } from './guards/session.guard';
+import { DeleteAccountDto } from '../common/dto/auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -12,6 +13,12 @@ export class AuthController {
   @Get('workspace')
   async workspace(@Req() req: any) {
     return this.authService.getAuthWorkspace(req.user?._id?.toString());
+  }
+
+  @Get('account/workspace')
+  @UseGuards(SessionAuthGuard)
+  async accountWorkspace(@Req() req: any) {
+    return this.authService.getAccountWorkspace(req.user._id.toString());
   }
 
   @Get('google')
@@ -83,5 +90,35 @@ export class AuthController {
         res.redirect('/');
       });
     });
+  }
+
+  @Post('delete-me')
+  @UseGuards(SessionAuthGuard)
+  async deleteMeConfirmed(@Req() req: any, @Body() body: DeleteAccountDto) {
+    const expected = String(req.user.username ?? '').trim().toLowerCase();
+    const provided = String(body.confirmation ?? '').trim().toLowerCase();
+
+    if (!expected || provided !== expected) {
+      return {
+        success: false,
+        error: `Type ${req.user.username} exactly to confirm account deletion.`,
+      };
+    }
+
+    await this.authService.deleteUser(req.user._id);
+
+    await new Promise<void>((resolve) => {
+      req.logout(() => resolve());
+    });
+
+    await new Promise<void>((resolve) => {
+      req.session?.destroy(() => resolve());
+    });
+
+    return {
+      success: true,
+      deleted: true,
+      redirectTo: '/',
+    };
   }
 }

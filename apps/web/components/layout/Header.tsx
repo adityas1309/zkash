@@ -63,6 +63,14 @@ export function Header() {
           {!loading &&
             (user ? (
               <div className="flex items-center gap-3">
+                <Link href="/account">
+                  <Button
+                    size="sm"
+                    className="hidden sm:flex rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
+                  >
+                    Account
+                  </Button>
+                </Link>
                 <Link href="/status">
                   <Button
                     size="sm"
