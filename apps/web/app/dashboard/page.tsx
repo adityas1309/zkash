@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRightLeft,
+  Bolt,
   CheckCircle,
   ChevronLeft,
   Copy,
@@ -808,6 +809,12 @@ export default function DashboardPage() {
             <Button variant="ghost">
               <History className="mr-2 h-4 w-4" />
               Activity Timeline
+            </Button>
+          </Link>
+          <Link href="/actions">
+            <Button variant="ghost">
+              <Bolt className="mr-2 h-4 w-4" />
+              Action Center
             </Button>
           </Link>
           <Link href="/">

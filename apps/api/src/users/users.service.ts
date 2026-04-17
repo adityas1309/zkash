@@ -17,6 +17,7 @@ import { ProofService } from '../zk/proof.service';
 import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.context';
 import { MetricsService } from '../ops/metrics.service';
+import { OpsService } from '../ops/ops.service';
 import { AppLoggerService } from '../common/logging/app-logger.service';
 import { SendPreviewDto, SponsorshipPreviewDto, WalletAsset } from '../common/dto/wallet.dto';
 import { SponsorshipService } from '../sponsorship/sponsorship.service';
@@ -44,6 +45,7 @@ export class UsersService {
     private proofService: ProofService,
     private merkleTree: MerkleTreeService,
     private metrics: MetricsService,
+    private opsService: OpsService,
     private logger: AppLoggerService,
     private sponsorshipService: SponsorshipService,
     private transactionAuditService: TransactionAuditService,
@@ -1858,6 +1860,370 @@ export class UsersService {
       },
       latestEntries,
       timeline,
+    };
+  }
+
+  async getActionCenterWorkspace(userId: string) {
+    const [user, walletWorkspace, historyWorkspace, authWorkspace, readiness, recentSwaps, audits] = await Promise.all([
+      this.findById(userId),
+      this.getWalletWorkspace(userId),
+      this.getHistoryWorkspace(userId),
+      this.authService.getAuthWorkspace(userId),
+      this.opsService.getReadiness(),
+      this.swapModel
+        .find({ $or: [{ aliceId: new Types.ObjectId(userId) }, { bobId: new Types.ObjectId(userId) }] })
+        .populate('aliceId', 'username')
+        .populate('bobId', 'username')
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .limit(24)
+        .lean()
+        .exec(),
+      this.transactionAuditService.listRecentForUser(userId, 24),
+    ]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const priorities: Array<{
+      id: string;
+      severity: 'critical' | 'caution' | 'info';
+      lane: 'wallet' | 'private' | 'market' | 'ops' | 'history';
+      label: string;
+      detail: string;
+      href: string;
+      cta: string;
+      status: string;
+    }> = [];
+
+    if (!authWorkspace.wallet.public.hasXlm) {
+      priorities.push({
+        id: 'fund-xlm',
+        severity: 'critical',
+        lane: 'wallet',
+        label: 'Fund visible XLM before doing anything else',
+        detail:
+          'The public wallet still has no XLM, which means trustline setup, public sends, deposits, and recovery actions all stay fee-blocked.',
+        href: '/wallet/fund',
+        cta: 'Open funding desk',
+        status: 'missing_xlm',
+      });
+    }
+
+    if (!authWorkspace.wallet.public.hasUsdcTrustline) {
+      priorities.push({
+        id: 'trustline',
+        severity: authWorkspace.wallet.public.hasXlm ? 'caution' : 'info',
+        lane: 'wallet',
+        label: 'Enable the USDC trustline',
+        detail:
+          'Stablecoin routes remain fragile until the public wallet can actually hold USDC. This is the main setup step after XLM funding.',
+        href: '/wallet/fund',
+        cta: 'Prepare trustline',
+        status: 'missing_trustline',
+      });
+    }
+
+    if (!authWorkspace.wallet.private.hasShieldedBalance) {
+      priorities.push({
+        id: 'private-seed',
+        severity: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.public.hasUsdcTrustline ? 'caution' : 'info',
+        lane: 'private',
+        label: 'Seed the first private balance',
+        detail:
+          'Private sends, note splitting, and shielded swap execution all feel blocked until at least one deposit has created a real shielded note.',
+        href: '/wallet/fund',
+        cta: 'Plan first deposit',
+        status: 'private_unseeded',
+      });
+    }
+
+    if (walletWorkspace.pending.count > 0) {
+      priorities.push({
+        id: 'pending-withdrawals',
+        severity: walletWorkspace.pending.count >= 3 ? 'critical' : 'caution',
+        lane: 'private',
+        label: 'Clear the pending withdrawal queue',
+        detail: `${walletWorkspace.pending.count} withdrawal items are still waiting to be surfaced publicly, which makes balances and history feel stale.`,
+        href: '/wallet',
+        cta: 'Process queue',
+        status: 'pending_withdrawals',
+      });
+    }
+
+    if (readiness.status !== 'ready') {
+      priorities.push({
+        id: 'ops-lag',
+        severity: readiness.lagging.length > 1 ? 'critical' : 'caution',
+        lane: 'ops',
+        label: 'Operational lag is affecting freshness',
+        detail:
+          readiness.lagging.length > 0
+            ? `${readiness.lagging.length} tracked pool lanes are degraded, so note visibility, audit freshness, or private readiness can take longer than expected.`
+            : 'The readiness surface is degraded even though no lagging lane summary was returned.',
+        href: '/status',
+        cta: 'Inspect status',
+        status: 'ops_degraded',
+      });
+    }
+
+    const topFailureBucket = historyWorkspace.failureBuckets[0];
+    if (topFailureBucket?.count) {
+      priorities.push({
+        id: `failure-${topFailureBucket.key}`,
+        severity: topFailureBucket.count >= 3 ? 'critical' : 'caution',
+        lane: 'history',
+        label: 'Review repeated blockers in recent history',
+        detail: `${topFailureBucket.label} has appeared ${topFailureBucket.count} time(s), so it is now one of the main sources of friction in the current session history.`,
+        href: '/history',
+        cta: 'Open history desk',
+        status: topFailureBucket.key,
+      });
+    }
+
+    const swapSummaries = recentSwaps.map((swap: any) => {
+      const participantRole =
+        String(swap.aliceId?._id ?? swap.aliceId) === userId
+          ? 'alice'
+          : String(swap.bobId?._id ?? swap.bobId) === userId
+            ? 'bob'
+            : 'observer';
+      const counterparty =
+        participantRole === 'alice'
+          ? swap.bobId?.username
+          : participantRole === 'bob'
+            ? swap.aliceId?.username
+            : undefined;
+
+      let action: string;
+      let urgency: 'critical' | 'caution' | 'info';
+      let detail: string;
+      let href = `/swap/${swap._id}`;
+
+      if (swap.status === 'requested' && participantRole === 'bob') {
+        action = 'Accept buyer request';
+        urgency = 'caution';
+        detail = 'A buyer has already requested this swap and it still needs seller acceptance before any proof or settlement work can begin.';
+      } else if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_bob' && participantRole === 'bob') {
+        action = 'Prepare seller proof';
+        urgency = 'critical';
+        detail = 'The buyer side is already waiting on the seller proof, so this private swap cannot progress until an exact-value note is prepared.';
+      } else if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_alice' && participantRole === 'alice') {
+        action = 'Prepare buyer proof';
+        urgency = 'critical';
+        detail = 'The seller side is already waiting on the buyer proof, so this private swap still needs the initiating side to finish note preparation.';
+      } else if (swap.status === 'proofs_ready') {
+        action = 'Execute private swap';
+        urgency = 'critical';
+        detail = 'Both proofs are ready, so this swap is now blocked on someone actually finalizing private execution.';
+      } else if (swap.status === 'executing') {
+        action = 'Watch active execution';
+        urgency = 'info';
+        detail = 'This swap is already in execution, so the right next step is status monitoring rather than another user action.';
+      } else if (swap.status === 'failed') {
+        action = 'Review failed swap';
+        urgency = 'critical';
+        detail = swap.lastError || 'A recent swap failed and should be reviewed before more market flow is accepted.';
+      } else {
+        action = 'Inspect swap lifecycle';
+        urgency = 'info';
+        detail = 'This swap has meaningful lifecycle signal, but no immediate intervention is required.';
+      }
+
+      return {
+        id: String(swap._id),
+        participantRole,
+        counterparty,
+        status: swap.status,
+        proofStatus: swap.proofStatus,
+        executionStatus: swap.executionStatus,
+        amountIn: Number(swap.amountIn) || 0,
+        amountOut: Number(swap.amountOut) || 0,
+        action,
+        urgency,
+        detail,
+        href,
+        updatedAt: swap.updatedAt ? new Date(swap.updatedAt).toISOString() : undefined,
+      };
+    });
+
+    const urgentSwapItems = swapSummaries.filter((swap) => swap.urgency !== 'info').slice(0, 3);
+    for (const swap of urgentSwapItems) {
+      priorities.push({
+        id: `swap-${swap.id}`,
+        severity: swap.urgency,
+        lane: 'market',
+        label: swap.action,
+        detail: swap.detail,
+        href: swap.href,
+        cta: 'Open swap',
+        status: swap.status,
+      });
+    }
+
+    const orderedPriorities = priorities.sort((left, right) => {
+      const severityRank = { critical: 0, caution: 1, info: 2 };
+      return severityRank[left.severity] - severityRank[right.severity];
+    });
+
+    const quickWins = [
+      !authWorkspace.wallet.public.hasXlm ? 'Use Friendbot to fund visible XLM before trying trustlines or deposits.' : undefined,
+      !authWorkspace.wallet.public.hasUsdcTrustline && authWorkspace.wallet.public.hasXlm
+        ? 'Add the USDC trustline so stablecoin funding and swap routes stop failing at the wallet layer.'
+        : undefined,
+      walletWorkspace.pending.count > 0 ? 'Process queued withdrawals to get delayed private funds back into visible balances.' : undefined,
+      !authWorkspace.wallet.private.hasShieldedBalance && (authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.public.hasUsdcTrustline)
+        ? 'Make the first deposit into the shielded pool so private send and private swap routes become realistic.'
+        : undefined,
+      topFailureBucket ? `Review ${topFailureBucket.label.toLowerCase()} in history before repeating the same action path.` : undefined,
+      readiness.status !== 'ready' ? 'Check status before assuming a balance or note issue is your fault instead of an indexing delay.' : undefined,
+    ].filter(Boolean);
+
+    const routeCards = [
+      {
+        id: 'funding',
+        label: 'Funding desk',
+        href: '/wallet/fund',
+        readiness: !authWorkspace.wallet.public.hasXlm ? 'critical' : !authWorkspace.wallet.public.hasUsdcTrustline ? 'caution' : 'ready',
+        detail: 'Handle faucet funding, trustline preparation, and the first private-balance seeding plan.',
+      },
+      {
+        id: 'wallet',
+        label: 'Wallet workspace',
+        href: '/wallet',
+        readiness: walletWorkspace.pending.count > 0 ? 'caution' : 'ready',
+        detail: 'Process pending withdrawals, inspect sponsorship, and manage public/private balances directly.',
+      },
+      {
+        id: 'send',
+        label: 'Send planner',
+        href: '/wallet/send',
+        readiness: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance ? 'ready' : 'caution',
+        detail: 'Preflight public or private transfers with route guidance instead of trial-and-error submissions.',
+      },
+      {
+        id: 'swap',
+        label: 'Swap desk',
+        href: '/swap/my',
+        readiness: urgentSwapItems.length > 0 ? 'critical' : swapSummaries.length > 0 ? 'caution' : 'info',
+        detail: 'Handle requests, proofs, private execution, and failed market flows that are still waiting on action.',
+      },
+      {
+        id: 'history',
+        label: 'History desk',
+        href: '/history',
+        readiness: historyWorkspace.summary.failed > 0 ? 'caution' : 'ready',
+        detail: 'Use the timeline and failure buckets when the same issue is starting to repeat across recent actions.',
+      },
+      {
+        id: 'status',
+        label: 'Status workspace',
+        href: '/status',
+        readiness: readiness.status === 'ready' ? 'ready' : 'critical',
+        detail: 'Inspect lagging pools and operational freshness before blaming the wallet or market layer.',
+      },
+      {
+        id: 'account',
+        label: 'Account center',
+        href: '/account',
+        readiness: 'info',
+        detail: 'Review identity, session state, and guarded account controls without leaving the workspace flow.',
+      },
+    ];
+
+    const blockerFeed = [
+      ...historyWorkspace.actionQueue.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        detail: item.detail,
+        lane: item.category,
+        state: item.state,
+        href:
+          item.category === 'swap'
+            ? '/swap/my'
+            : item.category === 'private'
+              ? '/wallet'
+              : '/history',
+      })),
+      ...swapSummaries
+        .filter((swap) => swap.urgency !== 'info')
+        .slice(0, 4)
+        .map((swap) => ({
+          id: `swap-blocker-${swap.id}`,
+          title: swap.action,
+          detail: swap.detail,
+          lane: 'market',
+          state: swap.status,
+          href: swap.href,
+        })),
+      ...audits
+        .filter((audit: any) => audit.state === 'failed' || audit.state === 'retryable')
+        .slice(0, 4)
+        .map((audit: any) => ({
+          id: `audit-${audit._id}`,
+          title: this.describeAuditTitle(String(audit.operation ?? 'activity')),
+          detail: audit.error || audit.indexingDetail || 'This audit record still needs follow-up.',
+          lane: String(audit.operation ?? '').startsWith('swap') ? 'market' : 'history',
+          state: audit.state,
+          href: String(audit.operation ?? '').startsWith('swap') ? '/swap/my' : '/history',
+        })),
+    ].slice(0, 12);
+
+    const marketSummary = {
+      total: swapSummaries.length,
+      requested: swapSummaries.filter((swap) => swap.status === 'requested').length,
+      proofsPending: swapSummaries.filter((swap) => swap.status === 'proofs_pending').length,
+      proofsReady: swapSummaries.filter((swap) => swap.status === 'proofs_ready').length,
+      executing: swapSummaries.filter((swap) => swap.status === 'executing').length,
+      failed: swapSummaries.filter((swap) => swap.status === 'failed').length,
+      completed: swapSummaries.filter((swap) => swap.status === 'completed').length,
+    };
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        totalPriorities: orderedPriorities.length,
+        critical: orderedPriorities.filter((item) => item.severity === 'critical').length,
+        caution: orderedPriorities.filter((item) => item.severity === 'caution').length,
+        quickWins: quickWins.length,
+      },
+      lanes: {
+        wallet: {
+          publicXlm: walletWorkspace.balances.public.xlm,
+          publicUsdc: walletWorkspace.balances.public.usdc,
+          privateXlm: walletWorkspace.balances.private.xlm,
+          privateUsdc: walletWorkspace.balances.private.usdc,
+          pendingWithdrawals: walletWorkspace.pending.count,
+          hasUsdcTrustline: authWorkspace.wallet.public.hasUsdcTrustline,
+          hasPrivateBalance: authWorkspace.wallet.private.hasShieldedBalance,
+        },
+        activity: {
+          total: historyWorkspace.summary.total,
+          pending: historyWorkspace.summary.pending,
+          failed: historyWorkspace.summary.failed,
+          privateFlows: historyWorkspace.summary.privateFlows,
+          sponsored: historyWorkspace.summary.sponsored,
+          momentum: historyWorkspace.velocity.momentum,
+        },
+        market: marketSummary,
+        ops: {
+          status: readiness.status,
+          trackedPools: readiness.counts.trackedPools,
+          laggingPools: readiness.lagging.length,
+          laggingPoolAddresses: readiness.lagging.map((item: any) => item.poolAddress),
+        },
+      },
+      priorities: orderedPriorities.slice(0, 8),
+      quickWins,
+      routeCards,
+      swapQueue: swapSummaries.slice(0, 10),
+      blockerFeed,
+      latestTitles: historyWorkspace.latestEntries.slice(0, 6).map((entry: any) => entry.title),
+      updatedAt: new Date().toISOString(),
     };
   }
 
