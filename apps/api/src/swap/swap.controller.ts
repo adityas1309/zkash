@@ -295,4 +295,21 @@ export class SwapController {
       });
     }
   }
+
+  @Get(':id/workspace')
+  @UseGuards(SessionAuthGuard)
+  async swapWorkspace(@Param('id') id: string, @Req() req: { user: { _id: Types.ObjectId } }) {
+    try {
+      return await this.swapService.getSwapWorkspaceForUser(id, req.user._id);
+    } catch (e) {
+      return failureResponse('swap_workspace', 'Failed to load swap workspace.', {
+        error: e instanceof Error ? e.message : String(e),
+        indexing: {
+          status: 'tracked',
+          detail: 'Workspace aggregation did not complete successfully.',
+        },
+        sponsorship: { attempted: false, sponsored: false },
+      });
+    }
+  }
 }

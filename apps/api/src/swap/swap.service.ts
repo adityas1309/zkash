@@ -841,6 +841,250 @@ export class SwapService {
     };
   }
 
+  async getSwapWorkspaceForUser(swapId: string, userId: Types.ObjectId) {
+    const status = await this.getSwapStatusForUser(swapId, userId);
+    if (!status) {
+      return null;
+    }
+
+    const swap = status.swap as any;
+    const offerId = swap.offerId?.toString?.() ?? swap.offerId;
+    const offer = offerId
+      ? await this.offerModel
+          .findById(offerId)
+          .populate('merchantId', 'username reputation')
+          .lean()
+          .exec()
+      : null;
+
+    const [viewerBalances, viewerPrivateBalances, recentSwaps] = await Promise.all([
+      this.usersService.getBalances(userId.toString()),
+      this.usersService.getPrivateBalance(userId.toString()),
+      this.getRecentActivityForUser(userId, 8),
+    ]);
+
+    const participantRole = status.participantRole;
+    const counterparty = participantRole === 'alice' ? swap.bobId : swap.aliceId;
+    const myFundingAsset: 'USDC' | 'XLM' =
+      participantRole === 'alice'
+        ? ((offer?.assetIn as 'USDC' | 'XLM') ?? 'XLM')
+        : ((offer?.assetOut as 'USDC' | 'XLM') ?? 'USDC');
+    const myFundingAmount = participantRole === 'alice' ? Number(swap.amountIn) || 0 : Number(swap.amountOut) || 0;
+    const publicFundingBalance = Number(
+      myFundingAsset === 'USDC' ? viewerBalances.usdc || 0 : viewerBalances.xlm || 0,
+    );
+    const privateFundingBalance = Number(
+      myFundingAsset === 'USDC' ? viewerPrivateBalances.usdc || 0 : viewerPrivateBalances.xlm || 0,
+    );
+
+    const proofRequirement = {
+      asset: myFundingAsset,
+      amount: myFundingAmount,
+      publicBalance: publicFundingBalance,
+      privateBalance: privateFundingBalance,
+      hasPublicFunding: publicFundingBalance >= myFundingAmount,
+      hasPrivateFunding: privateFundingBalance >= myFundingAmount,
+      exactProofLikely:
+        privateFundingBalance === myFundingAmount || privateFundingBalance >= myFundingAmount,
+    };
+
+    const routeMode = status.proofs.ready || swap.proofStatus === 'ready' || swap.status === 'proofs_pending'
+      ? 'private'
+      : 'public';
+
+    const actionBoard: Array<{
+      id: string;
+      severity: 'critical' | 'warning' | 'info';
+      title: string;
+      detail: string;
+      cta: string;
+      href?: string;
+      action: 'accept' | 'prepare_proof' | 'deposit' | 'execute_public' | 'execute_private' | 'wait';
+    }> = [];
+
+    if (swap.status === 'requested' && participantRole === 'bob') {
+      actionBoard.push({
+        id: 'accept-request',
+        severity: 'critical',
+        title: 'Accept the buyer request',
+        detail: 'The buyer is blocked until the seller accepts and the lifecycle moves into proof collection or execution.',
+        cta: 'Accept request',
+        action: 'accept',
+      });
+    }
+
+    if (swap.status === 'proofs_pending' && !swap.myProofSubmitted && routeMode === 'private') {
+      actionBoard.push({
+        id: 'prepare-proof',
+        severity: 'critical',
+        title: `Prepare an exact ${myFundingAmount} ${myFundingAsset} proof`,
+        detail:
+          proofRequirement.hasPrivateFunding
+            ? 'You have enough private balance to attempt proof preparation, but exact-note shape may still require splitting.'
+            : 'Private balance is not ready for this proof amount yet, so deposit or note preparation will be needed first.',
+        cta: proofRequirement.hasPrivateFunding ? 'Prepare proof' : 'Fund private balance',
+        href: proofRequirement.hasPrivateFunding ? undefined : '/wallet/fund',
+        action: proofRequirement.hasPrivateFunding ? 'prepare_proof' : 'deposit',
+      });
+    }
+
+    if (swap.status === 'proofs_ready') {
+      actionBoard.push({
+        id: 'execute-private',
+        severity: 'critical',
+        title: 'Finalize private execution',
+        detail: 'Both proofs are already present. The remaining blocker is an actual private execution submission.',
+        cta: 'Execute privately',
+        action: 'execute_private',
+      });
+    }
+
+    if (swap.status === 'executing') {
+      actionBoard.push({
+        id: 'watch-execution',
+        severity: 'info',
+        title: 'Monitor execution outcome',
+        detail: 'The swap is already executing, so the right next step is monitoring rather than submitting a new action.',
+        cta: 'Refresh status',
+        action: 'wait',
+      });
+    }
+
+    if (!actionBoard.length && participantRole === 'bob' && routeMode === 'public' && swap.status !== 'completed' && swap.status !== 'failed') {
+      actionBoard.push({
+        id: 'execute-public',
+        severity: 'warning',
+        title: 'Execute public settlement',
+        detail: 'Public settlement is controlled by the seller once both sides are operationally ready.',
+        cta: 'Execute publicly',
+        action: 'execute_public',
+      });
+    }
+
+    if (swap.status === 'failed') {
+      actionBoard.push({
+        id: 'review-failure',
+        severity: 'critical',
+        title: 'Review the failed lifecycle before retrying',
+        detail: swap.lastError || status.execution.lastError || 'A recent failure is stored in the swap execution state or audit trail.',
+        cta: 'Inspect audit trail',
+        href: '/history',
+        action: 'wait',
+      });
+    }
+
+    const routeSummary = {
+      recommendedMode:
+        swap.status === 'requested'
+          ? 'public'
+          : swap.proofStatus === 'ready' || swap.status === 'proofs_pending'
+            ? 'private'
+            : 'public',
+      public:
+        participantRole === 'bob'
+          ? 'Public settlement is available because the seller controls the final on-chain payment legs.'
+          : 'Public settlement depends on the seller accepting and executing the direct on-chain transfer.',
+      private:
+        'Private settlement depends on both parties producing exact-value proofs and then executing the shielded swap lifecycle cleanly.',
+    };
+
+    const offerHealth = offer
+      ? {
+          active: !!offer.active,
+          rate: Number(offer.rate) || 0,
+          min: Number(offer.min) || 0,
+          max: Number(offer.max) || 0,
+          merchant: {
+            username: (offer.merchantId as any)?.username,
+            reputation: (offer.merchantId as any)?.reputation ?? 0,
+          },
+        }
+      : null;
+
+    const journey = [
+      {
+        id: 'requested',
+        label: 'Request created',
+        status: swap.status === 'requested' ? 'active' : 'done',
+        detail: 'A buyer request is on record and waiting for acceptance or the next route decision.',
+      },
+      {
+        id: 'proofs',
+        label: 'Proof collection',
+        status:
+          swap.status === 'proofs_pending'
+            ? 'active'
+            : swap.status === 'proofs_ready' || swap.proofStatus === 'ready'
+              ? 'done'
+              : swap.status === 'requested'
+                ? 'pending'
+                : swap.status === 'failed'
+                  ? 'blocked'
+                  : 'pending',
+        detail: 'Private flow requires both parties to produce exact-value proofs tied to the swap route.',
+      },
+      {
+        id: 'execution',
+        label: 'Execution',
+        status:
+          swap.status === 'executing'
+            ? 'active'
+            : swap.status === 'completed'
+              ? 'done'
+              : swap.status === 'failed'
+                ? 'blocked'
+                : 'pending',
+        detail: 'The final settlement leg can be public or private depending on route and readiness.',
+      },
+      {
+        id: 'completion',
+        label: 'Completion and audit visibility',
+        status: swap.status === 'completed' ? 'done' : swap.status === 'failed' ? 'blocked' : 'pending',
+        detail: 'A finished swap should leave behind a clear tx hash or audit trail for both parties.',
+      },
+    ];
+
+    return {
+      swap: status.swap,
+      participantRole,
+      counterparty: {
+        username: counterparty?.username,
+        stellarPublicKey: counterparty?.stellarPublicKey,
+      },
+      proofs: status.proofs,
+      execution: status.execution,
+      audits: status.audits,
+      routeSummary,
+      proofRequirement,
+      offerHealth,
+      actionBoard,
+      journey,
+      viewerWallet: {
+        public: viewerBalances,
+        private: viewerPrivateBalances,
+      },
+      recentRelatedSwaps: recentSwaps.slice(0, 5).map((entry: any) => ({
+        id: entry._id,
+        status: entry.status,
+        proofStatus: entry.proofStatus,
+        executionStatus: entry.executionStatus,
+        amountIn: entry.amountIn,
+        amountOut: entry.amountOut,
+        participantRole: entry.participantRole,
+        createdAt: entry.createdAt,
+        txHash: entry.txHash,
+      })),
+      timestamps: {
+        createdAt: swap.createdAt,
+        acceptedAt: swap.acceptedAt,
+        proofsReadyAt: swap.proofsReadyAt,
+        completedAt: swap.completedAt,
+        failedAt: swap.failedAt,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   async getRecentActivityForUser(userId: Types.ObjectId, limit = 10) {
     const swaps = await this.swapModel
       .find({ $or: [{ aliceId: userId }, { bobId: userId }] })
