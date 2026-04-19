@@ -70,6 +70,13 @@ export class UsersController {
     return this.usersService.getActionCenterWorkspace(req.user._id);
   }
 
+  @Get('contacts/workspace')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getContactsWorkspace(@Req() req: any) {
+    return this.usersService.getContactsWorkspace(req.user._id);
+  }
+
   @Post('trustline')
   @UseGuards(SessionAuthGuard)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

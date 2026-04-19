@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Wallet, Repeat, Banknote, LogOut, UserCircle2, Wrench } from "lucide-react";
+import { Home, Wallet, Repeat, Banknote, LogOut, UserCircle2, Wrench, Users } from "lucide-react";
 
 export function FloatingBottomNav() {
   const pathname = usePathname();
@@ -17,6 +17,7 @@ export function FloatingBottomNav() {
     { name: "Wallet", href: "/wallet", icon: Wallet },
     { name: "Swap", href: "/swap", icon: Repeat },
     { name: "Fiat", href: "/fiat", icon: Banknote },
+    { name: "Contacts", href: "/contacts", icon: Users },
     { name: "Actions", href: "/actions", icon: Wrench },
     { name: "Account", href: "/account", icon: UserCircle2 },
   ];

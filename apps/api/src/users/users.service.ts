@@ -2227,6 +2227,248 @@ export class UsersService {
     };
   }
 
+  async getContactsWorkspace(userId: string) {
+    const [user, historyWorkspace, sendWorkspace, walletWorkspace, authWorkspace] = await Promise.all([
+      this.findById(userId),
+      this.getHistoryWorkspace(userId),
+      this.getSendWorkspace(userId),
+      this.getWalletWorkspace(userId),
+      this.authService.getAuthWorkspace(userId),
+    ]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const counterpartiesMap = new Map<
+      string,
+      {
+        counterparty: string;
+        interactions: number;
+        privateFlows: number;
+        swapFlows: number;
+        latestAt?: string | Date;
+        latestTitle?: string;
+        categories: Set<string>;
+        pendingTouches: number;
+        failedTouches: number;
+        sponsoredTouches: number;
+      }
+    >();
+
+    for (const entry of historyWorkspace.timeline as any[]) {
+      const counterparty = entry.participants?.counterparty;
+      if (!counterparty) {
+        continue;
+      }
+      const existing = counterpartiesMap.get(counterparty) ?? {
+        counterparty,
+        interactions: 0,
+        privateFlows: 0,
+        swapFlows: 0,
+        latestAt: entry.date,
+        latestTitle: entry.title,
+        categories: new Set<string>(),
+        pendingTouches: 0,
+        failedTouches: 0,
+        sponsoredTouches: 0,
+      };
+      existing.interactions += 1;
+      existing.privateFlows += entry.privateFlow ? 1 : 0;
+      existing.swapFlows += entry.category === 'swap' ? 1 : 0;
+      existing.categories.add(entry.category);
+      existing.pendingTouches += entry.state === 'pending' || entry.state === 'queued' ? 1 : 0;
+      existing.failedTouches += entry.state === 'failed' || entry.state === 'retryable' ? 1 : 0;
+      existing.sponsoredTouches += entry.sponsorship?.sponsored ? 1 : 0;
+      const currentLatest = existing.latestAt ? new Date(existing.latestAt).getTime() : 0;
+      const candidateLatest = entry.date ? new Date(entry.date).getTime() : 0;
+      if (candidateLatest >= currentLatest) {
+        existing.latestAt = entry.date;
+        existing.latestTitle = entry.title;
+      }
+      counterpartiesMap.set(counterparty, existing);
+    }
+
+    const contactCards = await Promise.all(
+      Array.from(counterpartiesMap.values())
+        .sort((left, right) => right.interactions - left.interactions)
+        .slice(0, 18)
+        .map(async (contact) => {
+          const userRecord = await this.findByUsername(contact.counterparty);
+          const publicKey = userRecord?.stellarPublicKey;
+          const preferredAsset =
+            contact.privateFlows >= contact.swapFlows && Number(walletWorkspace.balances.private.usdc || 0) > 0
+              ? 'USDC'
+              : Number(walletWorkspace.balances.public.xlm || 0) > 0
+                ? 'XLM'
+                : 'USDC';
+          const preview = await this.previewSend(userId, {
+            recipient: publicKey ?? contact.counterparty,
+            asset: preferredAsset as WalletAsset,
+            amount: 1,
+          }).catch(() => null);
+
+          const trustScore = Math.max(
+            5,
+            Math.min(
+              99,
+              Math.round(
+                contact.interactions * 8 +
+                  contact.privateFlows * 6 +
+                  contact.swapFlows * 7 -
+                  contact.failedTouches * 10 -
+                  contact.pendingTouches * 4 +
+                  contact.sponsoredTouches * 3,
+              ),
+            ),
+          );
+
+          const recommendedRoute =
+            preview?.recommendedMode ??
+            (contact.privateFlows > contact.interactions / 2 && authWorkspace.wallet.private.hasShieldedBalance
+              ? 'private'
+              : 'public');
+
+          const routeReadiness =
+            recommendedRoute === 'private'
+              ? preview?.routes?.private?.ready
+                ? 'ready'
+                : preview?.routes?.private?.available
+                  ? 'attention'
+                  : 'blocked'
+              : preview?.routes?.public?.ready
+                ? 'ready'
+                : preview?.routes?.public?.available
+                  ? 'attention'
+                  : 'blocked';
+
+          const notes = [
+            contact.privateFlows > 0
+              ? `${contact.privateFlows} prior private interaction(s) make shielded routing less surprising with this counterparty.`
+              : 'No private interactions are on record with this counterparty yet.',
+            contact.swapFlows > 0
+              ? `${contact.swapFlows} swap interaction(s) already exist, which gives this relationship richer market history than a plain send-only contact.`
+              : 'This relationship is mostly wallet-flow activity rather than market activity.',
+            contact.failedTouches > 0
+              ? `${contact.failedTouches} failure or retry touch(es) are in the history, so be careful repeating the same route blindly.`
+              : 'No failure-heavy pattern is visible in the tracked relationship history.',
+          ];
+
+          return {
+            counterparty: contact.counterparty,
+            username: userRecord?.username ?? contact.counterparty,
+            reputation: userRecord?.reputation ?? null,
+            stellarPublicKey: publicKey,
+            interactions: contact.interactions,
+            privateFlows: contact.privateFlows,
+            swapFlows: contact.swapFlows,
+            pendingTouches: contact.pendingTouches,
+            failedTouches: contact.failedTouches,
+            sponsoredTouches: contact.sponsoredTouches,
+            trustScore,
+            preferredAsset,
+            recommendedRoute,
+            routeReadiness,
+            categories: Array.from(contact.categories.values()),
+            latestAt: contact.latestAt,
+            latestTitle: contact.latestTitle,
+            notes,
+            routeSummary: preview
+              ? {
+                  public: preview.routes.public.summary,
+                  private: preview.routes.private.summary,
+                }
+              : {
+                  public: 'Public route summary is not available yet for this contact.',
+                  private: 'Private route summary is not available yet for this contact.',
+                },
+          };
+        }),
+    );
+
+    const routeBreakdown = {
+      publicPreferred: contactCards.filter((contact) => contact.recommendedRoute === 'public').length,
+      privatePreferred: contactCards.filter((contact) => contact.recommendedRoute === 'private').length,
+      blocked: contactCards.filter((contact) => contact.routeReadiness === 'blocked').length,
+      attention: contactCards.filter((contact) => contact.routeReadiness === 'attention').length,
+    };
+
+    const actionBoard = [
+      !authWorkspace.wallet.public.hasXlm
+        ? {
+            id: 'contacts-fund-xlm',
+            severity: 'critical',
+            title: 'Fund visible XLM before using contacts as a send list',
+            detail: 'Most contact relationships will still fail on public sends or route planning until the visible wallet can pay fees.',
+            href: '/wallet/fund',
+          }
+        : undefined,
+      !authWorkspace.wallet.private.hasShieldedBalance
+        ? {
+            id: 'contacts-seed-private',
+            severity: 'warning',
+            title: 'Seed a private balance before leaning on shielded contacts',
+            detail: 'Several counterparties are good candidates for private routing, but the wallet still needs an actual private balance first.',
+            href: '/wallet/fund',
+          }
+        : undefined,
+      routeBreakdown.blocked > 0
+        ? {
+            id: 'contacts-unblock-routes',
+            severity: 'warning',
+            title: 'Unblock counterparties with route issues',
+            detail: `${routeBreakdown.blocked} contact route(s) still look blocked by funding, trustline, or private-balance gaps.`,
+            href: '/actions',
+          }
+        : undefined,
+      historyWorkspace.failureBuckets[0]
+        ? {
+            id: 'contacts-review-failures',
+            severity: 'info',
+            title: 'Review relationship-heavy failure patterns',
+            detail: `${historyWorkspace.failureBuckets[0].label} is still the top recent blocker category, so it may affect repeat sends to familiar counterparties too.`,
+            href: '/history',
+          }
+        : undefined,
+    ].filter(Boolean);
+
+    const highlights = [
+      contactCards[0]
+        ? `@${contactCards[0].username} is currently your most active counterparty with ${contactCards[0].interactions} tracked touches.`
+        : 'No counterparties are established yet.',
+      routeBreakdown.privatePreferred > 0
+        ? `${routeBreakdown.privatePreferred} contact(s) look better suited to private routing than public sends right now.`
+        : 'No contact currently has a strong private-route bias.',
+      routeBreakdown.blocked > 0
+        ? `${routeBreakdown.blocked} contact route(s) still look blocked and should not be treated as ready send paths yet.`
+        : 'The current contact set does not show hard route blockers.',
+      walletWorkspace.pending.count > 0
+        ? `Pending withdrawals are still present, so some relationship balances may feel fresher after queue processing.`
+        : 'No pending withdrawal backlog is currently distorting relationship freshness.',
+    ];
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        contacts: contactCards.length,
+        privatePreferred: routeBreakdown.privatePreferred,
+        publicPreferred: routeBreakdown.publicPreferred,
+        blocked: routeBreakdown.blocked,
+        attention: routeBreakdown.attention,
+      },
+      routeBreakdown,
+      highlights,
+      actionBoard,
+      contacts: contactCards,
+      recentCounterparties: sendWorkspace.recentCounterparties,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   private describeAuditTitle(operation: string) {
     switch (operation) {
       case 'public_send':
