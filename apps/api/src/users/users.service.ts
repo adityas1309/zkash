@@ -2469,6 +2469,290 @@ export class UsersService {
     };
   }
 
+  async getPortfolioWorkspace(userId: string) {
+    const [user, walletWorkspace, historyWorkspace, actionWorkspace, contactsWorkspace, authWorkspace] = await Promise.all([
+      this.findById(userId),
+      this.getWalletWorkspace(userId),
+      this.getHistoryWorkspace(userId),
+      this.getActionCenterWorkspace(userId),
+      this.getContactsWorkspace(userId),
+      this.authService.getAuthWorkspace(userId),
+    ]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const publicUsdc = Number(walletWorkspace.balances.public.usdc || 0);
+    const publicXlm = Number(walletWorkspace.balances.public.xlm || 0);
+    const privateUsdc = Number(walletWorkspace.balances.private.usdc || 0);
+    const privateXlm = Number(walletWorkspace.balances.private.xlm || 0);
+
+    const totalUsdc = publicUsdc + privateUsdc;
+    const totalXlm = publicXlm + privateXlm;
+    const totalExposure = totalUsdc + totalXlm;
+    const privateExposure = privateUsdc + privateXlm;
+    const publicExposure = publicUsdc + publicXlm;
+
+    const allocation = [
+      {
+        id: 'public_usdc',
+        label: 'Public USDC',
+        amount: Number(totalUsdc ? publicUsdc.toFixed(4) : publicUsdc.toFixed(4)),
+        share: totalExposure > 0 ? Number(((publicUsdc / totalExposure) * 100).toFixed(1)) : 0,
+        lane: 'public',
+        asset: 'USDC',
+      },
+      {
+        id: 'private_usdc',
+        label: 'Private USDC',
+        amount: Number(privateUsdc.toFixed(4)),
+        share: totalExposure > 0 ? Number(((privateUsdc / totalExposure) * 100).toFixed(1)) : 0,
+        lane: 'private',
+        asset: 'USDC',
+      },
+      {
+        id: 'public_xlm',
+        label: 'Public XLM',
+        amount: Number(publicXlm.toFixed(4)),
+        share: totalExposure > 0 ? Number(((publicXlm / totalExposure) * 100).toFixed(1)) : 0,
+        lane: 'public',
+        asset: 'XLM',
+      },
+      {
+        id: 'private_xlm',
+        label: 'Private XLM',
+        amount: Number(privateXlm.toFixed(4)),
+        share: totalExposure > 0 ? Number(((privateXlm / totalExposure) * 100).toFixed(1)) : 0,
+        lane: 'private',
+        asset: 'XLM',
+      },
+    ];
+
+    const categoryCounts = historyWorkspace.categoryBreakdown.reduce<Record<string, number>>((acc, item: any) => {
+      acc[item.category] = item.count;
+      return acc;
+    }, {});
+
+    const momentumScore = Math.max(
+      5,
+      Math.min(
+        99,
+        Math.round(
+          historyWorkspace.velocity.last24h.total * 6 +
+            historyWorkspace.velocity.last7d.dailyAverage * 8 +
+            historyWorkspace.summary.sponsored * 3 -
+            historyWorkspace.summary.failed * 4,
+        ),
+      ),
+    );
+
+    const routeRisk = [
+      {
+        id: 'public_send',
+        label: 'Public send readiness',
+        tone: publicXlm > 0 || publicUsdc > 0 ? 'ready' : 'blocked',
+        detail:
+          publicXlm > 0 || publicUsdc > 0
+            ? 'Visible balance exists, so public routing can be attempted without first creating a private note.'
+            : 'Public routing is still fragile because the visible wallet lacks enough liquidity to act as a dependable source.',
+      },
+      {
+        id: 'private_send',
+        label: 'Private send readiness',
+        tone: privateExposure > 0 ? 'ready' : publicExposure > 0 ? 'attention' : 'blocked',
+        detail:
+          privateExposure > 0
+            ? 'Shielded balances already exist, so private route preparation is materially easier.'
+            : publicExposure > 0
+              ? 'A private route is reachable, but only after a first deposit or note-shaping step.'
+              : 'Private routing is still blocked by missing visible liquidity and no shielded seed balance.',
+      },
+      {
+        id: 'market_readiness',
+        label: 'Swap and market posture',
+        tone:
+          actionWorkspace.lanes.market.proofsReady > 0 || actionWorkspace.lanes.market.requested > 0
+            ? 'attention'
+            : actionWorkspace.lanes.market.total > 0
+              ? 'ready'
+              : 'info',
+        detail:
+          actionWorkspace.lanes.market.total > 0
+            ? 'Market history exists, but some swaps may still be waiting on proofs or seller-side execution.'
+            : 'No meaningful market flow is in the portfolio yet, so risk comes more from setup than from live swap backlog.',
+      },
+      {
+        id: 'ops_freshness',
+        label: 'Operational freshness',
+        tone: actionWorkspace.lanes.ops.status === 'ready' ? 'ready' : 'attention',
+        detail:
+          actionWorkspace.lanes.ops.status === 'ready'
+            ? 'Indexer freshness is currently healthy enough that portfolio surfaces should feel current.'
+            : 'Lagging pool lanes can distort how fresh balances, history, and note visibility feel inside the portfolio.',
+      },
+    ];
+
+    const rebalanceIdeas = [
+      publicExposure === 0
+        ? 'Add visible liquidity first so the portfolio can support direct sends, trustlines, and safer recovery actions.'
+        : undefined,
+      privateExposure === 0 && publicExposure > 0
+        ? 'Move a first slice of visible balance into the shielded pool to diversify route options beyond public-only execution.'
+        : undefined,
+      walletWorkspace.pending.count > 0
+        ? `Process ${walletWorkspace.pending.count} queued withdrawals so public and private exposure stop drifting apart.`
+        : undefined,
+      totalUsdc === 0 && authWorkspace.wallet.public.hasUsdcTrustline
+        ? 'USDC trustline exists, but the portfolio still lacks stablecoin exposure. Seed USDC if you want better swap and fiat flexibility.'
+        : undefined,
+      contactsWorkspace.summary.privatePreferred > contactsWorkspace.summary.publicPreferred && privateExposure === 0
+        ? 'Your relationship graph is skewing toward private-friendly counterparties, but the wallet still lacks shielded capital to use that advantage.'
+        : undefined,
+      historyWorkspace.summary.failed > 0
+        ? 'Review the failure buckets before adding more exposure to the same route that is already causing churn.'
+        : undefined,
+    ].filter(Boolean);
+
+    const exposureSignals = [
+      {
+        id: 'public_share',
+        label: 'Public share',
+        value: totalExposure > 0 ? Number(((publicExposure / totalExposure) * 100).toFixed(1)) : 0,
+        detail:
+          publicExposure > 0
+            ? 'Visible balances improve recovery and public routing, but they reduce privacy posture.'
+            : 'No visible exposure is currently available for direct wallet use.',
+      },
+      {
+        id: 'private_share',
+        label: 'Private share',
+        value: totalExposure > 0 ? Number(((privateExposure / totalExposure) * 100).toFixed(1)) : 0,
+        detail:
+          privateExposure > 0
+            ? 'Shielded balances expand private routing and protected market execution.'
+            : 'Private exposure is still zero, so the wallet cannot take advantage of its privacy-first product surface yet.',
+      },
+      {
+        id: 'counterparty_strength',
+        label: 'Counterparty strength',
+        value:
+          contactsWorkspace.contacts.length > 0
+            ? Number(
+                (
+                  contactsWorkspace.contacts.reduce((sum: number, item: any) => sum + item.trustScore, 0) /
+                  contactsWorkspace.contacts.length
+                ).toFixed(1),
+              )
+            : 0,
+        detail:
+          contactsWorkspace.contacts.length > 0
+            ? 'A higher relationship score means the portfolio can lean on known counterparties instead of cold routes.'
+            : 'No strong counterparty layer has formed yet, so every route behaves more like a cold start.',
+      },
+      {
+        id: 'momentum_score',
+        label: 'Momentum score',
+        value: momentumScore,
+        detail:
+          momentumScore >= 70
+            ? 'The portfolio is actively exercised across recent history and route surfaces.'
+            : momentumScore >= 40
+              ? 'The portfolio has useful recent signal, but it is not yet dense enough to feel battle-tested.'
+              : 'The portfolio is still light on recent usage signal, so readiness is driven more by setup than by exercised flow.',
+      },
+    ];
+
+    const flowMix = [
+      {
+        label: 'Wallet',
+        count: categoryCounts.wallet ?? 0,
+      },
+      {
+        label: 'Private',
+        count: categoryCounts.private ?? 0,
+      },
+      {
+        label: 'Swap',
+        count: categoryCounts.swap ?? 0,
+      },
+      {
+        label: 'System',
+        count: categoryCounts.system ?? 0,
+      },
+    ];
+
+    const actionLinks = [
+      {
+        id: 'funding',
+        label: 'Funding desk',
+        href: '/wallet/fund',
+        tone: !authWorkspace.wallet.public.hasXlm ? 'critical' : !authWorkspace.wallet.private.hasShieldedBalance ? 'warning' : 'info',
+        detail: 'Use this when the portfolio still needs XLM, trustline preparation, or a first shielded deposit.',
+      },
+      {
+        id: 'wallet',
+        label: 'Wallet workspace',
+        href: '/wallet',
+        tone: walletWorkspace.pending.count > 0 ? 'warning' : 'info',
+        detail: 'Best place to process pending withdrawals and correct public/private balance drift.',
+      },
+      {
+        id: 'actions',
+        label: 'Action center',
+        href: '/actions',
+        tone: actionWorkspace.summary.critical > 0 ? 'critical' : actionWorkspace.summary.caution > 0 ? 'warning' : 'info',
+        detail: 'Use this when route blockers, proof queues, or readiness issues are already waiting in line.',
+      },
+      {
+        id: 'contacts',
+        label: 'Contacts workspace',
+        href: '/contacts',
+        tone: contactsWorkspace.summary.blocked > 0 ? 'warning' : 'info',
+        detail: 'Use this when the portfolio should lean on known counterparties instead of cold routing.',
+      },
+    ];
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        totalExposure: Number(totalExposure.toFixed(4)),
+        publicExposure: Number(publicExposure.toFixed(4)),
+        privateExposure: Number(privateExposure.toFixed(4)),
+        totalUsdc: Number(totalUsdc.toFixed(4)),
+        totalXlm: Number(totalXlm.toFixed(4)),
+      },
+      allocation,
+      exposureSignals,
+      routeRisk,
+      rebalanceIdeas,
+      flowMix,
+      actionLinks,
+      portfolioHealth: {
+        tone:
+          !authWorkspace.wallet.public.hasXlm
+            ? 'blocked'
+            : historyWorkspace.summary.failed > historyWorkspace.summary.completed
+              ? 'attention'
+              : actionWorkspace.lanes.ops.status !== 'ready'
+                ? 'attention'
+                : 'ready',
+        headline:
+          !authWorkspace.wallet.public.hasXlm
+            ? 'Portfolio still needs visible funding before it can act like a real operating wallet.'
+            : privateExposure === 0
+              ? 'Portfolio is usable, but it is still overly dependent on visible balances.'
+              : 'Portfolio is diversified across visible and shielded balance surfaces.',
+      },
+      recentTitles: historyWorkspace.latestEntries.slice(0, 8).map((entry: any) => entry.title),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   private describeAuditTitle(operation: string) {
     switch (operation) {
       case 'public_send':
