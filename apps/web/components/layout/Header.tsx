@@ -79,6 +79,14 @@ export function Header() {
                     Portfolio
                   </Button>
                 </Link>
+                <Link href="/playbook">
+                  <Button
+                    size="sm"
+                    className="hidden sm:flex rounded-full bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all duration-300 font-medium px-5"
+                  >
+                    Playbook
+                  </Button>
+                </Link>
                 <Link href="/actions">
                   <Button
                     size="sm"

@@ -2753,6 +2753,528 @@ export class UsersService {
     };
   }
 
+  async getPlaybookWorkspace(userId: string) {
+    const [
+      user,
+      authWorkspace,
+      walletWorkspace,
+      sendWorkspace,
+      actionWorkspace,
+      contactsWorkspace,
+      portfolioWorkspace,
+      historyWorkspace,
+      readiness,
+    ] = await Promise.all([
+      this.findById(userId),
+      this.authService.getAuthWorkspace(userId),
+      this.getWalletWorkspace(userId),
+      this.getSendWorkspace(userId),
+      this.getActionCenterWorkspace(userId),
+      this.getContactsWorkspace(userId),
+      this.getPortfolioWorkspace(userId),
+      this.getHistoryWorkspace(userId),
+      this.opsService.getReadiness(),
+    ]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const publicXlm = Number(walletWorkspace.balances.public.xlm || 0);
+    const publicUsdc = Number(walletWorkspace.balances.public.usdc || 0);
+    const privateXlm = Number(walletWorkspace.balances.private.xlm || 0);
+    const privateUsdc = Number(walletWorkspace.balances.private.usdc || 0);
+    const totalPublic = publicXlm + publicUsdc;
+    const totalPrivate = privateXlm + privateUsdc;
+    const totalExposure = totalPublic + totalPrivate;
+    const topContact = contactsWorkspace.contacts[0];
+    const readyRoutes = portfolioWorkspace.routeRisk.filter((item: any) => item.tone === 'ready').length;
+    const laggingPools = readiness.lagging.length;
+    const privatePreferredContacts = contactsWorkspace.summary.privatePreferred;
+    const failureCount = historyWorkspace.summary.failed;
+    const pendingCount = historyWorkspace.summary.pending;
+    const sponsoredCount = historyWorkspace.summary.sponsored;
+    const hasFunding = authWorkspace.wallet.public.hasXlm;
+    const hasTrustline = authWorkspace.wallet.public.hasUsdcTrustline;
+    const hasPrivateBalance = authWorkspace.wallet.private.hasShieldedBalance;
+
+    const sponsorshipPairs = await Promise.all(
+      ([
+        { operation: 'public_send', asset: WalletAsset.XLM },
+        { operation: 'public_send', asset: WalletAsset.USDC },
+        { operation: 'deposit', asset: WalletAsset.XLM },
+        { operation: 'deposit', asset: WalletAsset.USDC },
+        { operation: 'withdraw_self', asset: WalletAsset.XLM },
+        { operation: 'withdraw_self', asset: WalletAsset.USDC },
+      ] as const).map(async (entry) => ({
+        operation: entry.operation,
+        asset: entry.asset,
+        preview: await this.previewSponsorship(userId, {
+          operation: entry.operation,
+          asset: entry.asset,
+          amount: 1,
+          recipient: topContact?.stellarPublicKey ?? topContact?.counterparty,
+        }).catch(() => ({
+          supported: false,
+          sponsored: false,
+          reason: 'Preview unavailable for this operation right now.',
+        })),
+      })),
+    );
+
+    const sponsorBoard = sponsorshipPairs.map((item) => ({
+      id: `${item.operation}_${item.asset}`.toLowerCase(),
+      operation: item.operation,
+      asset: item.asset,
+      supported: item.preview.supported,
+      sponsored: item.preview.sponsored,
+      reason: item.preview.reason,
+      tone: item.preview.sponsored ? 'ready' : item.preview.supported ? 'attention' : 'blocked',
+      label: `${item.operation.replaceAll('_', ' ')} ${item.asset}`,
+    }));
+
+    const sponsoredOpportunities = sponsorBoard.filter((item) => item.sponsored).length;
+
+    const routeComparisons = [
+      {
+        id: 'public_wallet_lane',
+        label: 'Visible wallet lane',
+        recommended: totalPublic > 0,
+        tone: totalPublic > 0 ? 'ready' : 'blocked',
+        summary:
+          totalPublic > 0
+            ? 'Visible funds are already available, so public sends, trustline management, and fast recovery remain reachable.'
+            : 'Visible funds are missing, so direct wallet operations still depend on fresh funding first.',
+        nextStep: totalPublic > 0 ? 'Use wallet, send, or fiat routes without waiting on a first deposit.' : 'Open the funding desk and add visible XLM first.',
+        sponsorship: sponsorBoard.find((item) => item.operation === 'public_send' && item.asset === 'XLM') ?? sponsorBoard[0],
+      },
+      {
+        id: 'private_wallet_lane',
+        label: 'Shielded wallet lane',
+        recommended: totalPrivate > 0 || totalPublic > 0,
+        tone: totalPrivate > 0 ? 'ready' : totalPublic > 0 ? 'attention' : 'blocked',
+        summary:
+          totalPrivate > 0
+            ? 'Private balances already exist, so the app can start taking advantage of protected transfer and market routes.'
+            : totalPublic > 0
+              ? 'Private flow is reachable, but the first deposit or note-shaping step is still missing.'
+              : 'Shielded flow is blocked because the wallet lacks both visible capital and a seeded private note.',
+        nextStep:
+          totalPrivate > 0
+            ? 'Use send or swap flows that already benefit from private balance posture.'
+            : totalPublic > 0
+              ? 'Make the first deposit to unlock private sends and more protected market execution.'
+              : 'Fund visible balance first, then seed a first private deposit.',
+        sponsorship: sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM') ?? sponsorBoard[2],
+      },
+      {
+        id: 'relationship_lane',
+        label: 'Counterparty lane',
+        recommended: !!topContact,
+        tone: topContact ? topContact.routeReadiness : 'blocked',
+        summary: topContact
+          ? `@${topContact.username} is currently the strongest known counterparty, so repeat routing can be more deliberate than a cold send.`
+          : 'No established counterparty graph is available yet, so every route still behaves like a cold start.',
+        nextStep: topContact
+          ? `Use contacts or send planning before repeating a transfer to @${topContact.username}.`
+          : 'Build the first reliable transfer relationship before leaning on route memory.',
+        sponsorship: sponsorBoard.find((item) => item.operation === 'public_send' && item.asset === (topContact?.preferredAsset ?? 'USDC')) ?? sponsorBoard[1],
+      },
+      {
+        id: 'ops_lane',
+        label: 'Operational freshness lane',
+        recommended: readiness.status === 'ready',
+        tone: readiness.status === 'ready' ? 'ready' : laggingPools > 0 ? 'attention' : 'blocked',
+        summary:
+          readiness.status === 'ready'
+            ? 'Readiness is healthy, so audits, balances, and notes should feel current enough for normal use.'
+            : laggingPools > 0
+              ? 'Lagging indexer pools can distort how fast the product reflects deposits, withdrawals, and proof outcomes.'
+              : 'Dependencies still need operator attention before the app should be trusted as fully current.',
+        nextStep: readiness.status === 'ready' ? 'Use the product normally while monitoring the status desk.' : 'Open status and remediation surfaces before assuming balances are fresh.',
+        sponsorship: sponsorBoard.find((item) => item.operation === 'withdraw_self' && item.asset === 'USDC') ?? sponsorBoard[5],
+      },
+    ];
+
+    const scenarioCards = [
+      {
+        id: 'bootstrap_visible_wallet',
+        title: 'Bootstrap visible liquidity',
+        lane: 'wallet',
+        tone: hasFunding ? 'ready' : 'blocked',
+        destination: '/wallet/fund',
+        headline: hasFunding
+          ? 'Visible XLM is already funded, so the wallet has the minimum capital needed for fees and direct actions.'
+          : 'The fastest way to improve every route is still to add visible XLM first.',
+        detail:
+          hasFunding
+            ? 'This scenario is already in good shape. From here the playbook is about maintaining enough visible balance to keep public sends, trustline actions, and recovery flows cheap and predictable.'
+            : 'Without visible XLM the wallet remains brittle. Deposits, trustline setup, public sends, and even fallback flows all feel worse until fees are funded.',
+        status: hasFunding ? 'Executable now' : 'Blocked by missing visible XLM',
+        requirements: [
+          hasFunding ? 'Visible XLM is present for fees and direct payment routes.' : 'Friendbot or another XLM funding path must succeed first.',
+          hasTrustline ? 'USDC trustline is already reachable once stablecoin liquidity is available.' : 'Trustline can be added immediately after XLM funding.',
+          readiness.status === 'ready'
+            ? 'Indexer and readiness surfaces are healthy enough for the wallet to feel current.'
+            : 'Ops freshness should still be checked if new balances do not appear quickly.',
+        ],
+        blockers: [
+          !hasFunding ? 'Public fee balance is still zero.' : undefined,
+          laggingPools > 0 ? `${laggingPools} pool lane(s) are lagging and may delay confidence in follow-up flows.` : undefined,
+          failureCount > 0 ? `${failureCount} recent failed or retryable actions mean the first next step should stay simple and visible.` : undefined,
+        ].filter(Boolean),
+        steps: [
+          'Open the funding desk and confirm the account has testnet XLM.',
+          'Refresh visible balances and confirm the wallet can pay fees without hesitation.',
+          'Immediately follow with USDC trustline setup if stablecoin flow matters for the next route.',
+          'Return to playbook or wallet to choose whether to stay visible or seed the first private deposit.',
+        ],
+        whyNow: [
+          'Every other route becomes easier after visible funding.',
+          'Fee confidence reduces friction across trustline, send, deposit, and swap flows.',
+          'Recovery paths stay simpler when the public wallet is not empty.',
+        ],
+        metrics: [
+          { label: 'Public XLM', value: walletWorkspace.balances.public.xlm },
+          { label: 'Public USDC', value: walletWorkspace.balances.public.usdc },
+          { label: 'Ready routes', value: String(readyRoutes) },
+          { label: 'Lagging pools', value: String(laggingPools) },
+        ],
+        recommendation: hasFunding
+          ? 'Maintain enough visible XLM to keep every route from regressing into setup friction.'
+          : 'Do this before any more ambitious flow. It has the best downstream leverage in the entire playbook.',
+      },
+      {
+        id: 'seed_private_capital',
+        title: 'Seed the first private lane',
+        lane: 'private',
+        tone: hasPrivateBalance ? 'ready' : hasFunding || publicUsdc > 0 ? 'attention' : 'blocked',
+        destination: '/wallet',
+        headline: hasPrivateBalance
+          ? 'Shielded balances already exist, so the app can plan private sends and more protected market routes.'
+          : totalPublic > 0
+            ? 'A first private deposit is the cleanest way to unlock the app’s differentiated behavior.'
+            : 'Private flow is still blocked because the wallet lacks visible capital to deposit.',
+        detail:
+          hasPrivateBalance
+            ? 'This scenario is no longer theoretical. The wallet already has note-based capital, which means the next decision is about shaping or using it well.'
+            : totalPublic > 0
+              ? 'The product has visible funds available, but until some of that capital is deposited into the shielded pool, private sends and protected route planning stay mostly aspirational.'
+              : 'There is no visible source balance yet, so a private note cannot be created. Funding comes first.',
+        status: hasPrivateBalance ? 'Executable now' : totalPublic > 0 ? 'Ready after deposit' : 'Blocked until visible funding exists',
+        requirements: [
+          totalPublic > 0 ? 'Visible balance exists to fund the initial deposit.' : 'Visible balance is still required before a deposit can be made.',
+          sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM')?.supported
+            ? 'Deposit sponsorship policy is available for at least one asset.'
+            : 'Deposit sponsorship may fall back to the user fee path.',
+          readiness.status === 'ready'
+            ? 'Indexer freshness is healthy enough that deposited notes should appear without unusual lag.'
+            : 'Expect more patience after deposit because current ops freshness is degraded.',
+        ],
+        blockers: [
+          !totalPublic ? 'No visible source balance is available for a first deposit.' : undefined,
+          !hasTrustline && publicUsdc === 0 ? 'USDC trustline is not ready yet, which limits stablecoin private seeding.' : undefined,
+          laggingPools > 0 ? 'Lagging indexer pools may slow confidence after the deposit settles.' : undefined,
+        ].filter(Boolean),
+        steps: [
+          'Choose the asset whose visible balance you can afford to move into the shielded lane.',
+          'Use the wallet workspace to submit a deposit and watch the private balance refresh.',
+          'Return to send or swap flows once a note exists and route comparisons become meaningfully different.',
+          'Use split or exact-note preparation only if the next private transfer needs a specific amount shape.',
+        ],
+        whyNow: [
+          'Private balance is what unlocks the product’s strongest differentiator.',
+          'Counterparties that prefer protected routes become materially more useful once a note exists.',
+          'Portfolio quality improves when capital is not trapped entirely in visible lanes.',
+        ],
+        metrics: [
+          { label: 'Private XLM', value: walletWorkspace.balances.private.xlm },
+          { label: 'Private USDC', value: walletWorkspace.balances.private.usdc },
+          { label: 'Private contacts', value: String(privatePreferredContacts) },
+          { label: 'Deposit sponsorship', value: sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM')?.tone ?? 'blocked' },
+        ],
+        recommendation: hasPrivateBalance
+          ? 'Use existing private capital deliberately instead of letting it sit idle without route advantage.'
+          : 'This is the highest-value move after visible funding because it upgrades the app from setup mode into real privacy mode.',
+      },
+      {
+        id: 'repeat_trusted_counterparty',
+        title: 'Repeat a trusted counterparty route',
+        lane: 'contacts',
+        tone: topContact ? topContact.routeReadiness : 'blocked',
+        destination: topContact ? '/contacts' : '/wallet/send',
+        headline: topContact
+          ? `@${topContact.username} is your strongest reusable route today.`
+          : 'No trusted counterparty is strong enough yet to anchor a repeat route.',
+        detail:
+          topContact
+            ? `This scenario turns relationship history into execution confidence. ${topContact.interactions} prior touch(es), ${topContact.privateFlows} private flow(s), and a trust score of ${topContact.trustScore} mean this is the least-cold send relationship in the workspace.`
+            : 'Before a repeat route can be treated as a safe default, the wallet needs at least one successful, well-understood transfer relationship to learn from.',
+        status: topContact ? `Recommended via ${topContact.recommendedRoute}` : 'Blocked by missing relationship signal',
+        requirements: [
+          topContact ? `Known counterparty: @${topContact.username}.` : 'A repeat counterparty is not established yet.',
+          topContact?.routeReadiness === 'ready'
+            ? 'Recommended route already looks executable.'
+            : topContact
+              ? 'Recommended route needs more setup before it should be treated as dependable.'
+              : 'No route memory exists yet for repeat-send planning.',
+          sponsoredCount > 0
+            ? 'Prior sponsored activity exists, which slightly lowers friction for repeating protected or fee-sensitive actions.'
+            : 'No sponsored activity has been recorded yet.',
+        ],
+        blockers: [
+          !topContact ? 'No reusable counterparty graph exists yet.' : undefined,
+          topContact && topContact.routeReadiness !== 'ready'
+            ? `Route to @${topContact.username} still needs preparation before it should be treated as low-risk.`
+            : undefined,
+          topContact && topContact.failedTouches > 0 ? `${topContact.failedTouches} prior failure touch(es) mean route memory should be used with care.` : undefined,
+        ].filter(Boolean),
+        steps: [
+          'Open the contacts workspace and review the recommended route for the strongest counterparty.',
+          'Check whether the route is public or private and confirm the necessary balance lane is actually ready.',
+          'Use send planning before execution if the amount differs meaningfully from prior history.',
+          'Record whether the route felt smooth so the relationship graph becomes more trustworthy over time.',
+        ],
+        whyNow: [
+          'Known counterparties reduce cold-start uncertainty.',
+          'Relationship-aware sends are one of the easiest ways to make the product feel smarter over time.',
+          'Repeat routes become more valuable as the user base and transfer cadence grow.',
+        ],
+        metrics: [
+          { label: 'Top contact', value: topContact ? `@${topContact.username}` : 'None' },
+          { label: 'Trust score', value: topContact ? String(topContact.trustScore) : '0' },
+          { label: 'Interactions', value: topContact ? String(topContact.interactions) : '0' },
+          { label: 'Route', value: topContact ? topContact.recommendedRoute : 'blocked' },
+        ],
+        recommendation: topContact
+          ? `Use @${topContact.username} as the first choice when you want a repeatable route instead of a cold transfer.`
+          : 'Create one successful counterparty pattern before expecting contact intelligence to guide send decisions.',
+      },
+      {
+        id: 'clear_pending_and_failure_pressure',
+        title: 'Clear pending pressure and failure drag',
+        lane: 'recovery',
+        tone: pendingCount > 0 || failureCount > 0 ? 'attention' : 'ready',
+        destination: pendingCount > 0 ? '/wallet' : '/history',
+        headline:
+          pendingCount > 0 || failureCount > 0
+            ? 'The next improvement may be cleanup, not more execution.'
+            : 'There is no meaningful queue or failure drag visible in recent history.',
+        detail:
+          pendingCount > 0 || failureCount > 0
+            ? `There are ${pendingCount} pending item(s) and ${failureCount} failed or retryable touch(es). Until some of that is cleared, portfolio quality and route confidence can be deceptively lower than the raw balances suggest.`
+            : 'Recent activity is not carrying unusual queue pressure or repeated failures, so the workspace can safely bias toward new execution instead of remediation.',
+        status: pendingCount > 0 || failureCount > 0 ? 'Remediation advised' : 'Clean enough to keep building',
+        requirements: [
+          pendingCount > 0
+            ? 'Pending withdrawals or queued actions should be reviewed for settlement or retry.'
+            : 'No pending queue is dragging balance freshness right now.',
+          failureCount > 0
+            ? 'Recent failure buckets should be understood before repeating the same route blindly.'
+            : 'Failure pressure is currently low.',
+          readiness.status === 'ready'
+            ? 'Healthy ops posture improves confidence that cleanups will reflect accurately.'
+            : 'Degraded ops posture means some cleanup results may take longer to feel visible.',
+        ],
+        blockers: [
+          laggingPools > 0 ? 'Lagging pools can blur whether a cleanup has fully settled.' : undefined,
+          pendingCount === 0 && failureCount === 0 ? undefined : 'Jumping straight into more activity can compound ambiguity instead of improving clarity.',
+        ].filter(Boolean),
+        steps: [
+          'Open wallet or history depending on whether queue pressure or failures are more visible.',
+          'Process pending withdrawals first so visible and private capital stop drifting apart.',
+          'Inspect failure buckets for repeated route mistakes, missing prerequisites, or stale assumptions.',
+          'Return to playbook only after the next action list no longer prioritizes cleanup.',
+        ],
+        whyNow: [
+          'Cleanup improves the honesty of every other workspace.',
+          'Failure-aware iteration is better than adding more noisy activity to a confused state.',
+          'Users trust the product more when pending and retryable edges are explicitly handled.',
+        ],
+        metrics: [
+          { label: 'Pending', value: String(pendingCount) },
+          { label: 'Failed', value: String(failureCount) },
+          { label: 'Lagging pools', value: String(laggingPools) },
+          { label: 'Recent momentum', value: historyWorkspace.velocity.momentum },
+        ],
+        recommendation:
+          pendingCount > 0 || failureCount > 0
+            ? 'Treat cleanup as a first-class execution path, not a side task.'
+            : 'No cleanup detour is necessary right now, so stay focused on growth routes.',
+      },
+      {
+        id: 'grow_market_and_fiat_optionality',
+        title: 'Grow market and fiat optionality',
+        lane: 'market',
+        tone: totalExposure > 0 ? actionWorkspace.lanes.market.total > 0 ? 'ready' : 'attention' : 'blocked',
+        destination: actionWorkspace.lanes.market.total > 0 ? '/swap' : '/fiat',
+        headline:
+          totalExposure > 0
+            ? actionWorkspace.lanes.market.total > 0
+              ? 'The account has enough history and funding to treat swap and fiat planning as active options.'
+              : 'There is enough capital to start learning the market and fiat desks, but route experience is still thin.'
+            : 'No capital exists yet, so market or fiat experimentation would mostly be empty planning.',
+        detail:
+          totalExposure > 0
+            ? `With ${portfolioWorkspace.summary.totalExposure} total exposure across visible and shielded lanes, the account can start using the product beyond simple storage. The remaining question is whether market flow is already active or just becoming reachable.`
+            : 'The market and fiat surfaces work best after at least some funded capital and route confidence already exist.',
+        status:
+          totalExposure > 0
+            ? actionWorkspace.lanes.market.total > 0
+              ? 'Market lanes already active'
+              : 'Planning-ready but early'
+            : 'Blocked until capital exists',
+        requirements: [
+          totalExposure > 0 ? 'At least some funded capital exists to support swap or fiat planning.' : 'Capital must be funded before meaningful market planning can happen.',
+          authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
+            ? 'At least one route lane is funded enough to explore execution planning.'
+            : 'Neither public nor private lanes are funded enough yet.',
+          contactsWorkspace.summary.contacts > 0
+            ? 'Counterparty and relationship data can help interpret route quality.'
+            : 'Market route decisions will still feel like a cold start.',
+        ],
+        blockers: [
+          totalExposure === 0 ? 'There is no capital to deploy or model against.' : undefined,
+          actionWorkspace.lanes.market.proofsPending > 0
+            ? `${actionWorkspace.lanes.market.proofsPending} proof-stage task(s) are still waiting and may deserve cleanup before more growth moves.`
+            : undefined,
+          !authWorkspace.wallet.public.hasUsdcTrustline ? 'Stablecoin optionality is still limited until the USDC trustline is enabled.' : undefined,
+        ].filter(Boolean),
+        steps: [
+          'Open swap if you want liquidity discovery, queue visibility, or offer-driven execution planning.',
+          'Open fiat if the goal is payout and conversion planning instead of market matching.',
+          'Compare public and private route posture before choosing which capital lane to expose to a new market flow.',
+          'Come back to playbook after the first market action so future strategy can lean on real execution history.',
+        ],
+        whyNow: [
+          'A wallet that never graduates into swap or fiat planning leaves a lot of route intelligence unused.',
+          'Even small first moves create future signal for better decision-making.',
+          'Market optionality is stronger when it is layered on top of stable wallet and private posture, not before.',
+        ],
+        metrics: [
+          { label: 'Total exposure', value: String(portfolioWorkspace.summary.totalExposure) },
+          { label: 'Open market items', value: String(actionWorkspace.lanes.market.total) },
+          { label: 'Open offers', value: String(actionWorkspace.lanes.market.requested) },
+          { label: 'Contacts', value: String(contactsWorkspace.summary.contacts) },
+        ],
+        recommendation:
+          totalExposure > 0
+            ? 'Use one measured market or fiat action to deepen route intelligence, not just to move capital.'
+            : 'Fund the wallet first so market and fiat planning can become real instead of hypothetical.',
+      },
+    ];
+
+    const actionRail = [
+      {
+        id: 'playbook-funding',
+        label: 'Funding desk',
+        href: '/wallet/fund',
+        tone: hasFunding ? 'info' : 'critical',
+        detail: hasFunding
+          ? 'Visible fee liquidity is present, so funding is now about optimization and range rather than emergency setup.'
+          : 'Use this first if the account still needs public XLM or trustline preparation.',
+      },
+      {
+        id: 'playbook-wallet',
+        label: 'Wallet workspace',
+        href: '/wallet',
+        tone: hasPrivateBalance ? 'info' : totalPublic > 0 ? 'warning' : 'critical',
+        detail: hasPrivateBalance
+          ? 'Best place to shape, move, or withdraw capital across visible and shielded lanes.'
+          : totalPublic > 0
+            ? 'Best place to seed the first private deposit and start note-based flow.'
+            : 'Wallet setup remains blocked on visible capital.',
+      },
+      {
+        id: 'playbook-send',
+        label: 'Send planner',
+        href: '/wallet/send',
+        tone: topContact ? topContact.routeReadiness === 'ready' ? 'info' : 'warning' : 'warning',
+        detail: topContact
+          ? `Best for validating amount shape and route choice before sending to @${topContact.username}.`
+          : 'Use this to create the first clean route relationship and teach the system a reusable counterparty pattern.',
+      },
+      {
+        id: 'playbook-status',
+        label: 'Status cockpit',
+        href: '/status',
+        tone: readiness.status === 'ready' ? 'info' : 'warning',
+        detail: readiness.status === 'ready'
+          ? 'Use this to confirm the app stays fresh while you keep executing.'
+          : 'Open this before trusting stale-looking notes, balances, or queue results.',
+      },
+    ];
+
+    const recentSignals = [
+      `Portfolio exposure is ${portfolioWorkspace.summary.totalExposure} across public and private lanes.`,
+      topContact
+        ? `@${topContact.username} is the current strongest reusable counterparty path with ${topContact.interactions} tracked interaction(s).`
+        : 'No strong repeat counterparty exists yet, so the send layer is still relationship-light.',
+      hasPrivateBalance
+        ? 'Private balance already exists, so protected routing is materially more reachable than a cold-start wallet.'
+        : 'No private balance exists yet, so protected routes still depend on the first deposit.',
+      laggingPools > 0
+        ? `${laggingPools} lagging pool lane(s) can still affect freshness perception.`
+        : 'Ops freshness is healthy enough that balance and note views should feel current.',
+      failureCount > 0
+        ? `${failureCount} failed or retryable action(s) are still adding drag to route confidence.`
+        : 'Recent history is not showing unusual failure drag right now.',
+    ];
+
+    const posture = {
+      readinessTone: portfolioWorkspace.portfolioHealth.tone,
+      capitalShape:
+        totalExposure === 0
+          ? 'Unfunded'
+          : totalPrivate > totalPublic
+            ? 'Private-led'
+            : totalPublic > totalPrivate * 1.5
+              ? 'Public-led'
+              : 'Balanced',
+      marketShape:
+        actionWorkspace.lanes.market.total > 0
+          ? actionWorkspace.lanes.market.proofsReady > 0 || actionWorkspace.lanes.market.requested > 0
+            ? 'Active with follow-up pressure'
+            : 'Active and relatively calm'
+          : 'Early',
+      relationshipShape:
+        contactsWorkspace.summary.contacts > 0
+          ? contactsWorkspace.summary.privatePreferred > contactsWorkspace.summary.publicPreferred
+            ? 'Privacy-friendly graph'
+            : 'Visible-route graph'
+          : 'Cold-start graph',
+      riskShape:
+        failureCount > 0 || laggingPools > 0
+          ? pendingCount > 0
+            ? 'Needs cleanup'
+            : 'Watchful'
+          : 'Healthy',
+    };
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        scenarios: scenarioCards.length,
+        executable: scenarioCards.filter((item) => item.tone === 'ready').length,
+        blocked: scenarioCards.filter((item) => item.tone === 'blocked').length,
+        sponsoredOpportunities,
+        urgentBlockers: actionWorkspace.summary.critical,
+        readyRoutes,
+      },
+      posture,
+      routeComparisons,
+      sponsorBoard,
+      scenarioCards,
+      actionRail,
+      recentSignals,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   private describeAuditTitle(operation: string) {
     switch (operation) {
       case 'public_send':
