@@ -91,6 +91,13 @@ export class UsersController {
     return this.usersService.getPlaybookWorkspace(req.user._id);
   }
 
+  @Get('settlement/workspace')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getSettlementWorkspace(@Req() req: any) {
+    return this.usersService.getSettlementWorkspace(req.user._id);
+  }
+
   @Post('trustline')
   @UseGuards(SessionAuthGuard)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

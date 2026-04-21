@@ -3275,6 +3275,489 @@ export class UsersService {
     };
   }
 
+  async getSettlementWorkspace(userId: string) {
+    const [user, walletWorkspace, historyWorkspace, actionWorkspace, portfolioWorkspace, authWorkspace, readiness, audits] = await Promise.all([
+      this.findById(userId),
+      this.getWalletWorkspace(userId),
+      this.getHistoryWorkspace(userId),
+      this.getActionCenterWorkspace(userId),
+      this.getPortfolioWorkspace(userId),
+      this.authService.getAuthWorkspace(userId),
+      this.opsService.getReadiness(),
+      this.transactionAuditService.listRecentForUser(userId, 80),
+    ]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const pendingWithdrawals = await this.pendingWithdrawalModel
+      .find({ recipientId: new Types.ObjectId(userId), processed: false })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    const privatePendingEntries = historyWorkspace.latestEntries.filter(
+      (item: any) =>
+        item.privateFlow &&
+        (item.state === 'pending' || item.state === 'queued' || item.indexing?.status === 'pending' || item.indexing?.status === 'lagging'),
+    );
+    const retryableEntries = historyWorkspace.latestEntries.filter(
+      (item: any) => item.state === 'retryable' || item.state === 'failed',
+    );
+    const laggingPrivateEntries = historyWorkspace.latestEntries.filter(
+      (item: any) =>
+        item.privateFlow &&
+        (item.indexing?.status === 'lagging' || item.indexing?.status === 'pending'),
+    );
+    const sponsoredEntries = historyWorkspace.latestEntries.filter((item: any) => item.sponsorship?.sponsored);
+    const publicSettlementEntries = historyWorkspace.latestEntries.filter(
+      (item: any) => !item.privateFlow && (item.state === 'pending' || item.state === 'queued' || item.state === 'retryable'),
+    );
+
+    const totals = pendingWithdrawals.reduce(
+      (accumulator, item: any) => {
+        const numeric = Number(item.amount || 0);
+        if (item.asset === 'USDC') {
+          accumulator.usdc += numeric;
+        }
+        if (item.asset === 'XLM') {
+          accumulator.xlm += numeric;
+        }
+        return accumulator;
+      },
+      { usdc: 0, xlm: 0 },
+    );
+
+    const settlementSponsorship = await Promise.all(
+      ([WalletAsset.USDC, WalletAsset.XLM] as const).flatMap((asset) => [
+        this.previewSponsorship(userId, {
+          asset,
+          operation: 'deposit',
+          amount: 1,
+        }).then((preview) => ({ key: `deposit_${asset}`, asset, operation: 'deposit', preview })),
+        this.previewSponsorship(userId, {
+          asset,
+          operation: 'withdraw_self',
+          amount: 1,
+        }).then((preview) => ({ key: `withdraw_self_${asset}`, asset, operation: 'withdraw_self', preview })),
+      ]),
+    );
+
+    const sponsorshipBoard = settlementSponsorship.map((item) => ({
+      id: item.key,
+      asset: item.asset,
+      operation: item.operation,
+      supported: item.preview.supported,
+      sponsored: item.preview.sponsored,
+      tone: item.preview.sponsored ? 'ready' : item.preview.supported ? 'attention' : 'blocked',
+      reason: item.preview.reason,
+      label: `${item.operation.replaceAll('_', ' ')} ${item.asset}`,
+    }));
+
+    const queueCards = pendingWithdrawals.map((item: any) => {
+      const matchingAudit = audits.find(
+        (audit: any) =>
+          audit.operation === 'pending_withdrawal' &&
+          typeof audit.metadata?.pendingWithdrawalId === 'string' &&
+          audit.metadata.pendingWithdrawalId === item._id.toString(),
+      ) as any;
+
+      const assetTone =
+        item.asset === 'USDC'
+          ? Number(walletWorkspace.balances.public.usdc || 0) === 0 && Number(walletWorkspace.balances.private.usdc || 0) > 0
+            ? 'attention'
+            : 'info'
+          : Number(walletWorkspace.balances.public.xlm || 0) === 0 && Number(walletWorkspace.balances.private.xlm || 0) > 0
+            ? 'attention'
+            : 'info';
+
+      const status =
+        matchingAudit?.state ??
+        (item.processed
+          ? 'success'
+          : item.txHash
+            ? 'pending'
+            : 'queued');
+
+      return {
+        id: item._id.toString(),
+        asset: item.asset,
+        amount: item.amount,
+        status,
+        tone:
+          status === 'success'
+            ? 'ready'
+            : status === 'failed' || status === 'retryable'
+              ? 'attention'
+              : 'info',
+        txHash: item.txHash,
+        createdAt: item.createdAt,
+        summary:
+          status === 'success'
+            ? 'This withdrawal has already been submitted to the visible wallet and should be waiting on chain confirmation only.'
+            : status === 'pending'
+              ? 'Proof material exists and a transaction hash is present, so this item is past proof generation and into visible settlement.'
+              : 'Proof material exists locally, but the visible withdrawal still needs to be processed from the queue.',
+        notes: [
+          `Pool source: ${item.poolAddress}`,
+          matchingAudit?.indexingDetail
+            ? `Audit note: ${matchingAudit.indexingDetail}`
+            : 'No detailed audit note is attached to this queued withdrawal yet.',
+          item.asset === 'USDC'
+            ? 'Stablecoin withdrawals are useful when the next route needs visible liquidity or fiat planning.'
+            : 'XLM withdrawals are useful when the next route needs fee coverage, visible payments, or simpler recovery.',
+        ],
+        destination:
+          status === 'queued'
+            ? '/wallet'
+            : '/history',
+        assetTone,
+      };
+    });
+
+    const laneCards = [
+      {
+        id: 'visible_settlement',
+        label: 'Visible settlement lane',
+        tone:
+          publicSettlementEntries.length > 0
+            ? 'attention'
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+              ? 'ready'
+              : 'blocked',
+        count: publicSettlementEntries.length,
+        total: `${walletWorkspace.balances.public.xlm} XLM / ${walletWorkspace.balances.public.usdc} USDC`,
+        detail:
+          publicSettlementEntries.length > 0
+            ? 'Visible settlement is already carrying pending or retry pressure, so the public wallet may not fully reflect intended state yet.'
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+              ? 'Visible balances are already funded enough that settlement can complete without depending entirely on fresh deposits.'
+              : 'Visible settlement remains weak because the wallet still lacks meaningful public liquidity.',
+        nextStep:
+          publicSettlementEntries.length > 0
+            ? 'Use wallet or history to confirm hashes, retries, and balance refresh instead of assuming visible state is final.'
+            : 'Visible settlement is currently calm enough for normal use.',
+      },
+      {
+        id: 'private_settlement',
+        label: 'Shielded settlement lane',
+        tone:
+          privatePendingEntries.length > 0
+            ? 'attention'
+            : authWorkspace.wallet.private.hasShieldedBalance
+              ? 'ready'
+              : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+                ? 'info'
+                : 'blocked',
+        count: privatePendingEntries.length,
+        total: `${walletWorkspace.balances.private.xlm} XLM / ${walletWorkspace.balances.private.usdc} USDC`,
+        detail:
+          privatePendingEntries.length > 0
+            ? 'Private settlement is waiting on proof completion, queue processing, or indexer freshness, so note-based balances may still be in motion.'
+            : authWorkspace.wallet.private.hasShieldedBalance
+              ? 'Shielded balances already exist and no unusual pending settlement pressure is visible right now.'
+              : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+                ? 'Shielded settlement is reachable, but it still depends on the first deposit before any private balance can settle back out.'
+                : 'Shielded settlement is blocked until visible capital exists and a private note can be created.',
+        nextStep:
+          privatePendingEntries.length > 0
+            ? 'Watch indexer freshness and queue state before assuming private balances have stopped changing.'
+            : authWorkspace.wallet.private.hasShieldedBalance
+              ? 'Private settlement is stable enough to support further protected routes.'
+              : 'Seed the first deposit when you want private settlement to become a real option.',
+      },
+      {
+        id: 'queue_lane',
+        label: 'Withdrawal queue lane',
+        tone:
+          queueCards.length > 0
+            ? queueCards.some((item: any) => item.status === 'queued')
+              ? 'attention'
+              : 'info'
+            : 'ready',
+        count: queueCards.length,
+        total: `${totals.xlm.toFixed(7).replace(/\.?0+$/, '') || '0'} XLM / ${totals.usdc.toFixed(7).replace(/\.?0+$/, '') || '0'} USDC`,
+        detail:
+          queueCards.length > 0
+            ? 'Queued withdrawals represent value that exists in the private flow but still needs visible settlement or confirmation.'
+            : 'No queued withdrawals are waiting right now, so there is no settlement backlog between private and public lanes.',
+        nextStep:
+          queueCards.length > 0
+            ? 'Process the queue or verify chain confirmation before treating the corresponding public balance as final.'
+            : 'No queue action is required right now.',
+      },
+      {
+        id: 'ops_lane',
+        label: 'Indexer freshness lane',
+        tone: readiness.status === 'ready' ? 'ready' : readiness.lagging.length > 0 ? 'attention' : 'blocked',
+        count: readiness.lagging.length,
+        total: `${readiness.counts.trackedPools} tracked pools`,
+        detail:
+          readiness.status === 'ready'
+            ? 'Ops freshness is healthy, so settlement state should feel current across notes, withdrawals, and visible follow-up.'
+            : readiness.lagging.length > 0
+              ? `${readiness.lagging.length} pool lane(s) are lagging, which can make deposits, notes, and queue outcomes feel stale.`
+              : 'Dependency readiness is degraded enough that settlement state should be treated carefully until status improves.',
+        nextStep:
+          readiness.status === 'ready'
+            ? 'Continue monitoring normally.'
+            : 'Use the status cockpit before treating stale-looking balances as definitive.',
+      },
+    ];
+
+    const transitionBoard = [
+      {
+        id: 'private_to_public',
+        label: 'Private to public',
+        tone:
+          queueCards.length > 0
+            ? 'attention'
+            : authWorkspace.wallet.private.hasShieldedBalance
+              ? 'ready'
+              : 'blocked',
+        summary:
+          queueCards.length > 0
+            ? 'Some capital is already on the way back to the visible wallet, so public balances may still be catching up.'
+            : authWorkspace.wallet.private.hasShieldedBalance
+              ? 'The wallet can unshield value when public spending, fiat planning, or recovery calls for it.'
+              : 'There is no settled shielded capital to unshield right now.',
+        nextStep:
+          queueCards.length > 0
+            ? 'Process pending withdrawals and verify resulting hashes.'
+            : authWorkspace.wallet.private.hasShieldedBalance
+              ? 'Withdraw only when the next route actually needs public visibility.'
+              : 'Seed private capital first before expecting to settle back to the public lane.',
+      },
+      {
+        id: 'public_to_private',
+        label: 'Public to private',
+        tone:
+          Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+            ? authWorkspace.wallet.private.hasShieldedBalance
+              ? 'ready'
+              : 'info'
+            : 'blocked',
+        summary:
+          Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+            ? authWorkspace.wallet.private.hasShieldedBalance
+              ? 'Visible capital can continue feeding the private lane when you want to deepen protected route capacity.'
+              : 'The wallet has visible capital, so the first private settlement path is available whenever you want to unlock it.'
+            : 'Public capital is missing, so the next private settlement path cannot start yet.',
+        nextStep:
+          Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+            ? 'Use deposit flows deliberately instead of over-exposing the visible lane.'
+            : 'Fund visible balance first before trying to improve private settlement posture.',
+      },
+      {
+        id: 'audited_visibility',
+        label: 'Audit visibility',
+        tone:
+          historyWorkspace.summary.failed > 0 || historyWorkspace.summary.pending > 0
+            ? 'attention'
+            : sponsoredEntries.length > 0 || historyWorkspace.summary.completed > 0
+              ? 'ready'
+              : 'info',
+        summary:
+          historyWorkspace.summary.failed > 0 || historyWorkspace.summary.pending > 0
+            ? 'The audit stream is showing work-in-progress or failures, so settlement certainty should come from explicit states rather than assumptions.'
+            : sponsoredEntries.length > 0 || historyWorkspace.summary.completed > 0
+              ? 'Audit visibility is already rich enough to explain most recent settlement behavior.'
+              : 'The audit stream is still early and will become more valuable after more real flow passes through it.',
+        nextStep:
+          historyWorkspace.summary.failed > 0 || historyWorkspace.summary.pending > 0
+            ? 'Use history and settlement together when deciding whether a route is actually finished.'
+            : 'Audit visibility is strong enough to support normal follow-up.',
+      },
+    ];
+
+    const riskBoard = [
+      {
+        id: 'queue_pressure',
+        label: 'Queue pressure',
+        tone: queueCards.length > 0 ? 'attention' : 'ready',
+        detail:
+          queueCards.length > 0
+            ? `${queueCards.length} queued withdrawal item(s) are still separating private value from visible settlement.`
+            : 'No queued withdrawal items are currently holding settlement apart.',
+      },
+      {
+        id: 'retry_pressure',
+        label: 'Retry pressure',
+        tone: retryableEntries.length > 0 ? 'attention' : 'ready',
+        detail:
+          retryableEntries.length > 0
+            ? `${retryableEntries.length} recent retryable or failed entries are asking for deliberate follow-up.`
+            : 'No unusual retry pressure is present in recent activity.',
+      },
+      {
+        id: 'indexer_pressure',
+        label: 'Indexer pressure',
+        tone: laggingPrivateEntries.length > 0 || readiness.lagging.length > 0 ? 'attention' : 'ready',
+        detail:
+          laggingPrivateEntries.length > 0 || readiness.lagging.length > 0
+            ? 'Settlement may feel stale because the indexer still has lagging work across private note visibility or pool sync lanes.'
+            : 'Indexer freshness is not the main settlement risk right now.',
+      },
+      {
+        id: 'public_liquidity_pressure',
+        label: 'Public liquidity pressure',
+        tone:
+          Number(walletWorkspace.balances.public.xlm || 0) === 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+            ? 'blocked'
+            : 'info',
+        detail:
+          Number(walletWorkspace.balances.public.xlm || 0) === 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+            ? 'Visible settlement is fragile because there is no public balance to absorb or confirm next steps cleanly.'
+            : 'Public liquidity exists, so settlement does not rely entirely on future funding.',
+      },
+    ];
+
+    const recommendedActions = [
+      queueCards.length > 0
+        ? {
+            id: 'settlement-process-queue',
+            severity: 'critical',
+            title: 'Process queued withdrawals before assuming visible balances are final',
+            detail: `${queueCards.length} item(s) are still carrying private value toward the visible wallet.`,
+            href: '/wallet',
+          }
+        : undefined,
+      retryableEntries[0]
+        ? {
+            id: 'settlement-review-retries',
+            severity: 'warning',
+            title: 'Review retryable settlement activity before repeating the same route',
+            detail: `${retryableEntries.length} failed or retryable item(s) remain in the recent audit trail.`,
+            href: '/history',
+          }
+        : undefined,
+      readiness.status !== 'ready'
+        ? {
+            id: 'settlement-check-status',
+            severity: 'warning',
+            title: 'Check ops freshness before trusting stale private balances',
+            detail: `${readiness.lagging.length} lagging pool lane(s) can still distort settlement visibility.`,
+            href: '/status',
+          }
+        : undefined,
+      !authWorkspace.wallet.private.hasShieldedBalance && portfolioWorkspace.summary.publicExposure > 0
+        ? {
+            id: 'settlement-seed-private',
+            severity: 'info',
+            title: 'Seed private capital so settlement has a second lane',
+            detail: 'Visible exposure exists, but all settlement still depends on public routing and public confirmation.',
+            href: '/wallet',
+          }
+        : undefined,
+    ].filter(Boolean);
+
+    const settlementTimeline = historyWorkspace.latestEntries
+      .filter((item: any) =>
+        item.operation.includes('deposit') ||
+        item.operation.includes('withdraw') ||
+        item.operation.includes('split') ||
+        item.indexing?.status === 'pending' ||
+        item.indexing?.status === 'lagging' ||
+        item.privateFlow,
+      )
+      .slice(0, 18)
+      .map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        detail: item.detail,
+        state: item.state,
+        asset: item.asset,
+        amountDisplay: item.amountDisplay,
+        txHash: item.txHash,
+        privateFlow: item.privateFlow,
+        indexing: item.indexing,
+        sponsorship: item.sponsorship,
+        date: item.date,
+        statusLabel: item.statusLabel,
+      }));
+
+    const assetWindows = [
+      {
+        asset: 'USDC',
+        publicBalance: walletWorkspace.balances.public.usdc,
+        privateBalance: walletWorkspace.balances.private.usdc,
+        queuedAmount: totals.usdc.toFixed(7).replace(/\.?0+$/, '') || '0',
+        tone:
+          Number(walletWorkspace.balances.private.usdc || 0) > 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+            ? 'attention'
+            : Number(walletWorkspace.balances.public.usdc || 0) > 0 || Number(walletWorkspace.balances.private.usdc || 0) > 0
+              ? 'ready'
+              : 'blocked',
+        detail:
+          Number(walletWorkspace.balances.private.usdc || 0) > 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+            ? 'USDC value exists privately, but visible stablecoin settlement still depends on withdrawal processing.'
+            : Number(walletWorkspace.balances.public.usdc || 0) > 0
+              ? 'USDC is already visible enough to support swap, fiat, or repeat payment routes.'
+              : 'USDC settlement is still minimal and may need trustline or funding support.',
+      },
+      {
+        asset: 'XLM',
+        publicBalance: walletWorkspace.balances.public.xlm,
+        privateBalance: walletWorkspace.balances.private.xlm,
+        queuedAmount: totals.xlm.toFixed(7).replace(/\.?0+$/, '') || '0',
+        tone:
+          Number(walletWorkspace.balances.private.xlm || 0) > 0 && Number(walletWorkspace.balances.public.xlm || 0) === 0
+            ? 'attention'
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.private.xlm || 0) > 0
+              ? 'ready'
+              : 'blocked',
+        detail:
+          Number(walletWorkspace.balances.private.xlm || 0) > 0 && Number(walletWorkspace.balances.public.xlm || 0) === 0
+            ? 'Fee-bearing XLM is trapped privately until withdrawal settlement catches up.'
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0
+              ? 'Visible XLM already supports fee payment and fast public settlement.'
+              : 'XLM settlement is still too thin for comfortable fee coverage.',
+      },
+    ];
+
+    const outlook = [
+      queueCards.length > 0
+        ? `${queueCards.length} queued withdrawal item(s) mean the visible wallet may still gain balance without a new funding event.`
+        : 'No queued withdrawals are waiting to change the visible wallet unexpectedly.',
+      laggingPrivateEntries.length > 0
+        ? `${laggingPrivateEntries.length} private settlement item(s) are still waiting on indexing or canonical freshness.`
+        : 'No unusual private indexing lag is visible in the latest settlement feed.',
+      sponsoredEntries.length > 0
+        ? `${sponsoredEntries.length} recent sponsored settlement-related touch(es) reduce the effective fee friction around movement between lanes.`
+        : 'Settlement is not currently leaning on sponsorship-heavy flow.',
+      portfolioWorkspace.portfolioHealth.tone === 'ready'
+        ? 'Portfolio posture is healthy enough that settlement should mostly be about timing, not structural weakness.'
+        : 'Portfolio posture still has structural gaps, so settlement improvements may need funding or note seeding rather than simple patience.',
+    ];
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        queuedWithdrawals: queueCards.length,
+        retryable: retryableEntries.length,
+        laggingPrivate: laggingPrivateEntries.length,
+        sponsoredSettlementTouches: sponsoredEntries.length,
+        readyLanes: laneCards.filter((item) => item.tone === 'ready').length,
+        trackedTimeline: settlementTimeline.length,
+      },
+      laneCards,
+      transitionBoard,
+      sponsorshipBoard,
+      riskBoard,
+      recommendedActions,
+      queueCards,
+      assetWindows,
+      settlementTimeline,
+      outlook,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   private describeAuditTitle(operation: string) {
     switch (operation) {
       case 'public_send':
