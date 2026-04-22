@@ -3758,6 +3758,531 @@ export class UsersService {
     };
   }
 
+  async getLiquidityWorkspace(userId: string) {
+    const [
+      user,
+      authWorkspace,
+      walletWorkspace,
+      actionWorkspace,
+      contactsWorkspace,
+      portfolioWorkspace,
+      playbookWorkspace,
+      settlementWorkspace,
+      historyWorkspace,
+      readiness,
+      stats,
+    ] = await Promise.all([
+      this.findById(userId),
+      this.authService.getAuthWorkspace(userId),
+      this.getWalletWorkspace(userId),
+      this.getActionCenterWorkspace(userId),
+      this.getContactsWorkspace(userId),
+      this.getPortfolioWorkspace(userId),
+      this.getPlaybookWorkspace(userId),
+      this.getSettlementWorkspace(userId),
+      this.getHistoryWorkspace(userId),
+      this.opsService.getReadiness(),
+      this.opsService.getStats(),
+    ]);
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const publicXlm = Number(walletWorkspace.balances.public.xlm || 0);
+    const publicUsdc = Number(walletWorkspace.balances.public.usdc || 0);
+    const privateXlm = Number(walletWorkspace.balances.private.xlm || 0);
+    const privateUsdc = Number(walletWorkspace.balances.private.usdc || 0);
+    const totalVisible = publicXlm + publicUsdc;
+    const totalShielded = privateXlm + privateUsdc;
+    const totalCapital = totalVisible + totalShielded;
+    const queuedWithdrawals = settlementWorkspace.summary.queuedWithdrawals;
+    const retryable = settlementWorkspace.summary.retryable;
+    const readyRoutes = playbookWorkspace.summary.readyRoutes;
+    const marketLoad = actionWorkspace.lanes.market.total;
+    const openOffers = stats.flows?.openOffers ?? 0;
+    const swaps = stats.flows?.swaps ?? 0;
+    const pendingWithdrawals = stats.flows?.pendingWithdrawals ?? walletWorkspace.pending.count;
+    const activeUsers = stats.users?.active24h ?? 0;
+    const privatePreferredContacts = contactsWorkspace.summary.privatePreferred;
+    const blockedContacts = contactsWorkspace.summary.blocked;
+
+    const capitalSummary = {
+      totalCapital: Number(totalCapital.toFixed(4)),
+      visibleCapital: Number(totalVisible.toFixed(4)),
+      shieldedCapital: Number(totalShielded.toFixed(4)),
+      queuedCapital: Number((Number(walletWorkspace.pending.byAsset.xlm || 0) + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+      dryPowder:
+        Number(
+          (
+            Math.max(publicXlm, 0) +
+            Math.max(publicUsdc, 0) +
+            Math.max(privateXlm * 0.4, 0) +
+            Math.max(privateUsdc * 0.4, 0)
+          ).toFixed(4),
+        ),
+    };
+
+    const deploymentWindows = [
+      {
+        id: 'visible_send',
+        label: 'Visible send window',
+        tone: totalVisible > 0 ? 'ready' : 'blocked',
+        availableCapital: Number(totalVisible.toFixed(4)),
+        routeCount: publicXlm > 0 || publicUsdc > 0 ? 1 : 0,
+        summary:
+          totalVisible > 0
+            ? 'Visible balance is immediately deployable for direct wallet sends, fiat planning, or public settlement follow-up.'
+            : 'Visible balance is missing, so fast public deployment remains blocked by funding.',
+        strongestAsset: publicUsdc >= publicXlm ? 'USDC' : 'XLM',
+        nextMove:
+          totalVisible > 0
+            ? 'Use the send planner, fiat desk, or wallet workspace without waiting on note prep.'
+            : 'Open the funding desk and restore public liquidity first.',
+      },
+      {
+        id: 'shielded_send',
+        label: 'Shielded send window',
+        tone: totalShielded > 0 ? 'ready' : totalVisible > 0 ? 'attention' : 'blocked',
+        availableCapital: Number(totalShielded.toFixed(4)),
+        routeCount: privatePreferredContacts > 0 ? privatePreferredContacts : totalShielded > 0 ? 1 : 0,
+        summary:
+          totalShielded > 0
+            ? 'Shielded balances are deployable for protected sends, note-driven planning, and more privacy-native route choices.'
+            : totalVisible > 0
+              ? 'Shielded deployment is reachable, but only after a first deposit or note-shaping step.'
+              : 'There is no capital in a state that can feed the shielded lane yet.',
+        strongestAsset: privateUsdc >= privateXlm ? 'USDC' : 'XLM',
+        nextMove:
+          totalShielded > 0
+            ? 'Use private send or market routes that benefit from note-based capital.'
+            : totalVisible > 0
+              ? 'Deposit visible capital to create the first deployable private window.'
+              : 'Fund visible capital before trying to deploy private routes.',
+      },
+      {
+        id: 'market_window',
+        label: 'Market liquidity window',
+        tone:
+          totalCapital > 0
+            ? marketLoad > 0 || openOffers > 0
+              ? 'ready'
+              : 'attention'
+            : 'blocked',
+        availableCapital: Number((publicUsdc + privateUsdc + publicXlm * 0.3 + privateXlm * 0.3).toFixed(4)),
+        routeCount: openOffers + marketLoad,
+        summary:
+          totalCapital > 0
+            ? marketLoad > 0 || openOffers > 0
+              ? 'Capital can already lean into swap and offer routes with some visible market structure around it.'
+              : 'Capital exists, but market use is still early and needs the first deliberate swap or offer action.'
+            : 'No capital exists to deploy into swap or offer routes yet.',
+        strongestAsset: publicUsdc + privateUsdc >= publicXlm + privateXlm ? 'USDC' : 'XLM',
+        nextMove:
+          totalCapital > 0
+            ? marketLoad > 0 || openOffers > 0
+              ? 'Use swap or seller desks to move beyond storage into routed market execution.'
+              : 'Take a first measured market action so capital learns a usable route.'
+            : 'Fund or seed the wallet before expecting market routes to matter.',
+      },
+      {
+        id: 'recovery_window',
+        label: 'Recovery liquidity window',
+        tone:
+          queuedWithdrawals > 0 || retryable > 0
+            ? 'attention'
+            : totalVisible > 0
+              ? 'ready'
+              : 'blocked',
+        availableCapital: Number((publicXlm + publicUsdc + Number(walletWorkspace.pending.byAsset.xlm || 0) + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+        routeCount: settlementWorkspace.summary.readyLanes,
+        summary:
+          queuedWithdrawals > 0 || retryable > 0
+            ? 'Some capital is still in a recovery-sensitive state, so settlement clarity matters before redeploying it aggressively.'
+            : totalVisible > 0
+              ? 'Visible capital and a calm queue make recovery and follow-up deployment relatively safe.'
+              : 'Recovery flexibility is weak because the public lane lacks enough settled liquidity.',
+        strongestAsset:
+          publicXlm + Number(walletWorkspace.pending.byAsset.xlm || 0) >= publicUsdc + Number(walletWorkspace.pending.byAsset.usdc || 0)
+            ? 'XLM'
+            : 'USDC',
+        nextMove:
+          queuedWithdrawals > 0 || retryable > 0
+            ? 'Use settlement or history before treating this capital as free for new routes.'
+            : totalVisible > 0
+              ? 'Recovery liquidity is stable enough to support follow-up sends or fiat planning.'
+              : 'Rebuild visible liquidity so recovery is not dependent on future settlement.',
+      },
+    ];
+
+    const capitalLanes = [
+      {
+        id: 'public_xlm',
+        label: 'Public XLM',
+        amount: publicXlm,
+        share: totalCapital > 0 ? Number(((publicXlm / totalCapital) * 100).toFixed(1)) : 0,
+        tone: publicXlm > 0 ? 'ready' : 'blocked',
+        role: 'fees, visible sends, and fast settlement',
+        risk:
+          publicXlm > 0
+            ? 'This lane is strong when the next move needs fees or public confirmation.'
+            : 'Without public XLM, most quick public actions become fragile.',
+      },
+      {
+        id: 'public_usdc',
+        label: 'Public USDC',
+        amount: publicUsdc,
+        share: totalCapital > 0 ? Number(((publicUsdc / totalCapital) * 100).toFixed(1)) : 0,
+        tone: publicUsdc > 0 ? 'ready' : authWorkspace.wallet.public.hasUsdcTrustline ? 'attention' : 'blocked',
+        role: 'stable visible payments, fiat readiness, and public market use',
+        risk:
+          publicUsdc > 0
+            ? 'This lane is useful when the next move benefits from visible stablecoin liquidity.'
+            : authWorkspace.wallet.public.hasUsdcTrustline
+              ? 'The trustline is ready, but stablecoin liquidity has not settled publicly yet.'
+              : 'Stablecoin routes are still gated by trustline or funding readiness.',
+      },
+      {
+        id: 'private_xlm',
+        label: 'Private XLM',
+        amount: privateXlm,
+        share: totalCapital > 0 ? Number(((privateXlm / totalCapital) * 100).toFixed(1)) : 0,
+        tone: privateXlm > 0 ? 'ready' : totalVisible > 0 ? 'info' : 'blocked',
+        role: 'protected fee-bearing movement and shielded route flexibility',
+        risk:
+          privateXlm > 0
+            ? 'This lane supports private movement, but it may still need withdrawal to become publicly spendable.'
+            : totalVisible > 0
+              ? 'Private XLM is reachable after deposit, but not yet deployable.'
+              : 'No shielded XLM exists yet.',
+      },
+      {
+        id: 'private_usdc',
+        label: 'Private USDC',
+        amount: privateUsdc,
+        share: totalCapital > 0 ? Number(((privateUsdc / totalCapital) * 100).toFixed(1)) : 0,
+        tone: privateUsdc > 0 ? 'ready' : totalVisible > 0 ? 'info' : 'blocked',
+        role: 'protected stablecoin routes, private swaps, and hidden balance posture',
+        risk:
+          privateUsdc > 0
+            ? 'This lane expands privacy-native stablecoin routing.'
+            : totalVisible > 0
+              ? 'Private USDC can be created, but the wallet has not seeded it yet.'
+              : 'There is no capital available to create private stablecoin exposure.',
+      },
+    ];
+
+    const idleCapitalBoard = [
+      {
+        id: 'public_idle',
+        label: 'Visible idle capital',
+        tone:
+          totalVisible > 0 && totalShielded === 0 && marketLoad === 0
+            ? 'attention'
+            : totalVisible > 0
+              ? 'info'
+              : 'blocked',
+        amount: Number(totalVisible.toFixed(4)),
+        detail:
+          totalVisible > 0 && totalShielded === 0 && marketLoad === 0
+            ? 'Visible capital is doing most of the work while privacy and market routes remain underused.'
+            : totalVisible > 0
+              ? 'Visible capital is present, but it is not necessarily idle if settlement and send routes still need it.'
+              : 'No visible idle capital exists right now.',
+      },
+      {
+        id: 'private_idle',
+        label: 'Shielded idle capital',
+        tone:
+          totalShielded > 0 && queuedWithdrawals === 0 && privatePreferredContacts === 0 && marketLoad === 0
+            ? 'attention'
+            : totalShielded > 0
+              ? 'info'
+              : 'blocked',
+        amount: Number(totalShielded.toFixed(4)),
+        detail:
+          totalShielded > 0 && queuedWithdrawals === 0 && privatePreferredContacts === 0 && marketLoad === 0
+            ? 'Private capital exists, but there is little current route pressure using its privacy advantage.'
+            : totalShielded > 0
+              ? 'Shielded capital is present, though it may still be strategically useful even if not immediately deployed.'
+              : 'No shielded idle capital exists yet.',
+      },
+      {
+        id: 'queued_idle',
+        label: 'Queued capital',
+        tone: queuedWithdrawals > 0 ? 'attention' : 'ready',
+        amount: Number((Number(walletWorkspace.pending.byAsset.xlm || 0) + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+        detail:
+          queuedWithdrawals > 0
+            ? 'This capital is not idle in a helpful sense. It is waiting on settlement and should not be counted twice.'
+            : 'No material queued capital is distorting deployable liquidity right now.',
+      },
+      {
+        id: 'blocked_relationship_liquidity',
+        label: 'Blocked relationship liquidity',
+        tone: blockedContacts > 0 ? 'attention' : 'ready',
+        amount: Number(((blockedContacts * 0.5) + privatePreferredContacts * 0.2).toFixed(1)),
+        detail:
+          blockedContacts > 0
+            ? `${blockedContacts} contact route(s) are blocked, which means some liquidity cannot be used as cleanly as the raw balances suggest.`
+            : 'Relationship-driven liquidity is not visibly blocked right now.',
+      },
+    ];
+
+    const deploymentScenarios = [
+      {
+        id: 'fee-and-recovery',
+        title: 'Protect fee and recovery liquidity',
+        tone: publicXlm > 0 ? 'ready' : 'blocked',
+        destination: '/wallet/fund',
+        capital: Number(publicXlm.toFixed(4)),
+        summary:
+          publicXlm > 0
+            ? 'Visible XLM should stay funded enough that no route collapses because of missing fees.'
+            : 'Fee and recovery liquidity is too thin, so every other route remains more brittle than it should be.',
+        steps: [
+          'Keep visible XLM funded for fees, trustline changes, and public fallbacks.',
+          'Avoid over-deploying all visible XLM into the private lane unless a strong reason exists.',
+          'Revisit this lane after any large withdrawal or market action that materially drains fee coverage.',
+        ],
+      },
+      {
+        id: 'seed-private-optionality',
+        title: 'Convert visible capital into private optionality',
+        tone: totalVisible > 0 && totalShielded === 0 ? 'attention' : totalShielded > 0 ? 'ready' : 'blocked',
+        destination: '/wallet',
+        capital: Number((publicUsdc + publicXlm).toFixed(4)),
+        summary:
+          totalVisible > 0 && totalShielded === 0
+            ? 'Visible liquidity exists, but the account is still missing deployable private optionality.'
+            : totalShielded > 0
+              ? 'Private optionality is already present, so further seeding is now a strategic choice rather than a prerequisite.'
+              : 'No visible capital exists to convert into private optionality yet.',
+        steps: [
+          'Choose which asset should first create private route capacity.',
+          'Deposit enough to make protected sends and protected market flow genuinely usable.',
+          'Return to portfolio or playbook once the shielded lane exists and can be compared against visible deployment.',
+        ],
+      },
+      {
+        id: 'redeploy-settled-stablecoin',
+        title: 'Redeploy stablecoin once visibly settled',
+        tone:
+          publicUsdc > 0
+            ? 'ready'
+            : privateUsdc > 0 || Number(walletWorkspace.pending.byAsset.usdc || 0) > 0
+              ? 'attention'
+              : 'blocked',
+        destination: publicUsdc > 0 ? '/fiat' : '/settlement',
+        capital: Number((publicUsdc + privateUsdc + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+        summary:
+          publicUsdc > 0
+            ? 'Stablecoin liquidity is already public enough for fiat, swaps, or repeat payments.'
+            : privateUsdc > 0 || Number(walletWorkspace.pending.byAsset.usdc || 0) > 0
+              ? 'Stablecoin capital exists, but some of it is still private or queued instead of visibly deployable.'
+              : 'Stablecoin deployment is still weak because the wallet lacks meaningful USDC liquidity.',
+        steps: [
+          'Verify whether the stablecoin is public, private, or still queued in settlement.',
+          'Use fiat or market desks only once the lane you need is actually visible and settled.',
+          'Avoid treating queued USDC as immediately deployable in visible-only routes.',
+        ],
+      },
+      {
+        id: 'market-pressure-deployment',
+        title: 'Answer market pressure with the right lane',
+        tone:
+          totalCapital > 0
+            ? marketLoad > 0 || openOffers > 0 || swaps > 0
+              ? 'ready'
+              : 'info'
+            : 'blocked',
+        destination: '/swap',
+        capital: Number((totalCapital * 0.65).toFixed(4)),
+        summary:
+          totalCapital > 0
+            ? marketLoad > 0 || openOffers > 0 || swaps > 0
+              ? 'There is enough capital and enough market signal that deployment can become route-aware instead of hypothetical.'
+              : 'The account has capital, but market pressure is still early and may not justify aggressive deployment yet.'
+            : 'No capital exists to answer market pressure yet.',
+        steps: [
+          'Check whether visible or private capital best matches the market route you actually want.',
+          'Do not over-expose visible liquidity if the market opportunity benefits from privacy.',
+          'Use seller or swap desks after confirming settlement and fee posture are strong enough.',
+        ],
+      },
+    ];
+
+    const pressureBoard = [
+      {
+        id: 'ops-pressure',
+        label: 'Ops pressure',
+        tone: readiness.status === 'ready' ? 'ready' : 'attention',
+        value: `${readiness.lagging.length} lagging pool lane(s)`,
+        detail:
+          readiness.status === 'ready'
+            ? 'Ops freshness is not materially reducing deployable liquidity right now.'
+            : 'Lagging pool lanes can make liquidity appear less deployable than it really is until state catches up.',
+      },
+      {
+        id: 'queue-pressure',
+        label: 'Queue pressure',
+        tone: queuedWithdrawals > 0 ? 'attention' : 'ready',
+        value: `${queuedWithdrawals} queued withdrawal(s)`,
+        detail:
+          queuedWithdrawals > 0
+            ? 'Some capital is still between private and public lanes.'
+            : 'No material queue pressure is currently slowing deployment choices.',
+      },
+      {
+        id: 'relationship-pressure',
+        label: 'Relationship pressure',
+        tone: blockedContacts > 0 ? 'attention' : 'info',
+        value: `${contactsWorkspace.summary.contacts} contact(s) tracked`,
+        detail:
+          blockedContacts > 0
+            ? 'Blocked counterparties reduce how easily existing balances can be reused.'
+            : 'Counterparty quality is not obviously limiting deployment right now.',
+      },
+      {
+        id: 'activity-pressure',
+        label: 'Activity pressure',
+        tone: retryable > 0 || pendingWithdrawals > 0 ? 'attention' : 'info',
+        value: `${historyWorkspace.summary.pending} pending / ${historyWorkspace.summary.failed} failed`,
+        detail:
+          retryable > 0 || pendingWithdrawals > 0
+            ? 'Recent unfinished activity is still pulling attention away from fresh deployment.'
+            : 'Recent activity is not heavily distorting deployment confidence.',
+      },
+    ];
+
+    const actionBoard = [
+      !authWorkspace.wallet.public.hasXlm
+        ? {
+            id: 'liquidity-fund-xlm',
+            severity: 'critical',
+            title: 'Restore visible XLM before trying to deploy capital elsewhere',
+            detail: 'Fee liquidity is the narrowest choke point in the whole system when visible XLM is absent.',
+            href: '/wallet/fund',
+          }
+        : undefined,
+      totalVisible > 0 && totalShielded === 0
+        ? {
+            id: 'liquidity-seed-private',
+            severity: 'warning',
+            title: 'Create a private deployment lane instead of leaving all capital visible',
+            detail: 'Right now the wallet is over-dependent on public liquidity for every route choice.',
+            href: '/wallet',
+          }
+        : undefined,
+      queuedWithdrawals > 0
+        ? {
+            id: 'liquidity-process-queue',
+            severity: 'warning',
+            title: 'Settle queued withdrawals before double-counting that capital',
+            detail: 'Queued value is real, but it is not fully redeployable until settlement completes.',
+            href: '/settlement',
+          }
+        : undefined,
+      marketLoad === 0 && totalCapital > 0 && activeUsers > 0
+        ? {
+            id: 'liquidity-use-market',
+            severity: 'info',
+            title: 'Use one market or fiat route so capital starts learning real deployment behavior',
+            detail: 'There is funded capital and active usage around the product, but your own deployment graph is still light.',
+            href: '/swap',
+          }
+        : undefined,
+    ].filter(Boolean);
+
+    const routeRadar = [
+      {
+        id: 'wallet-route',
+        label: 'Wallet route',
+        tone: totalVisible > 0 ? 'ready' : 'blocked',
+        score: Math.max(0, Math.min(100, Math.round(publicXlm * 12 + publicUsdc * 6))),
+        detail:
+          totalVisible > 0
+            ? 'Best for immediate balance control, trustline action, and visible sends.'
+            : 'Still blocked by missing visible liquidity.',
+      },
+      {
+        id: 'private-route',
+        label: 'Private route',
+        tone: totalShielded > 0 ? 'ready' : totalVisible > 0 ? 'attention' : 'blocked',
+        score: Math.max(0, Math.min(100, Math.round(privateXlm * 9 + privateUsdc * 9 + privatePreferredContacts * 6))),
+        detail:
+          totalShielded > 0
+            ? 'Best for protected transfer and privacy-led deployment.'
+            : totalVisible > 0
+              ? 'Reachable after seeding a first private deposit.'
+              : 'Not reachable yet.',
+      },
+      {
+        id: 'market-route',
+        label: 'Market route',
+        tone: totalCapital > 0 ? marketLoad > 0 || openOffers > 0 ? 'ready' : 'info' : 'blocked',
+        score: Math.max(0, Math.min(100, Math.round((openOffers + swaps) * 5 + totalCapital * 3))),
+        detail:
+          totalCapital > 0
+            ? 'Best when you want routed deployment instead of static storage.'
+            : 'Needs funded capital first.',
+      },
+      {
+        id: 'recovery-route',
+        label: 'Recovery route',
+        tone: queuedWithdrawals > 0 || retryable > 0 ? 'attention' : totalVisible > 0 ? 'ready' : 'blocked',
+        score: Math.max(0, Math.min(100, Math.round((publicXlm + publicUsdc) * 4 + settlementWorkspace.summary.readyLanes * 9))),
+        detail:
+          queuedWithdrawals > 0 || retryable > 0
+            ? 'Important right now because some capital still needs clarity before reuse.'
+            : 'Calm enough that recovery is not the main deployment concern.',
+      },
+    ];
+
+    const outlook = [
+      totalCapital > 0
+        ? `The account has ${capitalSummary.totalCapital} total capital across visible and shielded lanes.`
+        : 'The account still has no meaningful capital to deploy.',
+      totalVisible > totalShielded
+        ? 'Visible capital currently dominates, so the easiest next moves will still favor public routes.'
+        : totalShielded > totalVisible
+          ? 'Shielded capital currently dominates, so protected routes and settlement discipline matter more.'
+          : 'Visible and shielded capital are relatively balanced right now.',
+      queuedWithdrawals > 0
+        ? `${queuedWithdrawals} queued withdrawal item(s) mean some liquidity is real but not fully public yet.`
+        : 'No queued withdrawals are hiding future visible balance changes right now.',
+      marketLoad > 0 || openOffers > 0
+        ? `There are ${marketLoad} market task(s) and ${openOffers} open offer(s), so route-aware deployment has a meaningful surface to work with.`
+        : 'Market pressure is still light, so capital deployment can stay conservative unless you want to grow route history.',
+    ];
+
+    return {
+      user: {
+        username: user.username,
+        stellarPublicKey: user.stellarPublicKey,
+        reputation: user.reputation,
+      },
+      summary: {
+        windows: deploymentWindows.length,
+        readyWindows: deploymentWindows.filter((item) => item.tone === 'ready').length,
+        blockedWindows: deploymentWindows.filter((item) => item.tone === 'blocked').length,
+        routeScoreAverage: Math.round(routeRadar.reduce((sum, item) => sum + item.score, 0) / routeRadar.length),
+        activeUsers,
+        dryPowder: capitalSummary.dryPowder,
+      },
+      capitalSummary,
+      deploymentWindows,
+      capitalLanes,
+      idleCapitalBoard,
+      deploymentScenarios,
+      pressureBoard,
+      actionBoard,
+      routeRadar,
+      outlook,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   private describeAuditTitle(operation: string) {
     switch (operation) {
       case 'public_send':

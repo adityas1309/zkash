@@ -98,6 +98,13 @@ export class UsersController {
     return this.usersService.getSettlementWorkspace(req.user._id);
   }
 
+  @Get('liquidity/workspace')
+  @UseGuards(SessionAuthGuard)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async getLiquidityWorkspace(@Req() req: any) {
+    return this.usersService.getLiquidityWorkspace(req.user._id);
+  }
+
   @Post('trustline')
   @UseGuards(SessionAuthGuard)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
