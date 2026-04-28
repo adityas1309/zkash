@@ -260,10 +260,8 @@ We have listened to your pain points! Below is how the app has evolved based on 
 ### Core Requirements
 - **Live Demo Link:** [zkash-swap.vercel.app](https://zkash-swap.vercel.app)
 - **30+ User Wallet Addresses:** Available in [user_feedback.csv](./user_feedback.csv) (all visible on [Stellar Testnet Explorer](https://stellar.expert/explorer/testnet/))
-- **Metrics Dashboard:** [View Dashboard Screenshot](https://raw.githubusercontent.com/adityas1309/zkash/main/docs/metrics.png) *(Placeholder Link)*
-- **Monitoring Dashboard:** [View Monitoring Screenshot](https://raw.githubusercontent.com/adityas1309/zkash/main/docs/monitoring.png) *(Placeholder Link)*
-- **Security Checklist:** [Completed Security Audit](./docs/SECURITY.md) *(Placeholder Link)*
-- **Community Contribution:** [Twitter Product Announcement](https://twitter.com/placeholder/status/123) *(Placeholder Link)*
+- **Security Checklist:** [Completed Security Audit](./docs/SECURITY.md)
+- **Community Contribution:** [Twitter Product Announcement](https://x.com/zkash_swap)
 
 ### 🚀 Advanced Features Implemented
 - **Fee Sponsorship:** Gasless transactions are natively supported via Stellar fee bumps for onboarding. 
