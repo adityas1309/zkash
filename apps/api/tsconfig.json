@@ -19,7 +19,9 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "sdk": ["../../packages/sdk/src/index.ts"],
+      "sdk/*": ["../../packages/sdk/src/*"]
     }
   }
 }

@@ -176,9 +176,12 @@ The GitHub Actions workflow in [`.github/workflows/ci-cd.yml`](./.github/workflo
 | Test Cases                | `pnpm ci:test`    | Runs the workspace test suite after quality checks pass.                                           |
 | Deployment                | Vercel CLI        | Deploys `apps/web` to production after tests pass on `main`, `master`, or manual dispatch.         |
 
-Deployment requires these GitHub repository secrets:
+Deployment requires one GitHub repository secret:
 
 - `VERCEL_TOKEN`
+
+Deployment also expects these GitHub repository variables:
+
 - `VERCEL_ORG_ID`
 - `VERCEL_PROJECT_ID`
 
