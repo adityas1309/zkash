@@ -170,6 +170,8 @@ soroban contract optimize --wasm target/wasm32-unknown-unknown/release/shielded_
 
 The GitHub Actions workflow in [`.github/workflows/ci-cd.yml`](./.github/workflows/ci-cd.yml) runs on every push, pull request, and manual dispatch.
 
+![CI/CD workflow run screenshot](./cicd_Screenshot.png)
+
 | Stage                     | Command           | Purpose                                                                                            |
 | ------------------------- | ----------------- | -------------------------------------------------------------------------------------------------- |
 | Lint, Format & Type Check | `pnpm ci:quality` | Runs Next.js linting, Prettier formatting checks, and TypeScript checks across workspace packages. |
