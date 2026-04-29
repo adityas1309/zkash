@@ -51,23 +51,25 @@ export class TransactionAuditService {
     state: TransactionAuditState,
     patch: Partial<CreateAuditInput> = {},
   ) {
-    return this.transactionAuditModel.findByIdAndUpdate(
-      auditId,
-      {
-        $set: {
-          state,
-          txHash: patch.txHash,
-          sponsorshipAttempted: patch.sponsorshipAttempted,
-          sponsored: patch.sponsored,
-          sponsorshipDetail: patch.sponsorshipDetail,
-          indexingStatus: patch.indexingStatus,
-          indexingDetail: patch.indexingDetail,
-          error: patch.error,
-          metadata: patch.metadata,
+    return this.transactionAuditModel
+      .findByIdAndUpdate(
+        auditId,
+        {
+          $set: {
+            state,
+            txHash: patch.txHash,
+            sponsorshipAttempted: patch.sponsorshipAttempted,
+            sponsored: patch.sponsored,
+            sponsorshipDetail: patch.sponsorshipDetail,
+            indexingStatus: patch.indexingStatus,
+            indexingDetail: patch.indexingDetail,
+            error: patch.error,
+            metadata: patch.metadata,
+          },
         },
-      },
-      { new: true },
-    ).exec();
+        { new: true },
+      )
+      .exec();
   }
 
   async listRecentForUser(userId: string, limit = 20) {

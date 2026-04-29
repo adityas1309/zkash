@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import {
   AlertCircle,
   ArrowLeft,
@@ -20,13 +20,13 @@ import {
   Sparkles,
   TrendingUp,
   Wallet,
-} from "lucide-react";
-import Prism from "@/components/ui/Prism";
-import { usePrivacy } from "@/context/PrivacyContext";
+} from 'lucide-react';
+import Prism from '@/components/ui/Prism';
+import { usePrivacy } from '@/context/PrivacyContext';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
-type Asset = "USDC" | "XLM";
+type Asset = 'USDC' | 'XLM';
 
 interface OfferPreview {
   merchant: {
@@ -63,12 +63,12 @@ interface OfferPreview {
   };
   diagnostics: Array<{
     label: string;
-    tone: "good" | "caution" | "risk";
+    tone: 'good' | 'caution' | 'risk';
     detail: string;
   }>;
   publishingGuidance: {
     readinessScore: number;
-    launchTone: "good" | "caution" | "risk";
+    launchTone: 'good' | 'caution' | 'risk';
     notes: string[];
   };
 }
@@ -78,30 +78,30 @@ function parseNumber(value: string) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function getToneVariant(tone: "good" | "caution" | "risk") {
-  if (tone === "good") {
-    return "success" as const;
+function getToneVariant(tone: 'good' | 'caution' | 'risk') {
+  if (tone === 'good') {
+    return 'success' as const;
   }
-  if (tone === "caution") {
-    return "warning" as const;
+  if (tone === 'caution') {
+    return 'warning' as const;
   }
-  return "error" as const;
+  return 'error' as const;
 }
 
 function getPercentileLabel(position: string) {
   switch (position) {
-    case "first_listing":
-      return "First visible listing";
-    case "aggressive_low":
-      return "Aggressive discount";
-    case "discount_edge":
-      return "Discount edge";
-    case "aggressive_high":
-      return "Aggressive premium";
-    case "premium_edge":
-      return "Premium edge";
+    case 'first_listing':
+      return 'First visible listing';
+    case 'aggressive_low':
+      return 'Aggressive discount';
+    case 'discount_edge':
+      return 'Discount edge';
+    case 'aggressive_high':
+      return 'Aggressive premium';
+    case 'premium_edge':
+      return 'Premium edge';
     default:
-      return "Balanced band";
+      return 'Balanced band';
   }
 }
 
@@ -136,16 +136,16 @@ export default function CreateOfferPage() {
   const router = useRouter();
   const { isPrivate } = usePrivacy();
 
-  const [assetIn, setAssetIn] = useState<Asset>("XLM");
-  const [assetOut, setAssetOut] = useState<Asset>("USDC");
-  const [rate, setRate] = useState("");
-  const [min, setMin] = useState("");
-  const [max, setMax] = useState("");
+  const [assetIn, setAssetIn] = useState<Asset>('XLM');
+  const [assetOut, setAssetOut] = useState<Asset>('USDC');
+  const [rate, setRate] = useState('');
+  const [min, setMin] = useState('');
+  const [max, setMax] = useState('');
   const [preview, setPreview] = useState<OfferPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState("");
-  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState('');
 
   const numericRate = useMemo(() => parseNumber(rate), [rate]);
   const numericMin = useMemo(() => parseNumber(min), [min]);
@@ -155,36 +155,36 @@ export default function CreateOfferPage() {
     if (!numericRate || numericRate <= 0) {
       return {
         valid: false,
-        detail: "Set a positive exchange rate for the listing.",
+        detail: 'Set a positive exchange rate for the listing.',
       };
     }
     if (!numericMin || numericMin <= 0) {
       return {
         valid: false,
-        detail: "Set a positive minimum request size.",
+        detail: 'Set a positive minimum request size.',
       };
     }
     if (!numericMax || numericMax <= 0) {
       return {
         valid: false,
-        detail: "Set a positive maximum request size.",
+        detail: 'Set a positive maximum request size.',
       };
     }
     if (numericMax < numericMin) {
       return {
         valid: false,
-        detail: "Maximum size must be greater than or equal to the minimum size.",
+        detail: 'Maximum size must be greater than or equal to the minimum size.',
       };
     }
     if (assetIn === assetOut) {
       return {
         valid: false,
-        detail: "Input and output assets must be different.",
+        detail: 'Input and output assets must be different.',
       };
     }
     return {
       valid: true,
-      detail: "Draft is structurally valid. Preview will estimate how publishable it looks.",
+      detail: 'Draft is structurally valid. Preview will estimate how publishable it looks.',
     };
   }, [assetIn, assetOut, numericMax, numericMin, numericRate]);
 
@@ -195,13 +195,13 @@ export default function CreateOfferPage() {
     }
 
     setPreviewLoading(true);
-    setError("");
+    setError('');
 
     try {
       const res = await fetch(`${API_URL}/offers/preview`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           assetIn,
           assetOut,
@@ -213,13 +213,13 @@ export default function CreateOfferPage() {
 
       const data = await res.json().catch(() => null);
       if (!res.ok || !data) {
-        throw new Error(data?.message || data?.error || "Failed to preview offer");
+        throw new Error(data?.message || data?.error || 'Failed to preview offer');
       }
 
       setPreview(data);
     } catch (err: unknown) {
       setPreview(null);
-      setError(err instanceof Error ? err.message : "Failed to preview offer");
+      setError(err instanceof Error ? err.message : 'Failed to preview offer');
     } finally {
       setPreviewLoading(false);
     }
@@ -240,14 +240,14 @@ export default function CreateOfferPage() {
     }
 
     setSubmitting(true);
-    setSuccessMessage("");
-    setError("");
+    setSuccessMessage('');
+    setError('');
 
     try {
       const res = await fetch(`${API_URL}/offers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           assetIn,
           assetOut,
@@ -259,15 +259,15 @@ export default function CreateOfferPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.message || data.error || "Failed to create offer");
+        throw new Error(data.message || data.error || 'Failed to create offer');
       }
 
       setSuccessMessage(
-        "Offer created successfully. The listing is live on the market and will now appear with its execution diagnostics.",
+        'Offer created successfully. The listing is live on the market and will now appear with its execution diagnostics.',
       );
-      setTimeout(() => router.push("/swap"), 1800);
+      setTimeout(() => router.push('/swap'), 1800);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to create offer");
+      setError(err instanceof Error ? err.message : 'Failed to create offer');
     } finally {
       setSubmitting(false);
     }
@@ -302,12 +302,13 @@ export default function CreateOfferPage() {
             <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Listing Planner</p>
             <h1 className="mt-2 text-3xl font-bold text-white">Create a market-ready offer</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              This workspace previews how your listing fits the current market before you publish it: pair saturation,
-              rate placement, seller readiness, and whether the ticket band feels usable.
+              This workspace previews how your listing fits the current market before you publish
+              it: pair saturation, rate placement, seller readiness, and whether the ticket band
+              feels usable.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant={isPrivate ? "success" : "warning"}>
+            <Badge variant={isPrivate ? 'success' : 'warning'}>
               {isPrivate ? (
                 <span className="flex items-center gap-1">
                   <Shield className="h-3.5 w-3.5" />
@@ -348,7 +349,9 @@ export default function CreateOfferPage() {
                   <div className="mb-6 flex items-center justify-between gap-4">
                     <div>
                       <span className="text-sm font-medium text-slate-400">You Sell</span>
-                      <p className="mt-1 text-xs text-slate-500">This defines what buyers bring into your listing.</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        This defines what buyers bring into your listing.
+                      </p>
                     </div>
                     <Badge variant="default">Rate anchor</Badge>
                   </div>
@@ -359,9 +362,9 @@ export default function CreateOfferPage() {
                         <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/5 bg-white p-1">
                           <img
                             src={
-                              assetIn === "USDC"
-                                ? "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035"
-                                : "https://cryptologos.cc/logos/stellar-xlm-logo.svg?v=035"
+                              assetIn === 'USDC'
+                                ? 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035'
+                                : 'https://cryptologos.cc/logos/stellar-xlm-logo.svg?v=035'
                             }
                             alt={assetIn}
                             className="h-full w-full object-contain"
@@ -392,7 +395,9 @@ export default function CreateOfferPage() {
                         step="any"
                         className="block w-full bg-transparent text-right text-3xl font-bold text-white placeholder-slate-600 focus:outline-none md:text-4xl"
                       />
-                      <span className="mt-1 text-xs text-slate-500">Amount of {assetOut} per 1 {assetIn}</span>
+                      <span className="mt-1 text-xs text-slate-500">
+                        Amount of {assetOut} per 1 {assetIn}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -412,7 +417,9 @@ export default function CreateOfferPage() {
                   <div className="mb-6 flex items-center justify-between gap-4">
                     <div>
                       <span className="text-sm font-medium text-slate-400">Buyer Receives</span>
-                      <p className="mt-1 text-xs text-slate-500">This is the asset your listing pays out.</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        This is the asset your listing pays out.
+                      </p>
                     </div>
                     <Badge variant="default">Trade band</Badge>
                   </div>
@@ -423,9 +430,9 @@ export default function CreateOfferPage() {
                         <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-white/5 bg-white p-1">
                           <img
                             src={
-                              assetOut === "USDC"
-                                ? "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035"
-                                : "https://cryptologos.cc/logos/stellar-xlm-logo.svg?v=035"
+                              assetOut === 'USDC'
+                                ? 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035'
+                                : 'https://cryptologos.cc/logos/stellar-xlm-logo.svg?v=035'
                             }
                             alt={assetOut}
                             className="h-full w-full object-contain"
@@ -454,7 +461,9 @@ export default function CreateOfferPage() {
 
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Minimum request size</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Minimum request size
+                      </p>
                       <input
                         type="number"
                         placeholder="Min"
@@ -464,11 +473,15 @@ export default function CreateOfferPage() {
                         step="any"
                         className="mt-3 block w-full bg-transparent text-3xl font-bold text-white placeholder-slate-600 focus:outline-none"
                       />
-                      <p className="mt-2 text-xs text-slate-500">Smaller requests below this size will be rejected.</p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Smaller requests below this size will be rejected.
+                      </p>
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Maximum request size</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Maximum request size
+                      </p>
                       <input
                         type="number"
                         placeholder="Max"
@@ -478,7 +491,9 @@ export default function CreateOfferPage() {
                         step="any"
                         className="mt-3 block w-full bg-transparent text-3xl font-bold text-white placeholder-slate-600 focus:outline-none"
                       />
-                      <p className="mt-2 text-xs text-slate-500">Larger requests above this size will be rejected.</p>
+                      <p className="mt-2 text-xs text-slate-500">
+                        Larger requests above this size will be rejected.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -526,7 +541,9 @@ export default function CreateOfferPage() {
                           <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent"></div>
                           <CheckCircle className="z-10 h-6 w-6 text-slate-300" />
                         </div>
-                        <span className="ml-4 font-bold tracking-wide text-slate-200">Publish Offer</span>
+                        <span className="ml-4 font-bold tracking-wide text-slate-200">
+                          Publish Offer
+                        </span>
                       </>
                     )}
                   </button>
@@ -539,14 +556,16 @@ export default function CreateOfferPage() {
             <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-1">
               <MetricCard
                 title="Draft rate"
-                value={numericRate ? numericRate.toString() : "0"}
+                value={numericRate ? numericRate.toString() : '0'}
                 detail={`Quoted in ${assetOut} per 1 ${assetIn}.`}
                 icon={<TrendingUp className="h-5 w-5" />}
               />
               <MetricCard
                 title="Ticket band"
                 value={
-                  numericMin !== null && numericMax !== null ? `${Math.max(numericMax - numericMin, 0).toFixed(4)}` : "0"
+                  numericMin !== null && numericMax !== null
+                    ? `${Math.max(numericMax - numericMin, 0).toFixed(4)}`
+                    : '0'
                 }
                 detail="Difference between the minimum and maximum accepted request sizes."
                 icon={<Layers3 className="h-5 w-5" />}
@@ -556,16 +575,20 @@ export default function CreateOfferPage() {
             <Card variant="glass">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Publishing preview</p>
-                  <h3 className="mt-2 text-xl font-semibold text-white">How the market will read this listing</h3>
+                  <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                    Publishing preview
+                  </p>
+                  <h3 className="mt-2 text-xl font-semibold text-white">
+                    How the market will read this listing
+                  </h3>
                 </div>
                 {preview && (
                   <Badge variant={getToneVariant(preview.publishingGuidance.launchTone)}>
-                    {preview.publishingGuidance.launchTone === "good"
-                      ? "Ready"
-                      : preview.publishingGuidance.launchTone === "caution"
-                        ? "Adjustable"
-                        : "Risky"}
+                    {preview.publishingGuidance.launchTone === 'good'
+                      ? 'Ready'
+                      : preview.publishingGuidance.launchTone === 'caution'
+                        ? 'Adjustable'
+                        : 'Risky'}
                   </Badge>
                 )}
               </div>
@@ -581,7 +604,9 @@ export default function CreateOfferPage() {
                       <p className="text-sm font-medium text-white">Publishing readiness</p>
                       <div className="flex items-center gap-2">
                         <Gauge className="h-4 w-4 text-indigo-300" />
-                        <span className="text-xl font-semibold text-white">{preview.publishingGuidance.readinessScore}</span>
+                        <span className="text-xl font-semibold text-white">
+                          {preview.publishingGuidance.readinessScore}
+                        </span>
                       </div>
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -592,25 +617,33 @@ export default function CreateOfferPage() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                       <p className="text-xs uppercase tracking-wide text-slate-500">Pair board</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{preview.marketContext.pairMetrics.activeOffers}</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">
+                        {preview.marketContext.pairMetrics.activeOffers}
+                      </p>
                       <p className="mt-2 text-sm text-slate-400">
                         Active listings on {assetIn}/{assetOut}
                       </p>
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Rate placement</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Rate placement
+                      </p>
                       <p className="mt-2 text-lg font-semibold text-white">
                         {getPercentileLabel(preview.marketContext.percentileHint)}
                       </p>
                       <p className="mt-2 text-sm text-slate-400">
-                        Median visible rate: {preview.marketContext.nearestRates.median ?? "n/a"}
+                        Median visible rate: {preview.marketContext.nearestRates.median ?? 'n/a'}
                       </p>
                     </div>
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Seller coverage</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{preview.merchant.activeOffers}</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Seller coverage
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold text-white">
+                        {preview.merchant.activeOffers}
+                      </p>
                       <p className="mt-2 text-sm text-slate-400">
                         Active listings already running for this seller.
                       </p>
@@ -618,7 +651,9 @@ export default function CreateOfferPage() {
 
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                       <p className="text-xs uppercase tracking-wide text-slate-500">Pair demand</p>
-                      <p className="mt-2 text-2xl font-semibold text-white">{preview.marketContext.pairMetrics.pairOpenRequests}</p>
+                      <p className="mt-2 text-2xl font-semibold text-white">
+                        {preview.marketContext.pairMetrics.pairOpenRequests}
+                      </p>
                       <p className="mt-2 text-sm text-slate-400">
                         Open requests already competing for attention on this pair.
                       </p>
@@ -634,15 +669,18 @@ export default function CreateOfferPage() {
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Diagnostics</p>
                   <div className="mt-4 space-y-3">
                     {preview.diagnostics.map((diagnostic) => (
-                      <div key={diagnostic.label} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                      <div
+                        key={diagnostic.label}
+                        className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-white">{diagnostic.label}</p>
                           <Badge variant={getToneVariant(diagnostic.tone)}>
-                            {diagnostic.tone === "good"
-                              ? "Healthy"
-                              : diagnostic.tone === "caution"
-                                ? "Watch"
-                                : "Risk"}
+                            {diagnostic.tone === 'good'
+                              ? 'Healthy'
+                              : diagnostic.tone === 'caution'
+                                ? 'Watch'
+                                : 'Risk'}
                           </Badge>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-slate-400">{diagnostic.detail}</p>
@@ -655,7 +693,10 @@ export default function CreateOfferPage() {
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Launch notes</p>
                   <div className="mt-4 space-y-3">
                     {preview.publishingGuidance.notes.map((note) => (
-                      <div key={note} className="flex items-start gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4">
+                      <div
+                        key={note}
+                        className="flex items-start gap-3 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4"
+                      >
                         <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-300" />
                         <p className="text-sm leading-6 text-indigo-50/90">{note}</p>
                       </div>
@@ -668,7 +709,10 @@ export default function CreateOfferPage() {
         </div>
 
         <div className="mt-8 flex justify-center text-xs text-slate-600">
-          <Link href="/swap" className="inline-flex items-center transition-colors hover:text-slate-400">
+          <Link
+            href="/swap"
+            className="inline-flex items-center transition-colors hover:text-slate-400"
+          >
             <ArrowLeft className="mr-1 h-3 w-3" />
             Back to Market
           </Link>

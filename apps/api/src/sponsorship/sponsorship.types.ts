@@ -1,8 +1,4 @@
-export type SponsoredOperation =
-  | 'public_send'
-  | 'private_send'
-  | 'deposit'
-  | 'withdraw_self';
+export type SponsoredOperation = 'public_send' | 'private_send' | 'deposit' | 'withdraw_self';
 
 export interface SponsorshipDecision {
   supported: boolean;

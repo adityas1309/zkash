@@ -27,7 +27,7 @@ export class SorobanService {
         throw new Error(`Transaction ${hash} failed on-chain`);
       }
       // status === 'NOT_FOUND' means still pending
-      await new Promise(r => setTimeout(r, 3000));
+      await new Promise((r) => setTimeout(r, 3000));
     }
     throw new Error(`Transaction ${hash} not confirmed after ${timeoutMs / 1000}s`);
   }
@@ -35,7 +35,9 @@ export class SorobanService {
   /**
    * Helper to prepare transaction, add auth entries automatically, and add a resource/fee buffer.
    */
-  private async prepareTransactionWithBuffer(tx: StellarSdk.Transaction): Promise<StellarSdk.Transaction> {
+  private async prepareTransactionWithBuffer(
+    tx: StellarSdk.Transaction,
+  ): Promise<StellarSdk.Transaction> {
     console.log('[SorobanService] Preparing transaction with native SDK...');
     const preparedTx = await this.server.prepareTransaction(tx);
 
@@ -47,31 +49,32 @@ export class SorobanService {
       // @ts-ignore
       if (txExt && txExt.switch().value === 1) {
         const sorobanData = txExt.sorobanData();
-        const resources = sorobanData.resources();
+        type ResourceSlot = number | ((value?: number) => number | void);
+        type MutableSorobanResources = {
+          instructions: ResourceSlot;
+          readBytes: ResourceSlot;
+          writeBytes: ResourceSlot;
+        };
 
-        // @ts-ignore
-        const inst = typeof resources.instructions === 'function' ? resources.instructions() : resources.instructions;
-        // @ts-ignore
-        const rb = typeof resources.readBytes === 'function' ? resources.readBytes() : resources.readBytes;
-        // @ts-ignore
-        const wb = typeof resources.writeBytes === 'function' ? resources.writeBytes() : resources.writeBytes;
+        const resources = sorobanData.resources() as unknown as MutableSorobanResources;
+        const readResource = (slot: ResourceSlot) =>
+          typeof slot === 'function' ? Number(slot()) : Number(slot);
+        const writeResource = (key: keyof MutableSorobanResources, value: number) => {
+          const slot = resources[key];
+          if (typeof slot === 'function') {
+            slot(value);
+            return;
+          }
+          resources[key] = value;
+        };
 
-        // @ts-ignore
-        if (typeof resources.instructions === 'function') {
-          // @ts-ignore
-          resources.instructions(inst + 2000000);
-          // @ts-ignore
-          resources.readBytes(rb + 15000);
-          // @ts-ignore
-          resources.writeBytes(wb + 15000);
-        } else {
-          // @ts-ignore
-          resources.instructions = inst + 2000000;
-          // @ts-ignore
-          resources.readBytes = rb + 15000;
-          // @ts-ignore
-          resources.writeBytes = wb + 15000;
-        }
+        const inst = readResource(resources.instructions);
+        const rb = readResource(resources.readBytes);
+        const wb = readResource(resources.writeBytes);
+
+        writeResource('instructions', inst + 2000000);
+        writeResource('readBytes', rb + 15000);
+        writeResource('writeBytes', wb + 15000);
 
         const oldFee = parseInt(preparedTx.fee, 10);
         txV1.fee(oldFee + 500000);
@@ -140,7 +143,8 @@ export class SorobanService {
         const el = vec[i];
         const elSwitch = el.switch().name;
         if (elSwitch === 'scvU32') out[i] = Number((el as { u32(): unknown }).u32());
-        else if (elSwitch === 'scvU64') out[i] = Number(Number((el as { u64(): { low: number } }).u64().low) & 0xff);
+        else if (elSwitch === 'scvU64')
+          out[i] = Number(Number((el as { u64(): { low: number } }).u64().low) & 0xff);
         else throw new Error(`Unexpected ScVal element in merkle root vec: ${elSwitch}`);
       }
       return out;
@@ -259,9 +263,13 @@ export class SorobanService {
     // pubSignals = [nullifierHash(32), withdrawnValue(32), stateRoot(32), associationRoot(32)]
     if (pubSignalsBytes.length >= 96) {
       const stateRoot = pubSignalsBytes.subarray(64, 96);
-      console.log(`[SorobanService] invokeShieldedPoolWithdraw: stateRoot in signals: ${Buffer.from(stateRoot).toString('hex')}`);
+      console.log(
+        `[SorobanService] invokeShieldedPoolWithdraw: stateRoot in signals: ${Buffer.from(stateRoot).toString('hex')}`,
+      );
     } else {
-      console.warn(`[SorobanService] invokeShieldedPoolWithdraw: pubSignalsBytes too short: ${pubSignalsBytes.length}`);
+      console.warn(
+        `[SorobanService] invokeShieldedPoolWithdraw: pubSignalsBytes too short: ${pubSignalsBytes.length}`,
+      );
     }
 
     const fee = isMainnetContext() ? '2000000' : StellarSdk.BASE_FEE;
@@ -340,13 +348,13 @@ export class SorobanService {
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(alicePubSignals)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(aliceNullifier)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(aliceOutputCommitment)), // New XLM note for Alice
-      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(aliceOutputRoot)),       // New XLM root
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(aliceOutputRoot)), // New XLM root
       // Bob Inputs
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobProof)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobPubSignals)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobNullifier)),
-      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobOutputCommitment)),   // New USDC note for Bob
-      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobOutputRoot)),         // New USDC root
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobOutputCommitment)), // New USDC note for Bob
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(bobOutputRoot)), // New USDC root
     ];
 
     const fee = isMainnetContext() ? '2000000' : StellarSdk.BASE_FEE;
@@ -372,4 +380,3 @@ export class SorobanService {
     return this.waitForTransaction(result.hash);
   }
 }
-

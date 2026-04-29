@@ -1,13 +1,13 @@
 {
-    "functions": {
-        "api/**/*.ts": {
-            "includeFiles": "../../packages/circuits/**/*.{wasm,zkey}"
-        }
-    },
-    "rewrites": [
-        {
-            "source": "/(.*)",
-            "destination": "/api"
-        }
-    ]
+  "functions": {
+    "api/**/*.ts": {
+      "includeFiles": "../../packages/circuits/**/*.{wasm,zkey}"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ]
 }

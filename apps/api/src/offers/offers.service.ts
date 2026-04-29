@@ -165,7 +165,12 @@ interface MerchantOfferWorkspaceItem extends EnrichedOffer {
 
 interface SellerActionView {
   swapId: string;
-  action: 'accept_request' | 'prepare_proof' | 'execute_public' | 'execute_private' | 'review_failure';
+  action:
+    | 'accept_request'
+    | 'prepare_proof'
+    | 'execute_public'
+    | 'execute_private'
+    | 'review_failure';
   label: string;
   detail: string;
   severity: 'info' | 'caution' | 'critical';
@@ -265,7 +270,11 @@ export class OffersService {
         this.offerModel.countDocuments({ merchantId }).exec(),
         this.offerModel.countDocuments({ merchantId, active: true }).exec(),
       ]),
-      this.offerModel.find({ assetIn: data.assetIn, assetOut: data.assetOut, active: true }).select('rate').lean().exec(),
+      this.offerModel
+        .find({ assetIn: data.assetIn, assetOut: data.assetOut, active: true })
+        .select('rate')
+        .lean()
+        .exec(),
     ]);
 
     const rateValues = pairOffers
@@ -280,7 +289,12 @@ export class OffersService {
         ? null
         : rateValues.length % 2 === 1
           ? rateValues[Math.floor(rateValues.length / 2)]
-          : Number(((rateValues[rateValues.length / 2 - 1] + rateValues[rateValues.length / 2]) / 2).toFixed(4));
+          : Number(
+              (
+                (rateValues[rateValues.length / 2 - 1] + rateValues[rateValues.length / 2]) /
+                2
+              ).toFixed(4),
+            );
 
     const percentileHint = this.describeRatePosition(data.rate, rateValues);
     const bandWidth = Number((data.max - data.min).toFixed(4));
@@ -288,7 +302,12 @@ export class OffersService {
     const diagnostics: OfferPreviewView['diagnostics'] = [
       {
         label: 'Pair saturation',
-        tone: pairMetrics.activeOffers >= 6 ? 'risk' : pairMetrics.activeOffers >= 3 ? 'caution' : 'good',
+        tone:
+          pairMetrics.activeOffers >= 6
+            ? 'risk'
+            : pairMetrics.activeOffers >= 3
+              ? 'caution'
+              : 'good',
         detail:
           pairMetrics.activeOffers >= 6
             ? 'This pair already has a crowded active board, so your listing must differentiate on rate or reliability.'
@@ -405,7 +424,9 @@ export class OffersService {
       .lean()
       .exec();
 
-    return Promise.all(offers.map((offer) => this.enrichOffer(offer as unknown as OfferDocumentView)));
+    return Promise.all(
+      offers.map((offer) => this.enrichOffer(offer as unknown as OfferDocumentView)),
+    );
   }
 
   async findById(id: string) {
@@ -442,10 +463,12 @@ export class OffersService {
       this.swapModel.countDocuments({ status: 'requested' }).exec(),
       this.swapModel.countDocuments({ status: 'proofs_ready' }).exec(),
       this.swapModel.countDocuments({ status: 'executing' }).exec(),
-      this.swapModel.countDocuments({
-        status: 'completed',
-        completedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      }).exec(),
+      this.swapModel
+        .countDocuments({
+          status: 'completed',
+          completedAt: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+        })
+        .exec(),
     ]);
 
     return {
@@ -468,15 +491,23 @@ export class OffersService {
   }
 
   async update(id: string, data: UpdateOfferDto): Promise<EnrichedOffer>;
-  async update(id: string, merchantId: Types.ObjectId, data: UpdateOfferDto): Promise<EnrichedOffer>;
-  async update(id: string, merchantOrData: Types.ObjectId | UpdateOfferDto, maybeData?: UpdateOfferDto) {
+  async update(
+    id: string,
+    merchantId: Types.ObjectId,
+    data: UpdateOfferDto,
+  ): Promise<EnrichedOffer>;
+  async update(
+    id: string,
+    merchantOrData: Types.ObjectId | UpdateOfferDto,
+    maybeData?: UpdateOfferDto,
+  ) {
     const offer = await this.offerModel.findById(id).exec();
     if (!offer) {
       throw new NotFoundException('Offer not found');
     }
 
-    const merchantId = maybeData ? merchantOrData as Types.ObjectId : undefined;
-    const data = maybeData ?? merchantOrData as UpdateOfferDto;
+    const merchantId = maybeData ? (merchantOrData as Types.ObjectId) : undefined;
+    const data = maybeData ?? (merchantOrData as UpdateOfferDto);
 
     this.validateOfferPayload(data, true);
     if (merchantId && offer.merchantId.toString() !== merchantId.toString()) {
@@ -500,7 +531,11 @@ export class OffersService {
   }
 
   async getWorkspace(merchantId: Types.ObjectId): Promise<MerchantWorkspaceView> {
-    const merchant = await this.userModel.findById(merchantId).select('username reputation').lean().exec();
+    const merchant = await this.userModel
+      .findById(merchantId)
+      .select('username reputation')
+      .lean()
+      .exec();
     if (!merchant) {
       throw new NotFoundException('Merchant not found');
     }
@@ -514,18 +549,22 @@ export class OffersService {
 
     const offerIds = rawOffers.map((offer) => offer._id);
     const relatedSwaps: MerchantWorkspaceSwapRecord[] = offerIds.length
-      ? await this.swapModel
+      ? ((await this.swapModel
           .find({ offerId: { $in: offerIds } })
           .populate('aliceId', 'username')
           .sort({ updatedAt: -1, createdAt: -1 })
           .lean()
-          .exec() as MerchantWorkspaceSwapRecord[]
+          .exec()) as MerchantWorkspaceSwapRecord[])
       : [];
 
     const [queueCounts, merchantMetrics, enrichedOffers] = await Promise.all([
       this.getQueueCountsForMerchant(merchantId),
       this.getMerchantMetrics(merchantId, new Types.ObjectId()),
-      Promise.all(rawOffers.map((offer) => this.enrichMerchantOfferWorkspaceItem(offer as unknown as OfferDocumentView))),
+      Promise.all(
+        rawOffers.map((offer) =>
+          this.enrichMerchantOfferWorkspaceItem(offer as unknown as OfferDocumentView),
+        ),
+      ),
     ]);
 
     const queueHealth = this.buildQueueHealth(queueCounts, relatedSwaps);
@@ -589,7 +628,8 @@ export class OffersService {
   }
 
   private validateOfferPayload(
-    data: Partial<CreateOfferDto> & Partial<UpdateOfferDto> & { assetIn?: 'USDC' | 'XLM'; assetOut?: 'USDC' | 'XLM' },
+    data: Partial<CreateOfferDto> &
+      Partial<UpdateOfferDto> & { assetIn?: 'USDC' | 'XLM'; assetOut?: 'USDC' | 'XLM' },
     partial = false,
   ) {
     const assetIn = data.assetIn;
@@ -633,12 +673,16 @@ export class OffersService {
     };
   }
 
-  private async enrichMerchantOfferWorkspaceItem(offer: OfferDocumentView): Promise<MerchantOfferWorkspaceItem> {
+  private async enrichMerchantOfferWorkspaceItem(
+    offer: OfferDocumentView,
+  ): Promise<MerchantOfferWorkspaceItem> {
     const [enriched, queueCounts, latestSwapDoc] = await Promise.all([
       this.enrichOffer(offer),
       Promise.all([
         this.swapModel.countDocuments({ offerId: offer._id, status: 'requested' }).exec(),
-        this.swapModel.countDocuments({ offerId: offer._id, status: { $in: ['proofs_ready', 'executing'] } }).exec(),
+        this.swapModel
+          .countDocuments({ offerId: offer._id, status: { $in: ['proofs_ready', 'executing'] } })
+          .exec(),
       ]),
       this.swapModel
         .findOne({ offerId: offer._id })
@@ -657,10 +701,15 @@ export class OffersService {
       openBuyerRequests,
       stalledExecutions,
       healthTone,
-      healthSummary: this.describeOfferHealthSummary(enriched, openBuyerRequests, stalledExecutions),
+      healthSummary: this.describeOfferHealthSummary(
+        enriched,
+        openBuyerRequests,
+        stalledExecutions,
+      ),
       queuePressure: pressure,
       queueMessage: this.describeQueueMessage(pressure, openBuyerRequests, stalledExecutions),
-      latestSwapAt: this.toIso(latestSwapDoc?.updatedAt) ?? this.toIso(latestSwapDoc?.createdAt) ?? null,
+      latestSwapAt:
+        this.toIso(latestSwapDoc?.updatedAt) ?? this.toIso(latestSwapDoc?.createdAt) ?? null,
     };
   }
 
@@ -697,31 +746,40 @@ export class OffersService {
     };
   }
 
-  private async getMerchantMetrics(merchantId: Types.ObjectId, offerId: Types.ObjectId): Promise<MerchantMetricsView> {
-    const [completedAsSeller, failedAsSeller, pendingAsSeller, activeAsSeller, recentCompletedDocs] =
-      await Promise.all([
-        this.swapModel.countDocuments({ bobId: merchantId, status: 'completed' }).exec(),
-        this.swapModel.countDocuments({ bobId: merchantId, status: 'failed' }).exec(),
-        this.swapModel.countDocuments({ bobId: merchantId, status: 'requested' }).exec(),
-        this.swapModel
-          .countDocuments({
-            bobId: merchantId,
-            status: { $in: ['proofs_pending', 'proofs_ready', 'executing'] },
-          })
-          .exec(),
-        this.swapModel
-          .find({ bobId: merchantId, status: 'completed' })
-          .sort({ completedAt: -1 })
-          .limit(5)
-          .select('completedAt offerId amountIn amountOut')
-          .lean()
-          .exec(),
-      ]);
+  private async getMerchantMetrics(
+    merchantId: Types.ObjectId,
+    offerId: Types.ObjectId,
+  ): Promise<MerchantMetricsView> {
+    const [
+      completedAsSeller,
+      failedAsSeller,
+      pendingAsSeller,
+      activeAsSeller,
+      recentCompletedDocs,
+    ] = await Promise.all([
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'completed' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'failed' }).exec(),
+      this.swapModel.countDocuments({ bobId: merchantId, status: 'requested' }).exec(),
+      this.swapModel
+        .countDocuments({
+          bobId: merchantId,
+          status: { $in: ['proofs_pending', 'proofs_ready', 'executing'] },
+        })
+        .exec(),
+      this.swapModel
+        .find({ bobId: merchantId, status: 'completed' })
+        .sort({ completedAt: -1 })
+        .limit(5)
+        .select('completedAt offerId amountIn amountOut')
+        .lean()
+        .exec(),
+    ]);
 
     const routedThroughThisOffer = recentCompletedDocs.filter(
       (swap) => swap.offerId?.toString() === offerId.toString(),
     ).length;
-    const lastCompleted = recentCompletedDocs.find((swap) => !!swap.completedAt)?.completedAt ?? null;
+    const lastCompleted =
+      recentCompletedDocs.find((swap) => !!swap.completedAt)?.completedAt ?? null;
     const totalOutcomes = completedAsSeller + failedAsSeller;
 
     return {
@@ -730,29 +788,31 @@ export class OffersService {
       pendingAsSeller,
       activeAsSeller,
       routedThroughThisOffer,
-      completionRate: totalOutcomes > 0 ? Number(((completedAsSeller / totalOutcomes) * 100).toFixed(1)) : 100,
+      completionRate:
+        totalOutcomes > 0 ? Number(((completedAsSeller / totalOutcomes) * 100).toFixed(1)) : 100,
       lastCompletedAt: lastCompleted ? new Date(lastCompleted).toISOString() : null,
     };
   }
 
   private async getOfferMetrics(offerId: Types.ObjectId): Promise<OfferMetrics> {
-    const [openRequests, activeExecutions, completedSwaps, failedSwaps, recentCompletedDocs] = await Promise.all([
-      this.swapModel.countDocuments({ offerId, status: 'requested' }).exec(),
-      this.swapModel
-        .countDocuments({
-          offerId,
-          status: { $in: ['proofs_pending', 'proofs_ready', 'executing'] },
-        })
-        .exec(),
-      this.swapModel.countDocuments({ offerId, status: 'completed' }).exec(),
-      this.swapModel.countDocuments({ offerId, status: 'failed' }).exec(),
-      this.swapModel
-        .find({ offerId, status: 'completed' })
-        .sort({ completedAt: -1 })
-        .select('amountIn amountOut completedAt')
-        .lean()
-        .exec(),
-    ]);
+    const [openRequests, activeExecutions, completedSwaps, failedSwaps, recentCompletedDocs] =
+      await Promise.all([
+        this.swapModel.countDocuments({ offerId, status: 'requested' }).exec(),
+        this.swapModel
+          .countDocuments({
+            offerId,
+            status: { $in: ['proofs_pending', 'proofs_ready', 'executing'] },
+          })
+          .exec(),
+        this.swapModel.countDocuments({ offerId, status: 'completed' }).exec(),
+        this.swapModel.countDocuments({ offerId, status: 'failed' }).exec(),
+        this.swapModel
+          .find({ offerId, status: 'completed' })
+          .sort({ completedAt: -1 })
+          .select('amountIn amountOut completedAt')
+          .lean()
+          .exec(),
+      ]);
 
     const recentCompletedSwaps = recentCompletedDocs.filter((swap) => {
       if (!swap.completedAt) {
@@ -779,7 +839,8 @@ export class OffersService {
       failedSwaps,
       recentCompletedSwaps,
       averageTicketSize,
-      completionRate: totalOutcomes > 0 ? Number(((completedSwaps / totalOutcomes) * 100).toFixed(1)) : 100,
+      completionRate:
+        totalOutcomes > 0 ? Number(((completedSwaps / totalOutcomes) * 100).toFixed(1)) : 100,
       lastTradedAt: recentCompletedDocs[0]?.completedAt
         ? new Date(recentCompletedDocs[0].completedAt).toISOString()
         : null,
@@ -787,14 +848,16 @@ export class OffersService {
   }
 
   private async getQueueCountsForMerchant(merchantId: Types.ObjectId): Promise<QueueStatusCounts> {
-    const [requested, proofsPending, proofsReady, executing, completed, failed] = await Promise.all([
-      this.swapModel.countDocuments({ bobId: merchantId, status: 'requested' }).exec(),
-      this.swapModel.countDocuments({ bobId: merchantId, status: 'proofs_pending' }).exec(),
-      this.swapModel.countDocuments({ bobId: merchantId, status: 'proofs_ready' }).exec(),
-      this.swapModel.countDocuments({ bobId: merchantId, status: 'executing' }).exec(),
-      this.swapModel.countDocuments({ bobId: merchantId, status: 'completed' }).exec(),
-      this.swapModel.countDocuments({ bobId: merchantId, status: 'failed' }).exec(),
-    ]);
+    const [requested, proofsPending, proofsReady, executing, completed, failed] = await Promise.all(
+      [
+        this.swapModel.countDocuments({ bobId: merchantId, status: 'requested' }).exec(),
+        this.swapModel.countDocuments({ bobId: merchantId, status: 'proofs_pending' }).exec(),
+        this.swapModel.countDocuments({ bobId: merchantId, status: 'proofs_ready' }).exec(),
+        this.swapModel.countDocuments({ bobId: merchantId, status: 'executing' }).exec(),
+        this.swapModel.countDocuments({ bobId: merchantId, status: 'completed' }).exec(),
+        this.swapModel.countDocuments({ bobId: merchantId, status: 'failed' }).exec(),
+      ],
+    );
 
     return {
       requested,
@@ -843,7 +906,9 @@ export class OffersService {
     };
   }
 
-  private async buildPairCoverage(rawOffers: Array<{ assetIn: 'USDC' | 'XLM'; assetOut: 'USDC' | 'XLM'; active: boolean }>) {
+  private async buildPairCoverage(
+    rawOffers: Array<{ assetIn: 'USDC' | 'XLM'; assetOut: 'USDC' | 'XLM'; active: boolean }>,
+  ) {
     const pairs: Array<{ assetIn: 'USDC' | 'XLM'; assetOut: 'USDC' | 'XLM' }> = [
       { assetIn: 'XLM', assetOut: 'USDC' },
       { assetIn: 'USDC', assetOut: 'XLM' },
@@ -853,7 +918,8 @@ export class OffersService {
       pairs.map(async (pair) => {
         const pairMetrics = await this.getPairMetrics(pair.assetIn, pair.assetOut);
         const ownActiveOffers = rawOffers.filter(
-          (offer) => offer.active && offer.assetIn === pair.assetIn && offer.assetOut === pair.assetOut,
+          (offer) =>
+            offer.active && offer.assetIn === pair.assetIn && offer.assetOut === pair.assetOut,
         ).length;
 
         return {
@@ -874,85 +940,89 @@ export class OffersService {
     );
   }
 
-  private buildSellerActionQueue(
-    swaps: MerchantWorkspaceSwapRecord[],
-  ): SellerActionView[] {
+  private buildSellerActionQueue(swaps: MerchantWorkspaceSwapRecord[]): SellerActionView[] {
     const actions: SellerActionView[] = [];
 
     for (const swap of swaps) {
-        if (swap.status === 'requested') {
-          actions.push({
-            swapId: swap._id.toString(),
-            offerId: swap.offerId?.toString(),
-            action: 'accept_request' as const,
-            label: 'Accept buyer request',
-            detail: 'A buyer is waiting for seller acceptance before the lifecycle can move into proof collection or execution.',
-            severity: 'caution' as const,
-            mode: 'public' as const,
-            status: swap.status,
-            createdAt: this.toIso(swap.createdAt),
-          });
-          continue;
-        }
+      if (swap.status === 'requested') {
+        actions.push({
+          swapId: swap._id.toString(),
+          offerId: swap.offerId?.toString(),
+          action: 'accept_request' as const,
+          label: 'Accept buyer request',
+          detail:
+            'A buyer is waiting for seller acceptance before the lifecycle can move into proof collection or execution.',
+          severity: 'caution' as const,
+          mode: 'public' as const,
+          status: swap.status,
+          createdAt: this.toIso(swap.createdAt),
+        });
+        continue;
+      }
 
-        if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_bob') {
-          actions.push({
-            swapId: swap._id.toString(),
-            offerId: swap.offerId?.toString(),
-            action: 'prepare_proof' as const,
-            label: 'Prepare seller proof',
-            detail: 'The buyer proof is already present. This swap is waiting on the seller-side exact note proof.',
-            severity: 'caution' as const,
-            mode: 'private' as const,
-            status: swap.status,
-            createdAt: this.toIso(swap.updatedAt),
-          });
-          continue;
-        }
+      if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_bob') {
+        actions.push({
+          swapId: swap._id.toString(),
+          offerId: swap.offerId?.toString(),
+          action: 'prepare_proof' as const,
+          label: 'Prepare seller proof',
+          detail:
+            'The buyer proof is already present. This swap is waiting on the seller-side exact note proof.',
+          severity: 'caution' as const,
+          mode: 'private' as const,
+          status: swap.status,
+          createdAt: this.toIso(swap.updatedAt),
+        });
+        continue;
+      }
 
-        if (swap.status === 'proofs_ready') {
-          actions.push({
-            swapId: swap._id.toString(),
-            offerId: swap.offerId?.toString(),
-            action: 'execute_private' as const,
-            label: 'Execute private settlement',
-            detail: 'Both proofs are ready. The private swap is waiting for the executor to finalize the settlement.',
-            severity: 'critical' as const,
-            mode: 'private' as const,
-            status: swap.status,
-            createdAt: this.toIso(swap.updatedAt),
-          });
-          continue;
-        }
+      if (swap.status === 'proofs_ready') {
+        actions.push({
+          swapId: swap._id.toString(),
+          offerId: swap.offerId?.toString(),
+          action: 'execute_private' as const,
+          label: 'Execute private settlement',
+          detail:
+            'Both proofs are ready. The private swap is waiting for the executor to finalize the settlement.',
+          severity: 'critical' as const,
+          mode: 'private' as const,
+          status: swap.status,
+          createdAt: this.toIso(swap.updatedAt),
+        });
+        continue;
+      }
 
-        if (swap.status === 'executing') {
-          actions.push({
-            swapId: swap._id.toString(),
-            offerId: swap.offerId?.toString(),
-            action: 'execute_public' as const,
-            label: 'Watch execution outcome',
-            detail: 'The swap is already in execution. Use the status view to confirm whether settlement clears or needs intervention.',
-            severity: 'info' as const,
-            mode: 'public' as const,
-            status: swap.status,
-            createdAt: this.toIso(swap.updatedAt),
-          });
-          continue;
-        }
+      if (swap.status === 'executing') {
+        actions.push({
+          swapId: swap._id.toString(),
+          offerId: swap.offerId?.toString(),
+          action: 'execute_public' as const,
+          label: 'Watch execution outcome',
+          detail:
+            'The swap is already in execution. Use the status view to confirm whether settlement clears or needs intervention.',
+          severity: 'info' as const,
+          mode: 'public' as const,
+          status: swap.status,
+          createdAt: this.toIso(swap.updatedAt),
+        });
+        continue;
+      }
 
-        if (swap.status === 'failed') {
-          actions.push({
-            swapId: swap._id.toString(),
-            offerId: swap.offerId?.toString(),
-            action: 'review_failure' as const,
-            label: 'Review failed execution',
-            detail: swap.lastError || 'A recent swap failed and should be reviewed before more buyer flow is accepted.',
-            severity: 'critical' as const,
-            mode: swap.proofStatus === 'ready' ? 'private' : 'public',
-            status: swap.status,
-            createdAt: this.toIso(swap.updatedAt),
-          });
-        }
+      if (swap.status === 'failed') {
+        actions.push({
+          swapId: swap._id.toString(),
+          offerId: swap.offerId?.toString(),
+          action: 'review_failure' as const,
+          label: 'Review failed execution',
+          detail:
+            swap.lastError ||
+            'A recent swap failed and should be reviewed before more buyer flow is accepted.',
+          severity: 'critical' as const,
+          mode: swap.proofStatus === 'ready' ? 'private' : 'public',
+          status: swap.status,
+          createdAt: this.toIso(swap.updatedAt),
+        });
+      }
     }
 
     return actions.slice(0, 8);
@@ -969,11 +1039,17 @@ export class OffersService {
       return 0;
     }
 
-    const total = swaps.reduce((sum, swap) => sum + Math.max(Number(swap.amountIn) || 0, Number(swap.amountOut) || 0), 0);
+    const total = swaps.reduce(
+      (sum, swap) => sum + Math.max(Number(swap.amountIn) || 0, Number(swap.amountOut) || 0),
+      0,
+    );
     return Number((total / swaps.length).toFixed(2));
   }
 
-  private describeQueuePressure(openRequests: number, inFlightExecutions: number): 'light' | 'moderate' | 'heavy' {
+  private describeQueuePressure(
+    openRequests: number,
+    inFlightExecutions: number,
+  ): 'light' | 'moderate' | 'heavy' {
     const pressureScore = openRequests * 2 + inFlightExecutions * 3;
     if (pressureScore >= 12) {
       return 'heavy';
@@ -995,7 +1071,10 @@ export class OffersService {
     if (openBuyerRequests >= 3 || stalledExecutions >= 2) {
       return 'risk';
     }
-    if (offer.requestGuidance.backlogLevel === 'heavy' || offer.offerMetrics.failedSwaps > offer.offerMetrics.completedSwaps) {
+    if (
+      offer.requestGuidance.backlogLevel === 'heavy' ||
+      offer.offerMetrics.failedSwaps > offer.offerMetrics.completedSwaps
+    ) {
       return 'caution';
     }
     return 'good';
@@ -1043,8 +1122,14 @@ export class OffersService {
     return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
   }
 
-  private async getPairMetrics(assetIn: 'USDC' | 'XLM', assetOut: 'USDC' | 'XLM'): Promise<PairMetricsView> {
-    const pairOffers = await this.offerModel.find({ assetIn, assetOut, active: true }).lean().exec();
+  private async getPairMetrics(
+    assetIn: 'USDC' | 'XLM',
+    assetOut: 'USDC' | 'XLM',
+  ): Promise<PairMetricsView> {
+    const pairOffers = await this.offerModel
+      .find({ assetIn, assetOut, active: true })
+      .lean()
+      .exec();
     const offerIds = pairOffers.map((offer) => offer._id);
 
     const [pairOpenRequests, pairCompletedSwaps] = offerIds.length
@@ -1054,7 +1139,9 @@ export class OffersService {
         ])
       : [0, 0];
 
-    const rateValues = pairOffers.map((offer) => Number(offer.rate) || 0).filter((value) => value > 0);
+    const rateValues = pairOffers
+      .map((offer) => Number(offer.rate) || 0)
+      .filter((value) => value > 0);
     const minRate = rateValues.length ? Math.min(...rateValues) : 0;
     const maxRate = rateValues.length ? Math.max(...rateValues) : 0;
 

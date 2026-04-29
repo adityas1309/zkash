@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
-import { usePrivacy } from "@/context/PrivacyContext";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { PrivacyToggle } from '@/components/ui/PrivacyToggle';
+import { usePrivacy } from '@/context/PrivacyContext';
 import {
   ArrowRight,
   BarChart3,
@@ -23,12 +23,12 @@ import {
   Star,
   TrendingUp,
   Wallet,
-} from "lucide-react";
+} from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 interface ExecutionMode {
-  mode: "public" | "private";
+  mode: 'public' | 'private';
   label: string;
   detail: string;
 }
@@ -56,8 +56,8 @@ interface OfferMetrics {
 
 interface EnrichedOffer {
   _id: string;
-  assetIn: "USDC" | "XLM";
-  assetOut: "USDC" | "XLM";
+  assetIn: 'USDC' | 'XLM';
+  assetOut: 'USDC' | 'XLM';
   rate: number;
   min: number;
   max: number;
@@ -68,8 +68,8 @@ interface EnrichedOffer {
   offerMetrics: OfferMetrics;
   requestGuidance: {
     confidenceScore: number;
-    backlogLevel: "light" | "moderate" | "heavy";
-    recommendedMode: "public" | "private";
+    backlogLevel: 'light' | 'moderate' | 'heavy';
+    recommendedMode: 'public' | 'private';
     notes: string[];
   };
 }
@@ -80,61 +80,61 @@ interface MarketHighlights {
   proofsReady: number;
   executing: number;
   completedLastWeek: number;
-  executionModes: Array<{ mode: "public" | "private"; detail: string }>;
+  executionModes: Array<{ mode: 'public' | 'private'; detail: string }>;
 }
 
 function formatTimestamp(value?: string | null) {
   if (!value) {
-    return "No recent trades";
+    return 'No recent trades';
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "No recent trades";
+    return 'No recent trades';
   }
   return date.toLocaleString();
 }
 
-function getBacklogTone(level: "light" | "moderate" | "heavy") {
-  if (level === "heavy") {
+function getBacklogTone(level: 'light' | 'moderate' | 'heavy') {
+  if (level === 'heavy') {
     return {
-      variant: "error" as const,
-      label: "Heavy queue",
-      detail: "Expect the seller to already be juggling several requests.",
+      variant: 'error' as const,
+      label: 'Heavy queue',
+      detail: 'Expect the seller to already be juggling several requests.',
     };
   }
-  if (level === "moderate") {
+  if (level === 'moderate') {
     return {
-      variant: "warning" as const,
-      label: "Moderate queue",
-      detail: "There is active demand, but not enough to fully crowd the listing.",
+      variant: 'warning' as const,
+      label: 'Moderate queue',
+      detail: 'There is active demand, but not enough to fully crowd the listing.',
     };
   }
   return {
-    variant: "success" as const,
-    label: "Light queue",
-    detail: "This listing currently has a lighter request backlog.",
+    variant: 'success' as const,
+    label: 'Light queue',
+    detail: 'This listing currently has a lighter request backlog.',
   };
 }
 
 function getConfidenceTone(score: number) {
   if (score >= 85) {
     return {
-      variant: "success" as const,
-      label: "High trust signal",
-      detail: "The seller and listing both show strong settlement evidence.",
+      variant: 'success' as const,
+      label: 'High trust signal',
+      detail: 'The seller and listing both show strong settlement evidence.',
     };
   }
   if (score >= 65) {
     return {
-      variant: "warning" as const,
-      label: "Medium trust signal",
-      detail: "The offer is usable, but you should still watch backlog and mode fit.",
+      variant: 'warning' as const,
+      label: 'Medium trust signal',
+      detail: 'The offer is usable, but you should still watch backlog and mode fit.',
     };
   }
   return {
-    variant: "error" as const,
-    label: "Early trust signal",
-    detail: "The listing still needs more successful settlements to feel proven.",
+    variant: 'error' as const,
+    label: 'Early trust signal',
+    detail: 'The listing still needs more successful settlements to feel proven.',
   };
 }
 
@@ -165,13 +165,7 @@ function MetricCard({
   );
 }
 
-function OfferCard({
-  offer,
-  isPrivate,
-}: {
-  offer: EnrichedOffer;
-  isPrivate: boolean;
-}) {
+function OfferCard({ offer, isPrivate }: { offer: EnrichedOffer; isPrivate: boolean }) {
   const backlogTone = getBacklogTone(offer.requestGuidance.backlogLevel);
   const confidenceTone = getConfidenceTone(offer.requestGuidance.confidenceScore);
 
@@ -180,7 +174,9 @@ function OfferCard({
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-lg font-semibold text-white">@{offer.merchantId?.username || "Unknown"}</span>
+            <span className="text-lg font-semibold text-white">
+              @{offer.merchantId?.username || 'Unknown'}
+            </span>
             {offer.merchantId?.reputation !== undefined && (
               <Badge variant="warning" className="px-1.5 py-0.5 text-xs">
                 <Star className="mr-1 h-3 w-3 fill-current" />
@@ -188,9 +184,7 @@ function OfferCard({
               </Badge>
             )}
           </div>
-          <p className="text-sm leading-6 text-slate-400">
-            {confidenceTone.detail}
-          </p>
+          <p className="text-sm leading-6 text-slate-400">{confidenceTone.detail}</p>
         </div>
         <Badge variant={confidenceTone.variant}>{confidenceTone.label}</Badge>
       </div>
@@ -219,12 +213,12 @@ function OfferCard({
           <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Recommended mode</p>
             <p className="mt-2 flex items-center gap-2 text-sm font-medium text-white">
-              {offer.requestGuidance.recommendedMode === "private" ? (
+              {offer.requestGuidance.recommendedMode === 'private' ? (
                 <Shield className="h-4 w-4 text-emerald-300" />
               ) : (
                 <Globe className="h-4 w-4 text-sky-300" />
               )}
-              {offer.requestGuidance.recommendedMode === "private" ? "Private flow" : "Public flow"}
+              {offer.requestGuidance.recommendedMode === 'private' ? 'Private flow' : 'Public flow'}
             </p>
           </div>
         </div>
@@ -233,7 +227,9 @@ function OfferCard({
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Seller completions</p>
-          <p className="mt-2 text-xl font-semibold text-white">{offer.merchantMetrics.completedAsSeller}</p>
+          <p className="mt-2 text-xl font-semibold text-white">
+            {offer.merchantMetrics.completedAsSeller}
+          </p>
           <p className="mt-1 text-xs text-slate-400">
             {offer.merchantMetrics.completionRate}% seller-side completion rate
           </p>
@@ -244,26 +240,29 @@ function OfferCard({
             {offer.offerMetrics.openRequests + offer.offerMetrics.activeExecutions}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            Requests: {offer.offerMetrics.openRequests} | Executing: {offer.offerMetrics.activeExecutions}
+            Requests: {offer.offerMetrics.openRequests} | Executing:{' '}
+            {offer.offerMetrics.activeExecutions}
           </p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <p className="text-xs uppercase tracking-wide text-slate-500">Last trade</p>
-          <p className="mt-2 text-sm font-medium text-white">{formatTimestamp(offer.offerMetrics.lastTradedAt)}</p>
+          <p className="mt-2 text-sm font-medium text-white">
+            {formatTimestamp(offer.offerMetrics.lastTradedAt)}
+          </p>
         </div>
       </div>
 
       <div className="mt-4 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-indigo-100">Execution hint</p>
-          <Badge variant={isPrivate ? "success" : "warning"}>
-            {isPrivate ? "Private mode selected" : "Public mode selected"}
+          <Badge variant={isPrivate ? 'success' : 'warning'}>
+            {isPrivate ? 'Private mode selected' : 'Public mode selected'}
           </Badge>
         </div>
         <p className="mt-2 text-sm leading-6 text-indigo-50/90">
           {isPrivate
-            ? offer.executionModes.find((mode) => mode.mode === "private")?.detail
-            : offer.executionModes.find((mode) => mode.mode === "public")?.detail}
+            ? offer.executionModes.find((mode) => mode.mode === 'private')?.detail
+            : offer.executionModes.find((mode) => mode.mode === 'public')?.detail}
         </p>
         <ul className="mt-3 space-y-2 text-sm leading-6 text-indigo-50/90">
           {offer.requestGuidance.notes.slice(0, 2).map((note) => (
@@ -291,28 +290,28 @@ export default function SwapPage() {
   const [offers, setOffers] = useState<EnrichedOffer[]>([]);
   const [highlights, setHighlights] = useState<MarketHighlights | null>(null);
   const [loading, setLoading] = useState(true);
-  const [assetInFilter, setAssetInFilter] = useState<"" | "USDC" | "XLM">("");
-  const [assetOutFilter, setAssetOutFilter] = useState<"" | "USDC" | "XLM">("");
-  const [amountFilter, setAmountFilter] = useState("");
-  const [queryError, setQueryError] = useState("");
+  const [assetInFilter, setAssetInFilter] = useState<'' | 'USDC' | 'XLM'>('');
+  const [assetOutFilter, setAssetOutFilter] = useState<'' | 'USDC' | 'XLM'>('');
+  const [amountFilter, setAmountFilter] = useState('');
+  const [queryError, setQueryError] = useState('');
 
   const fetchMarket = async () => {
     setLoading(true);
-    setQueryError("");
+    setQueryError('');
     try {
       const params = new URLSearchParams();
       if (assetInFilter) {
-        params.set("assetIn", assetInFilter);
+        params.set('assetIn', assetInFilter);
       }
       if (assetOutFilter) {
-        params.set("assetOut", assetOutFilter);
+        params.set('assetOut', assetOutFilter);
       }
       if (amountFilter) {
-        params.set("amount", amountFilter);
+        params.set('amount', amountFilter);
       }
 
       const [offersRes, highlightsRes] = await Promise.all([
-        fetch(`${API_URL}/offers${params.toString() ? `?${params.toString()}` : ""}`),
+        fetch(`${API_URL}/offers${params.toString() ? `?${params.toString()}` : ''}`),
         fetch(`${API_URL}/offers/market/highlights`),
       ]);
 
@@ -322,16 +321,16 @@ export default function SwapPage() {
       ]);
 
       if (!offersRes.ok) {
-        throw new Error("Failed to load offers");
+        throw new Error('Failed to load offers');
       }
       if (!highlightsRes.ok) {
-        throw new Error("Failed to load market highlights");
+        throw new Error('Failed to load market highlights');
       }
 
       setOffers(Array.isArray(offersData) ? offersData : []);
       setHighlights(highlightsData);
     } catch (err) {
-      setQueryError(err instanceof Error ? err.message : "Failed to load market");
+      setQueryError(err instanceof Error ? err.message : 'Failed to load market');
     } finally {
       setLoading(false);
     }
@@ -350,9 +349,10 @@ export default function SwapPage() {
       };
     }
 
-    const averageRate =
-      offers.reduce((sum, offer) => sum + offer.rate, 0) / offers.length;
-    const strongestConfidence = Math.max(...offers.map((offer) => offer.requestGuidance.confidenceScore));
+    const averageRate = offers.reduce((sum, offer) => sum + offer.rate, 0) / offers.length;
+    const strongestConfidence = Math.max(
+      ...offers.map((offer) => offer.requestGuidance.confidenceScore),
+    );
     const lowestBacklog = Math.min(...offers.map((offer) => offer.offerMetrics.openRequests));
 
     return {
@@ -379,13 +379,15 @@ export default function SwapPage() {
       <main className="relative z-10 mx-auto w-full max-w-6xl space-y-8 pt-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">P2P Market Intelligence</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+              P2P Market Intelligence
+            </p>
             <h1 className="mt-2 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-3xl font-bold text-transparent">
               Browse execution-ready offers
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-              The marketplace now surfaces seller history, listing backlog, and pair demand so you can choose a trade
-              path with more context than just price.
+              The marketplace now surfaces seller history, listing backlog, and pair demand so you
+              can choose a trade path with more context than just price.
             </p>
           </div>
           <div className="flex gap-3">
@@ -452,10 +454,12 @@ export default function SwapPage() {
 
             <div className="grid gap-4 md:grid-cols-4">
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">Pay asset</span>
+                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">
+                  Pay asset
+                </span>
                 <select
                   value={assetInFilter}
-                  onChange={(event) => setAssetInFilter(event.target.value as "" | "USDC" | "XLM")}
+                  onChange={(event) => setAssetInFilter(event.target.value as '' | 'USDC' | 'XLM')}
                   className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
                 >
                   <option value="">All</option>
@@ -465,10 +469,12 @@ export default function SwapPage() {
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">Receive asset</span>
+                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">
+                  Receive asset
+                </span>
                 <select
                   value={assetOutFilter}
-                  onChange={(event) => setAssetOutFilter(event.target.value as "" | "USDC" | "XLM")}
+                  onChange={(event) => setAssetOutFilter(event.target.value as '' | 'USDC' | 'XLM')}
                   className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
                 >
                   <option value="">All</option>
@@ -478,7 +484,9 @@ export default function SwapPage() {
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">Request amount</span>
+                <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">
+                  Request amount
+                </span>
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                   <input
@@ -509,15 +517,23 @@ export default function SwapPage() {
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Average rate</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{filteredSummary.averageRate}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {filteredSummary.averageRate}
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Best confidence</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{filteredSummary.strongestConfidence}%</p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {filteredSummary.strongestConfidence}%
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                <p className="text-xs uppercase tracking-wide text-slate-500">Lowest visible backlog</p>
-                <p className="mt-2 text-2xl font-semibold text-white">{filteredSummary.lowestBacklog}</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Lowest visible backlog
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-white">
+                  {filteredSummary.lowestBacklog}
+                </p>
               </div>
             </div>
           </Card>
@@ -528,11 +544,15 @@ export default function SwapPage() {
             <Card key={mode.mode} variant="glass">
               <div className="flex items-start gap-3">
                 <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3 text-indigo-300">
-                  {mode.mode === "private" ? <Shield className="h-5 w-5" /> : <Globe className="h-5 w-5" />}
+                  {mode.mode === 'private' ? (
+                    <Shield className="h-5 w-5" />
+                  ) : (
+                    <Globe className="h-5 w-5" />
+                  )}
                 </div>
                 <div>
                   <p className="text-sm font-medium text-white">
-                    {mode.mode === "private" ? "Private proof flow" : "Public settlement flow"}
+                    {mode.mode === 'private' ? 'Private proof flow' : 'Public settlement flow'}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">{mode.detail}</p>
                 </div>

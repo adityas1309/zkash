@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 export interface AuthWorkspace {
   session: {
@@ -18,12 +18,12 @@ export interface AuthWorkspace {
     createdAt?: string;
   };
   network: {
-    mode: "testnet" | "mainnet";
+    mode: 'testnet' | 'mainnet';
     label: string;
   };
   readiness: {
     score: number;
-    tone: "guest" | "blocked" | "attention" | "ready";
+    tone: 'guest' | 'blocked' | 'attention' | 'ready';
     headline: string;
     detail: string;
   };
@@ -41,7 +41,7 @@ export interface AuthWorkspace {
     };
   };
   ops: {
-    status: "ready" | "degraded";
+    status: 'ready' | 'degraded';
     trackedPools: number;
     laggingPools: number;
   };
@@ -49,7 +49,7 @@ export interface AuthWorkspace {
   checklist: Array<{
     id: string;
     label: string;
-    status: "complete" | "attention" | "blocked";
+    status: 'complete' | 'attention' | 'blocked';
     detail: string;
     action: string;
   }>;
@@ -72,47 +72,48 @@ const guestFallback: AuthWorkspace = {
   },
   user: null,
   network: {
-    mode: "testnet",
-    label: "Stellar Testnet",
+    mode: 'testnet',
+    label: 'Stellar Testnet',
   },
   readiness: {
     score: 10,
-    tone: "guest",
-    headline: "Sign in to start your private Stellar workspace.",
-    detail: "Authentication unlocks wallet generation, trustline setup, private-note actions, and the full dashboard.",
+    tone: 'guest',
+    headline: 'Sign in to start your private Stellar workspace.',
+    detail:
+      'Authentication unlocks wallet generation, trustline setup, private-note actions, and the full dashboard.',
   },
   wallet: {
     public: {
-      xlm: "0",
-      usdc: "0",
+      xlm: '0',
+      usdc: '0',
       hasXlm: false,
       hasUsdcTrustline: false,
     },
     private: {
-      xlm: "0",
-      usdc: "0",
+      xlm: '0',
+      usdc: '0',
       hasShieldedBalance: false,
     },
   },
   ops: {
-    status: "degraded",
+    status: 'degraded',
     trackedPools: 0,
     laggingPools: 0,
   },
   nextActions: [
-    "Authenticate with Google to provision your Stellar and private note keys.",
-    "Fund the generated wallet with testnet XLM before trying a deposit or swap.",
-    "Add the USDC trustline so the wallet can receive and convert stable value.",
+    'Authenticate with Google to provision your Stellar and private note keys.',
+    'Fund the generated wallet with testnet XLM before trying a deposit or swap.',
+    'Add the USDC trustline so the wallet can receive and convert stable value.',
   ],
   checklist: [],
   faucet: {
     xlm: {
       available: true,
-      label: "Friendbot XLM",
+      label: 'Friendbot XLM',
     },
     usdc: {
       available: true,
-      url: "https://faucet.circle.com/?network=stellar-testnet",
+      url: 'https://faucet.circle.com/?network=stellar-testnet',
     },
   },
 };
@@ -124,7 +125,7 @@ export function useAuthWorkspace() {
   const fetchWorkspace = async () => {
     try {
       const res = await fetch(`${API_URL}/auth/workspace`, {
-        credentials: "include",
+        credentials: 'include',
       });
       if (!res.ok) {
         setWorkspace(guestFallback);
@@ -133,7 +134,7 @@ export function useAuthWorkspace() {
       const data = await res.json();
       setWorkspace(data);
     } catch (error) {
-      console.error("[useAuthWorkspace] Failed to fetch workspace", error);
+      console.error('[useAuthWorkspace] Failed to fetch workspace', error);
       setWorkspace(guestFallback);
     } finally {
       setLoading(false);

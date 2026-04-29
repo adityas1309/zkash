@@ -19,4 +19,3 @@ import { OpsModule } from '../ops/ops.module';
   exports: [PoolIndexerService],
 })
 export class IndexerModule {}
-

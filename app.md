@@ -4,11 +4,11 @@
 
 A web app where users can:
 
-* ✅ send **private P2P payments** in USDC or XLM
-* ✅ do **private P2P swaps** (USDC ↔ XLM) with other users / verified merchants
-* ✅ use email onboarding (Gmail)
-* ✅ all transactions run on **Stellar testnet**
-* ✅ privacy via **zero-knowledge proofs** (no mocked privacy)
+- ✅ send **private P2P payments** in USDC or XLM
+- ✅ do **private P2P swaps** (USDC ↔ XLM) with other users / verified merchants
+- ✅ use email onboarding (Gmail)
+- ✅ all transactions run on **Stellar testnet**
+- ✅ privacy via **zero-knowledge proofs** (no mocked privacy)
 
 ---
 
@@ -21,15 +21,15 @@ A web app where users can:
 1. User visits web app
 2. Clicks “Sign in with Google”
 3. Backend:
+   - creates Stellar keypair (testnet)
+   - creates ZK keypair (private spending key + view key)
+   - stores **encrypted** private keys in MongoDB (or user device if you go non-custodial later)
 
-   * creates Stellar keypair (testnet)
-   * creates ZK keypair (private spending key + view key)
-   * stores **encrypted** private keys in MongoDB (or user device if you go non-custodial later)
 4. User sees:
+   - username
+   - QR code
+   - private balance (starts 0)
 
-   * username
-   * QR code
-   * private balance (starts 0)
 5. App gives user a **testnet faucet button** to get XLM
 
 ---
@@ -40,20 +40,20 @@ A web app where users can:
 
 1. Alice clicks **“Send Payment”**
 2. Chooses:
+   - Bob from contacts / QR / username
 
-   * Bob from contacts / QR / username
 3. Selects asset:
+   - USDC or XLM
 
-   * USDC or XLM
 4. Enters amount
 5. Confirms
 6. App:
+   - builds ZK proof:
+     - Alice owns private balance
+     - balance ≥ amount
 
-   * builds ZK proof:
+   - submits tx to **ShieldedPool Soroban contract**
 
-     * Alice owns private balance
-     * balance ≥ amount
-   * submits tx to **ShieldedPool Soroban contract**
 7. Tx confirmed on Stellar testnet
 8. UI updates Alice’s private balance
 
@@ -66,9 +66,8 @@ A web app where users can:
 3. Bob’s app scans encrypted notes
 4. Bob decrypts incoming payment
 5. Bob sees:
-
-   * “Received XLM from Alice” (only if Alice chooses to reveal username)
-   * amount shown only in Bob’s wallet
+   - “Received XLM from Alice” (only if Alice chooses to reveal username)
+   - amount shown only in Bob’s wallet
 
 **Public chain sees:**
 
@@ -82,13 +81,13 @@ A web app where users can:
 
 1. Alice clicks **“P2P Swap”**
 2. Sees list of verified merchants/users:
+   - Bob: rate, limits, reputation
 
-   * Bob: rate, limits, reputation
 3. Alice selects Bob
 4. Enters:
+   - Pay: 50 USDC
+   - Receive: auto-calculated XLM
 
-   * Pay: 50 USDC
-   * Receive: auto-calculated XLM
 5. Sends swap request
 
 ---
@@ -97,9 +96,9 @@ A web app where users can:
 
 1. Bob receives swap request
 2. Reviews:
+   - amounts
+   - counterparty rating
 
-   * amounts
-   * counterparty rating
 3. Clicks **Accept**
 
 ---
@@ -107,19 +106,18 @@ A web app where users can:
 ### 🔐 On-Chain Private Swap Execution
 
 1. Alice generates ZK proof:
+   - owns ≥ 50 USDC privately
 
-   * owns ≥ 50 USDC privately
 2. Bob generates ZK proof:
+   - owns ≥ X XLM privately
 
-   * owns ≥ X XLM privately
 3. Both submit proofs to **ZKSwap Soroban contract**
 4. Contract verifies:
+   - both deposits valid
 
-   * both deposits valid
 5. Contract performs **atomic private settlement**:
-
-   * Alice gets XLM privately
-   * Bob gets USDC privately
+   - Alice gets XLM privately
+   - Bob gets USDC privately
 
 **Public chain sees:**
 
@@ -127,9 +125,9 @@ A web app where users can:
 
 **Public cannot see:**
 
-* amounts
-* identities
-* trading graph
+- amounts
+- identities
+- trading graph
 
 ---
 
@@ -138,10 +136,10 @@ A web app where users can:
 ### 👤 Bob as Merchant
 
 1. Bob creates offer:
+   - “I sell XLM for USDC”
+   - rate
+   - min / max
 
-   * “I sell XLM for USDC”
-   * rate
-   * min / max
 2. Offer stored in MongoDB
 3. Alice sees Bob in P2P marketplace
 4. Swap flow continues privately
@@ -152,65 +150,64 @@ A web app where users can:
 
 ### 🌐 Frontend
 
-* **Next.js (TypeScript)**
-* Tailwind CSS
-* Wallet UI
-* QR code scanning
-* Swap UI
-* Proof generation (WASM)
+- **Next.js (TypeScript)**
+- Tailwind CSS
+- Wallet UI
+- QR code scanning
+- Swap UI
+- Proof generation (WASM)
 
 ---
 
 ### 🧠 Backend
 
-* **Node.js (NestJS or Express)**
-* **MongoDB**
+- **Node.js (NestJS or Express)**
+- **MongoDB**
+  - users
+  - wallets
+  - encrypted notes
+  - swap offers
+  - transaction metadata
 
-  * users
-  * wallets
-  * encrypted notes
-  * swap offers
-  * transaction metadata
-* REST API:
-
-  * `/auth/google`
-  * `/users`
-  * `/offers`
-  * `/swap/request`
-  * `/swap/accept`
+- REST API:
+  - `/auth/google`
+  - `/users`
+  - `/offers`
+  - `/swap/request`
+  - `/swap/accept`
 
 ---
 
 ### ⛓️ Blockchain
 
-* **Stellar Testnet**
-* **Soroban Smart Contracts**
+- **Stellar Testnet**
+- **Soroban Smart Contracts**
+  - ShieldedPool contract (private balances)
+  - ZKSwap contract (atomic swaps)
 
-  * ShieldedPool contract (private balances)
-  * ZKSwap contract (atomic swaps)
-* Stellar SDK for tx submission
+- Stellar SDK for tx submission
 
 ---
 
 ### 🔐 ZK Stack (Real, No Mock)
 
-* Circom:
+- Circom:
+  - private transfer circuit
+  - private atomic swap circuit
 
-  * private transfer circuit
-  * private atomic swap circuit
-* SnarkJS:
+- SnarkJS:
+  - proof generation in browser (WASM)
 
-  * proof generation in browser (WASM)
-* Verifier contract deployed on Soroban
+- Verifier contract deployed on Soroban
 
 ---
 
 ### 📡 Indexer / Listener
 
-* Node.js worker
-* Listens to Soroban events
-* Updates MongoDB
-* Pushes notifications to frontend
+- Node.js worker
+- Listens to Soroban events
+- Updates MongoDB
+- Pushes notifications to frontend
 
 (No Redis needed – MongoDB + polling/webhooks is fine for MVP)
 
@@ -254,14 +251,14 @@ Swap {
 
 ## 8️⃣ What Is Real on Testnet (No Mocking)
 
-* ✅ Real Stellar accounts
-* ✅ Real USDC testnet asset
-* ✅ Real Soroban contracts
-* ✅ Real ZK proof generation
-* ✅ Real tx submission
-* ✅ Real indexer
-* ❌ No fake privacy
-* ❌ No mocked blockchain
+- ✅ Real Stellar accounts
+- ✅ Real USDC testnet asset
+- ✅ Real Soroban contracts
+- ✅ Real ZK proof generation
+- ✅ Real tx submission
+- ✅ Real indexer
+- ❌ No fake privacy
+- ❌ No mocked blockchain
 
 ---
 

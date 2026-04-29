@@ -207,13 +207,26 @@ export default function ActionsPage() {
             What actually needs your attention right now
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This workspace ranks the next highest-value moves across funding, trustlines, shielded balances, swaps,
-            failure recovery, and indexer freshness so you stop guessing which page to open next.
+            This workspace ranks the next highest-value moves across funding, trustlines, shielded
+            balances, swaps, failure recovery, and indexer freshness so you stop guessing which page
+            to open next.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant={workspace.summary.critical > 0 ? 'error' : workspace.summary.caution > 0 ? 'warning' : 'success'}>
-            {workspace.summary.critical > 0 ? `${workspace.summary.critical} critical` : workspace.summary.caution > 0 ? `${workspace.summary.caution} caution` : 'All clear'}
+          <Badge
+            variant={
+              workspace.summary.critical > 0
+                ? 'error'
+                : workspace.summary.caution > 0
+                  ? 'warning'
+                  : 'success'
+            }
+          >
+            {workspace.summary.critical > 0
+              ? `${workspace.summary.critical} critical`
+              : workspace.summary.caution > 0
+                ? `${workspace.summary.caution} caution`
+                : 'All clear'}
           </Badge>
           <Button variant="ghost" onClick={() => fetchWorkspace(true)}>
             <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -225,23 +238,39 @@ export default function ActionsPage() {
       <section className="grid gap-4 md:grid-cols-4">
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Priority queue</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.totalPriorities}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Ranked actions across wallet, market, history, and ops.</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {workspace.summary.totalPriorities}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Ranked actions across wallet, market, history, and ops.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Quick wins</p>
           <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.quickWins}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Low-friction steps that remove the most day-to-day friction.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Low-friction steps that remove the most day-to-day friction.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Pending actions</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{workspace.lanes.activity.pending}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">History items still waiting on chain follow-up or user intervention.</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {workspace.lanes.activity.pending}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            History items still waiting on chain follow-up or user intervention.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Market pressure</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{workspace.lanes.market.requested + workspace.lanes.market.proofsPending + workspace.lanes.market.proofsReady}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Requests and proof-stage swaps still asking for active follow-up.</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {workspace.lanes.market.requested +
+              workspace.lanes.market.proofsPending +
+              workspace.lanes.market.proofsReady}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Requests and proof-stage swaps still asking for active follow-up.
+          </p>
         </Card>
       </section>
 
@@ -258,7 +287,10 @@ export default function ActionsPage() {
               </div>
             ) : (
               workspace.priorities.map((item, index) => (
-                <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -295,7 +327,10 @@ export default function ActionsPage() {
               </div>
             ) : (
               workspace.quickWins.map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={item}
+                  className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
                   <p className="text-sm leading-6 text-slate-300">{item}</p>
                 </div>
@@ -326,15 +361,19 @@ export default function ActionsPage() {
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-white">Wallet</p>
-                <Badge variant={workspace.lanes.wallet.pendingWithdrawals > 0 ? 'warning' : 'success'}>
+                <Badge
+                  variant={workspace.lanes.wallet.pendingWithdrawals > 0 ? 'warning' : 'success'}
+                >
                   {workspace.lanes.wallet.pendingWithdrawals > 0 ? 'Queue waiting' : 'Stable'}
                 </Badge>
               </div>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Public: {workspace.lanes.wallet.publicXlm} XLM / {workspace.lanes.wallet.publicUsdc} USDC
+                Public: {workspace.lanes.wallet.publicXlm} XLM / {workspace.lanes.wallet.publicUsdc}{' '}
+                USDC
               </p>
               <p className="mt-1 text-sm leading-6 text-slate-400">
-                Private: {workspace.lanes.wallet.privateXlm} XLM / {workspace.lanes.wallet.privateUsdc} USDC
+                Private: {workspace.lanes.wallet.privateXlm} XLM /{' '}
+                {workspace.lanes.wallet.privateUsdc} USDC
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -343,18 +382,27 @@ export default function ActionsPage() {
                 <Badge variant="default">{workspace.lanes.activity.momentum}</Badge>
               </div>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                {workspace.lanes.activity.pending} pending, {workspace.lanes.activity.failed} failed, {workspace.lanes.activity.privateFlows} private flow events.
+                {workspace.lanes.activity.pending} pending, {workspace.lanes.activity.failed}{' '}
+                failed, {workspace.lanes.activity.privateFlows} private flow events.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-white">Market</p>
-                <Badge variant={workspace.lanes.market.failed > 0 || workspace.lanes.market.proofsReady > 0 ? 'warning' : 'default'}>
+                <Badge
+                  variant={
+                    workspace.lanes.market.failed > 0 || workspace.lanes.market.proofsReady > 0
+                      ? 'warning'
+                      : 'default'
+                  }
+                >
                   {workspace.lanes.market.total} tracked swaps
                 </Badge>
               </div>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                {workspace.lanes.market.requested} requests, {workspace.lanes.market.proofsPending} proofs pending, {workspace.lanes.market.proofsReady} proofs ready, {workspace.lanes.market.executing} executing.
+                {workspace.lanes.market.requested} requests, {workspace.lanes.market.proofsPending}{' '}
+                proofs pending, {workspace.lanes.market.proofsReady} proofs ready,{' '}
+                {workspace.lanes.market.executing} executing.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -365,7 +413,8 @@ export default function ActionsPage() {
                 </Badge>
               </div>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                {workspace.lanes.ops.trackedPools} tracked pools with {workspace.lanes.ops.laggingPools} lagging lanes.
+                {workspace.lanes.ops.trackedPools} tracked pools with{' '}
+                {workspace.lanes.ops.laggingPools} lagging lanes.
               </p>
             </div>
           </div>
@@ -407,7 +456,10 @@ export default function ActionsPage() {
               </div>
             ) : (
               workspace.swapQueue.map((swap) => (
-                <div key={swap.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={swap.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -418,7 +470,8 @@ export default function ActionsPage() {
                       <h3 className="mt-3 text-base font-semibold text-white">{swap.action}</h3>
                       <p className="mt-2 text-sm leading-6 text-slate-400">{swap.detail}</p>
                       <p className="mt-2 text-xs text-slate-500">
-                        Counterparty: {swap.counterparty ? `@${swap.counterparty}` : 'Unknown'} | Ticket {swap.amountIn} / {swap.amountOut}
+                        Counterparty: {swap.counterparty ? `@${swap.counterparty}` : 'Unknown'} |
+                        Ticket {swap.amountIn} / {swap.amountOut}
                       </p>
                     </div>
                     <div className="shrink-0">
@@ -477,7 +530,9 @@ export default function ActionsPage() {
             Back to Dashboard
           </Button>
         </Link>
-        <div className="text-sm text-slate-500">Last refresh: {formatTimestamp(workspace.updatedAt)}</div>
+        <div className="text-sm text-slate-500">
+          Last refresh: {formatTimestamp(workspace.updatedAt)}
+        </div>
       </div>
     </div>
   );

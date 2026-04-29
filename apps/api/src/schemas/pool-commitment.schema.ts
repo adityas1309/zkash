@@ -22,4 +22,3 @@ export class PoolCommitment extends Document {
 export const PoolCommitmentSchema = SchemaFactory.createForClass(PoolCommitment);
 PoolCommitmentSchema.index({ poolAddress: 1, index: 1 }, { unique: true });
 PoolCommitmentSchema.index({ poolAddress: 1, commitmentHex: 1 }, { unique: true });
-

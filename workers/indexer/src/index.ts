@@ -12,18 +12,24 @@ const RPC_URL = process.env.RPC_URL ?? 'https://soroban-testnet.stellar.org';
 const SHIELDED_POOL_ADDRESS = process.env.SHIELDED_POOL_ADDRESS;
 const ZK_SWAP_ADDRESS = process.env.ZK_SWAP_ADDRESS;
 
-const EncryptedNoteSchema = new mongoose.Schema({
-  commitment: { type: String, default: '' },
-  ciphertext: { type: String, default: '' },
-  asset: String,
-  txHash: String,
-  poolAddress: String,
-}, { timestamps: true });
+const EncryptedNoteSchema = new mongoose.Schema(
+  {
+    commitment: { type: String, default: '' },
+    ciphertext: { type: String, default: '' },
+    asset: String,
+    txHash: String,
+    poolAddress: String,
+  },
+  { timestamps: true },
+);
 
 const EncryptedNote = mongoose.model('EncryptedNote', EncryptedNoteSchema);
 
 /** Extract commitment or nullifier from Soroban event value if present; no PII stored. */
-function parseEventPayload(ev: Record<string, unknown>): { commitment?: string; nullifier?: string } {
+function parseEventPayload(ev: Record<string, unknown>): {
+  commitment?: string;
+  nullifier?: string;
+} {
   const out: { commitment?: string; nullifier?: string } = {};
   const value = ev?.value ?? (ev as any)?.body?.value;
   if (value && typeof value === 'object') {
@@ -62,11 +68,7 @@ async function indexContractEvents(server: rpc.Server, contractId: string, asset
       txHash,
       poolAddress,
     };
-    await EncryptedNote.findOneAndUpdate(
-      { txHash, poolAddress },
-      doc,
-      { upsert: true, new: true }
-    );
+    await EncryptedNote.findOneAndUpdate({ txHash, poolAddress }, doc, { upsert: true, new: true });
   }
 }
 

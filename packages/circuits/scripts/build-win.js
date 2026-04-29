@@ -10,10 +10,13 @@ if (!fs.existsSync(buildDir)) fs.mkdirSync(buildDir, { recursive: true });
 if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
 console.log('Compiling circuit...');
-execSync(`circom "${path.join(circuitsDir, 'main.circom')}" --r1cs --wasm --sym --prime bls12381 -o "${buildDir}"`, {
-  stdio: 'inherit',
-  cwd: circuitsDir,
-});
+execSync(
+  `circom "${path.join(circuitsDir, 'main.circom')}" --r1cs --wasm --sym --prime bls12381 -o "${buildDir}"`,
+  {
+    stdio: 'inherit',
+    cwd: circuitsDir,
+  },
+);
 
 // Copy WASM to output for frontend
 const wasmSrc = path.join(buildDir, 'main_js', 'main.wasm');

@@ -4,8 +4,8 @@ import { FiatController } from './fiat.controller';
 import { UsersModule } from '../users/users.module';
 
 @Module({
-    imports: [UsersModule],
-    controllers: [FiatController],
-    providers: [FiatService],
+  imports: [UsersModule],
+  controllers: [FiatController],
+  providers: [FiatService],
 })
-export class FiatModule { }
+export class FiatModule {}

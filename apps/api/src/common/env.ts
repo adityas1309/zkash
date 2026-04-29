@@ -12,7 +12,9 @@ export function validateEnvironment(env: NodeJS.ProcessEnv) {
   required('MONGODB_URI or MONGO_URI', mongoUri);
 
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) {
-    console.warn('[env] Google OAuth credentials missing; auth endpoints will not function until configured.');
+    console.warn(
+      '[env] Google OAuth credentials missing; auth endpoints will not function until configured.',
+    );
   }
 
   if (!env.RPC_URL) {

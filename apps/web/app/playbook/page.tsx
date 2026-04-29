@@ -263,17 +263,21 @@ export default function PlaybookPage() {
                     : 'Still blocked'}
               </Badge>
               <Badge variant="default">{workspace.summary.scenarios} scenarios</Badge>
-              <Badge variant="default">{workspace.summary.sponsoredOpportunities} sponsored opportunities</Badge>
+              <Badge variant="default">
+                {workspace.summary.sponsoredOpportunities} sponsored opportunities
+              </Badge>
               <Badge variant="default">Updated {formatTimestamp(workspace.updatedAt)}</Badge>
             </div>
-            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">Playbook Workspace</p>
+            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">
+              Playbook Workspace
+            </p>
             <h1 className="mt-3 bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-3xl font-bold text-transparent md:text-5xl">
               Turn balances, route health, and counterparties into concrete next moves
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300 md:text-base">
-              This workspace converts current wallet posture into scenario-based strategy. Instead of opening six pages
-              and inferring what matters, you get a ranked playbook for funding, private seeding, repeat sends, cleanup,
-              and growth routes.
+              This workspace converts current wallet posture into scenario-based strategy. Instead
+              of opening six pages and inferring what matters, you get a ranked playbook for
+              funding, private seeding, repeat sends, cleanup, and growth routes.
             </p>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">
               {topScenario
@@ -285,18 +289,28 @@ export default function PlaybookPage() {
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[34rem]">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Executable</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.executable}</p>
-              <p className="mt-2 text-sm text-slate-400">Scenarios that are already good enough to execute.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workspace.summary.executable}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Scenarios that are already good enough to execute.
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Blocked</p>
               <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.blocked}</p>
-              <p className="mt-2 text-sm text-slate-400">Plans still gated by missing capital or readiness.</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Plans still gated by missing capital or readiness.
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Urgent blockers</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.urgentBlockers}</p>
-              <p className="mt-2 text-sm text-slate-400">Critical action-center blockers still visible in the account.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workspace.summary.urgentBlockers}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Critical action-center blockers still visible in the account.
+              </p>
             </div>
           </div>
         </div>
@@ -310,7 +324,8 @@ export default function PlaybookPage() {
           </div>
           <p className="mt-3 text-2xl font-semibold text-white">{workspace.posture.capitalShape}</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Whether the account currently behaves more like a visible wallet, a private wallet, or a balanced mix.
+            Whether the account currently behaves more like a visible wallet, a private wallet, or a
+            balanced mix.
           </p>
         </Card>
         <Card variant="glass">
@@ -328,9 +343,12 @@ export default function PlaybookPage() {
             <Target className="h-4 w-4 text-indigo-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Relationship shape</p>
           </div>
-          <p className="mt-3 text-2xl font-semibold text-white">{workspace.posture.relationshipShape}</p>
+          <p className="mt-3 text-2xl font-semibold text-white">
+            {workspace.posture.relationshipShape}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            Whether strategy can lean on known counterparties or still has to behave like a cold-start wallet.
+            Whether strategy can lean on known counterparties or still has to behave like a
+            cold-start wallet.
           </p>
         </Card>
         <Card variant="glass">
@@ -353,7 +371,10 @@ export default function PlaybookPage() {
           </div>
           <div className="space-y-5">
             {workspace.scenarioCards.map((scenario) => (
-              <div key={scenario.id} className={`rounded-[28px] border p-5 ${tonePanelClass(scenario.tone)}`}>
+              <div
+                key={scenario.id}
+                className={`rounded-[28px] border p-5 ${tonePanelClass(scenario.tone)}`}
+              >
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -367,7 +388,8 @@ export default function PlaybookPage() {
                     <p className="mt-4 text-sm font-medium text-slate-200">{scenario.headline}</p>
                     <p className="mt-3 text-sm leading-7 text-slate-300">{scenario.detail}</p>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
-                      <span className="font-semibold text-slate-200">Current status:</span> {scenario.status}
+                      <span className="font-semibold text-slate-200">Current status:</span>{' '}
+                      {scenario.status}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-3">
@@ -382,8 +404,13 @@ export default function PlaybookPage() {
 
                 <div className="mt-5 grid gap-3 md:grid-cols-4">
                   {scenario.metrics.map((metric) => (
-                    <div key={`${scenario.id}-${metric.label}`} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">{metric.label}</p>
+                    <div
+                      key={`${scenario.id}-${metric.label}`}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3"
+                    >
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        {metric.label}
+                      </p>
                       <p className="mt-2 text-lg font-semibold text-white">{metric.value}</p>
                     </div>
                   ))}
@@ -459,8 +486,12 @@ export default function PlaybookPage() {
                       ))}
                     </div>
                     <div className="mt-4 rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-4">
-                      <p className="text-xs uppercase tracking-wide text-indigo-200">Recommendation</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-200">{scenario.recommendation}</p>
+                      <p className="text-xs uppercase tracking-wide text-indigo-200">
+                        Recommendation
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-200">
+                        {scenario.recommendation}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -477,7 +508,10 @@ export default function PlaybookPage() {
             </div>
             <div className="space-y-4">
               {workspace.routeComparisons.map((item) => (
-                <div key={item.id} className={`rounded-2xl border p-4 ${tonePanelClass(item.tone)}`}>
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border p-4 ${tonePanelClass(item.tone)}`}
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-semibold text-white">{item.label}</p>
                     <Badge variant={variantFor(item.tone)}>{item.tone}</Badge>
@@ -489,10 +523,14 @@ export default function PlaybookPage() {
                   </p>
                   <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={variantFor(item.sponsorship.tone)}>{item.sponsorship.tone}</Badge>
+                      <Badge variant={variantFor(item.sponsorship.tone)}>
+                        {item.sponsorship.tone}
+                      </Badge>
                       <p className="text-sm font-medium text-white">{item.sponsorship.label}</p>
                     </div>
-                    <p className="mt-3 text-sm leading-6 text-slate-400">{item.sponsorship.reason}</p>
+                    <p className="mt-3 text-sm leading-6 text-slate-400">
+                      {item.sponsorship.reason}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -506,7 +544,10 @@ export default function PlaybookPage() {
             </div>
             <div className="space-y-3">
               {workspace.sponsorBoard.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={variantFor(item.tone)}>{item.tone}</Badge>
                     <p className="text-sm font-semibold text-white">
@@ -529,7 +570,10 @@ export default function PlaybookPage() {
           </div>
           <div className="space-y-3">
             {workspace.recentSignals.map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item}
+                className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <Sparkles className="mt-1 h-4 w-4 shrink-0 text-indigo-300" />
                 <p className="text-sm leading-6 text-slate-300">{item}</p>
               </div>
@@ -573,31 +617,33 @@ export default function PlaybookPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">1. Start with posture</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                1. Start with posture
+              </p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Capital shape, relationship shape, and risk shape tell you whether the account should be funding,
-                protecting, reusing counterparties, or cleaning up.
+                Capital shape, relationship shape, and risk shape tell you whether the account
+                should be funding, protecting, reusing counterparties, or cleaning up.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">2. Pick one scenario</p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                The playbook works best when you commit to one scenario and complete it, instead of switching between
-                three half-prepared routes at once.
+                The playbook works best when you commit to one scenario and complete it, instead of
+                switching between three half-prepared routes at once.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">3. Respect blockers</p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                A blocked scenario is not a failure. It is the workspace telling you which prerequisite creates the most
-                downstream leverage.
+                A blocked scenario is not a failure. It is the workspace telling you which
+                prerequisite creates the most downstream leverage.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">4. Feed the graph</p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Every successful route creates more history, stronger counterparty intelligence, and better future
-                recommendations for the same account.
+                Every successful route creates more history, stronger counterparty intelligence, and
+                better future recommendations for the same account.
               </p>
             </div>
           </div>
@@ -653,7 +699,9 @@ export default function PlaybookPage() {
                 className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-indigo-500/30 hover:bg-slate-900"
               >
                 <div>
-                  <p className="text-sm font-semibold text-white">View account on Stellar Explorer</p>
+                  <p className="text-sm font-semibold text-white">
+                    View account on Stellar Explorer
+                  </p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     Cross-check public chain posture outside the app before major moves.
                   </p>
@@ -667,11 +715,16 @@ export default function PlaybookPage() {
 
       <section className="flex flex-col gap-4 rounded-[28px] border border-slate-800 bg-slate-950/80 p-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Commit to the next move</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Choose one scenario and complete it end-to-end</h2>
+          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+            Commit to the next move
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Choose one scenario and complete it end-to-end
+          </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            The playbook becomes smarter when each move actually completes. Finish one scenario, then return here so
-            the next recommendation is based on real updated posture instead of partial intent.
+            The playbook becomes smarter when each move actually completes. Finish one scenario,
+            then return here so the next recommendation is based on real updated posture instead of
+            partial intent.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

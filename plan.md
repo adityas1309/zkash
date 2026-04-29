@@ -16,27 +16,27 @@ flowchart TB
         ProofGen[Proof Generation WASM]
         QR[QR Scanner]
     end
-    
+
     subgraph backend [Backend - NestJS]
         Auth[Google Auth]
         API[REST API]
         Indexer[Event Indexer]
     end
-    
+
     subgraph db [MongoDB]
         Users[(Users)]
         Offers[(Offers)]
         Swaps[(Swaps)]
         Notes[(Encrypted Notes)]
     end
-    
+
     subgraph stellar [Stellar Testnet]
         ShieldedPool[ShieldedPool Contract]
         ZKSwap[ZKSwap Contract]
         USDC[USDC Token]
         XLM[XLM Native]
     end
-    
+
     UI --> API
     ProofGen --> ShieldedPool
     ProofGen --> ZKSwap
@@ -50,8 +50,6 @@ flowchart TB
     ShieldedPool --> XLM
     ZKSwap --> ShieldedPool
 ```
-
-
 
 ---
 
@@ -76,14 +74,12 @@ Your spec describes **private balances** (user owns notes; sends to another user
 
 ### 3. Reference Codebases
 
-
 | Component         | Source                                                                                                              | Use                                 |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Circuits (base)   | [soroban-privacy-pools/circuits](https://github.com/ymcrcat/soroban-privacy-pools)                                  | Merkle proof, commitment, nullifier |
 | Groth16 verifier  | [stellar/soroban-examples/groth16_verifier](https://github.com/stellar/soroban-examples/tree/main/groth16_verifier) | On-chain verification               |
 | circom2soroban    | soroban-privacy-pools `stellar-circom2soroban`                                                                      | VK/proof serialization              |
 | coinutils pattern | soroban-privacy-pools `stellar-coinutils`                                                                           | Note generation, Merkle state       |
-
 
 ---
 
@@ -277,7 +273,6 @@ User {
 
 ## Dependencies
 
-
 | Layer     | Key Packages                                                                      |
 | --------- | --------------------------------------------------------------------------------- |
 | Frontend  | Next.js 14, Tailwind, @stellar/stellar-sdk, snarkjs, qrcode.react, html5-qrcode   |
@@ -285,7 +280,6 @@ User {
 | Contracts | rust, soroban-cli, rs-soroban-sdk (v25+)                                          |
 | Circuits  | circom, snarkjs                                                                   |
 | Workers   | @stellar/stellar-sdk, mongoose                                                    |
-
 
 ---
 
@@ -306,7 +300,6 @@ User {
 
 ## Risks and Mitigations
 
-
 | Risk                                | Mitigation                                                                   |
 | ----------------------------------- | ---------------------------------------------------------------------------- |
 | Proof generation slow in browser    | Use Web Worker; show progress; consider optional server-side proving for MVP |
@@ -314,7 +307,6 @@ User {
 | Merkle tree depth                   | Use Poseidon host functions (X-Ray) to support larger trees                  |
 | Native XLM in Soroban               | Confirm Stellar docs for native asset in contracts; may need wrapper         |
 | USDC testnet address                | Document and test Circle faucet + contract address                           |
-
 
 ---
 
@@ -326,4 +318,3 @@ User {
 - [stellar/soroban-examples groth16_verifier](https://github.com/stellar/soroban-examples/tree/main/groth16_verifier)
 - [Stellar Developer Docs - Soroban](https://developers.stellar.org/docs/build/smart-contracts)
 - [Circle Testnet Faucet](https://faucet.circle.com/)
-

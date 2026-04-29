@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   ArrowRightLeft,
   Bolt,
@@ -21,26 +21,26 @@ import {
   Sparkles,
   Wallet,
   XCircle,
-} from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
-import { NetworkToggle } from "@/components/ui/NetworkToggle";
-import Prism from "@/components/ui/Prism";
-import { cn } from "@/lib/utils";
-import { useNetwork } from "@/context/NetworkContext";
-import { usePrivacy } from "@/context/PrivacyContext";
+} from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { PrivacyToggle } from '@/components/ui/PrivacyToggle';
+import { NetworkToggle } from '@/components/ui/NetworkToggle';
+import Prism from '@/components/ui/Prism';
+import { cn } from '@/lib/utils';
+import { useNetwork } from '@/context/NetworkContext';
+import { usePrivacy } from '@/context/PrivacyContext';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
-type WalletAsset = "USDC" | "XLM";
+type WalletAsset = 'USDC' | 'XLM';
 
 interface WorkspaceHistoryEntry {
   id: string;
   title: string;
   detail: string;
-  state: "success" | "pending" | "failed" | "retryable" | "queued";
-  category: "wallet" | "private" | "swap" | "system";
+  state: 'success' | 'pending' | 'failed' | 'retryable' | 'queued';
+  category: 'wallet' | 'private' | 'swap' | 'system';
   amountDisplay: string;
   txHash?: string;
   privateFlow: boolean;
@@ -70,7 +70,7 @@ interface WalletWorkspace {
 }
 
 interface ReadyPayload {
-  status: "ready" | "degraded";
+  status: 'ready' | 'degraded';
   dependencies: {
     mongodb: string;
     indexer: string;
@@ -124,33 +124,33 @@ interface SponsorshipPreview {
 
 function formatAddress(address?: string) {
   if (!address) {
-    return "";
+    return '';
   }
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
 }
 
 function formatTimestamp(value?: string) {
   if (!value) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   return date.toLocaleString();
 }
 
-function getHistoryStateTone(state: WorkspaceHistoryEntry["state"]) {
-  if (state === "success") {
-    return "text-emerald-300 bg-emerald-500/10 border-emerald-500/30";
+function getHistoryStateTone(state: WorkspaceHistoryEntry['state']) {
+  if (state === 'success') {
+    return 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30';
   }
-  if (state === "failed") {
-    return "text-red-300 bg-red-500/10 border-red-500/30";
+  if (state === 'failed') {
+    return 'text-red-300 bg-red-500/10 border-red-500/30';
   }
-  if (state === "retryable") {
-    return "text-yellow-300 bg-yellow-500/10 border-yellow-500/30";
+  if (state === 'retryable') {
+    return 'text-yellow-300 bg-yellow-500/10 border-yellow-500/30';
   }
-  return "text-slate-300 bg-slate-500/10 border-slate-500/30";
+  return 'text-slate-300 bg-slate-500/10 border-slate-500/30';
 }
 
 export default function DashboardPage() {
@@ -161,22 +161,22 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<StatsPayload | null>(null);
   const [readiness, setReadiness] = useState<ReadyPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeView, setActiveView] = useState<"home" | "send">("home");
+  const [activeView, setActiveView] = useState<'home' | 'send'>('home');
   const [copied, setCopied] = useState(false);
-  const [recipient, setRecipient] = useState("");
-  const [asset, setAsset] = useState<WalletAsset>("XLM");
-  const [amount, setAmount] = useState("");
-  const [status, setStatus] = useState("");
+  const [recipient, setRecipient] = useState('');
+  const [asset, setAsset] = useState<WalletAsset>('XLM');
+  const [amount, setAmount] = useState('');
+  const [status, setStatus] = useState('');
   const [sendLoading, setSendLoading] = useState(false);
-  const [processStep, setProcessStep] = useState("");
+  const [processStep, setProcessStep] = useState('');
   const [sponsorship, setSponsorship] = useState<SponsorshipPreview | null>(null);
 
   const fetchDashboardData = async () => {
     try {
       const [workspaceRes, statsRes, readyRes] = await Promise.all([
-        fetch(`${API_URL}/users/workspace`, { credentials: "include" }),
-        fetch(`${API_URL}/stats`, { credentials: "include" }),
-        fetch(`${API_URL}/ready`, { credentials: "include" }),
+        fetch(`${API_URL}/users/workspace`, { credentials: 'include' }),
+        fetch(`${API_URL}/stats`, { credentials: 'include' }),
+        fetch(`${API_URL}/ready`, { credentials: 'include' }),
       ]);
 
       const [workspaceData, statsData, readyData] = await Promise.all([
@@ -189,7 +189,7 @@ export default function DashboardPage() {
       setStats(statsRes.ok ? statsData : null);
       setReadiness(readyRes.ok ? readyData : null);
     } catch (error) {
-      console.error("[DashboardPage] Failed to fetch dashboard data", error);
+      console.error('[DashboardPage] Failed to fetch dashboard data', error);
       setWorkspace(null);
       setStats(null);
       setReadiness(null);
@@ -215,12 +215,12 @@ export default function DashboardPage() {
   useEffect(() => {
     const controller = new AbortController();
     fetch(`${API_URL}/users/sponsorship/preview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         asset,
-        operation: isPrivate ? "private_send" : "public_send",
+        operation: isPrivate ? 'private_send' : 'public_send',
         recipient,
         amount: Number(amount || 0),
       }),
@@ -233,7 +233,7 @@ export default function DashboardPage() {
         }
       })
       .catch((error) => {
-        if ((error as Error).name !== "AbortError") {
+        if ((error as Error).name !== 'AbortError') {
           console.error(error);
         }
       });
@@ -250,46 +250,46 @@ export default function DashboardPage() {
   };
 
   const handleSplit = async (requestAsset: WalletAsset, requestAmount: number) => {
-    setProcessStep("Splitting note to match exact amount...");
+    setProcessStep('Splitting note to match exact amount...');
     const response = await fetch(`${API_URL}/users/split`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ asset: requestAsset, amount: requestAmount }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data.success) {
-      throw new Error(data.error || "Split failed");
+      throw new Error(data.error || 'Split failed');
     }
-    setProcessStep("Waiting for split confirmation...");
+    setProcessStep('Waiting for split confirmation...');
     await new Promise((resolve) => setTimeout(resolve, 6000));
   };
 
   const handleDeposit = async (requestAsset: WalletAsset, requestAmount: number) => {
     setProcessStep(`Depositing ${requestAmount} ${requestAsset} from public balance...`);
     const response = await fetch(`${API_URL}/users/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ asset: requestAsset, amount: requestAmount }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.success === false) {
-      throw new Error(data.error || "Deposit failed");
+      throw new Error(data.error || 'Deposit failed');
     }
-    setProcessStep("Waiting for deposit confirmation...");
+    setProcessStep('Waiting for deposit confirmation...');
     await new Promise((resolve) => setTimeout(resolve, 6000));
   };
 
   const handleSend = async () => {
     if (!recipient || !amount) {
-      setStatus("Please fill in all fields");
+      setStatus('Please fill in all fields');
       return;
     }
 
     setSendLoading(true);
-    setStatus("");
-    setProcessStep(isPrivate ? "Generating proof and submitting..." : "Sending payment...");
+    setStatus('');
+    setProcessStep(isPrivate ? 'Generating proof and submitting...' : 'Sending payment...');
 
     const runDepositFlow = async (requestAsset: WalletAsset, requestAmount: number) => {
       if (
@@ -300,21 +300,21 @@ export default function DashboardPage() {
         await handleDeposit(requestAsset, requestAmount);
         return;
       }
-      throw new Error("Cancelled by user.");
+      throw new Error('Cancelled by user.');
     };
 
     try {
       const attemptSend = async () => {
         const url = isPrivate ? `${API_URL}/users/send/private` : `${API_URL}/users/send`;
         const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ recipient, asset, amount }),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.success === false) {
-          throw new Error(data.error || data.message || "Send failed");
+          throw new Error(data.error || data.message || 'Send failed');
         }
         return data;
       };
@@ -322,36 +322,36 @@ export default function DashboardPage() {
       try {
         const data = await attemptSend();
         setStatus(
-          `${data.message ?? "Payment submitted."}${data.txHash ? ` TX: ${data.txHash}` : ""}${data.sponsorship?.detail ? ` ${data.sponsorship.detail}` : ""}`,
+          `${data.message ?? 'Payment submitted.'}${data.txHash ? ` TX: ${data.txHash}` : ''}${data.sponsorship?.detail ? ` ${data.sponsorship.detail}` : ''}`,
         );
         await fetchDashboardData();
-        setAmount("");
-        setRecipient("");
+        setAmount('');
+        setRecipient('');
       } catch (error) {
-        const message = error instanceof Error ? error.message : "Failed to send";
+        const message = error instanceof Error ? error.message : 'Failed to send';
         const numericAmount = Number.parseFloat(amount);
 
         if (isPrivate) {
           if (
-            message.includes("No private note with EXACT amount") ||
-            message.includes("No spendable private note") ||
-            message.includes("Splitting not yet supported")
+            message.includes('No private note with EXACT amount') ||
+            message.includes('No spendable private note') ||
+            message.includes('Splitting not yet supported')
           ) {
             await handleSplit(asset, numericAmount);
-            setProcessStep("Retrying payment after split...");
+            setProcessStep('Retrying payment after split...');
             const data = await attemptSend();
-            setStatus(data.message ?? "Private payment submitted.");
+            setStatus(data.message ?? 'Private payment submitted.');
             await fetchDashboardData();
-            setAmount("");
-            setRecipient("");
-          } else if (message.includes("Insufficient private balance")) {
+            setAmount('');
+            setRecipient('');
+          } else if (message.includes('Insufficient private balance')) {
             await runDepositFlow(asset, numericAmount);
-            setProcessStep("Retrying payment after deposit...");
+            setProcessStep('Retrying payment after deposit...');
             const data = await attemptSend();
-            setStatus(data.message ?? "Private payment submitted.");
+            setStatus(data.message ?? 'Private payment submitted.');
             await fetchDashboardData();
-            setAmount("");
-            setRecipient("");
+            setAmount('');
+            setRecipient('');
           } else {
             throw error;
           }
@@ -361,13 +361,13 @@ export default function DashboardPage() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (message !== "Cancelled by user.") {
+      if (message !== 'Cancelled by user.') {
         setStatus(message);
       }
       console.error(error);
     } finally {
       setSendLoading(false);
-      setProcessStep("");
+      setProcessStep('');
     }
   };
 
@@ -378,26 +378,26 @@ export default function DashboardPage() {
 
   const activeUsdc = isPrivate ? privateUsdc : publicUsdc;
   const activeXlm = isPrivate ? privateXlm : publicXlm;
-  const totalDisplay = isPrivate ? "$***.**" : `$${Math.max(activeUsdc, 0).toFixed(2)}`;
+  const totalDisplay = isPrivate ? '$***.**' : `$${Math.max(activeUsdc, 0).toFixed(2)}`;
 
-  const readinessTone = readiness?.status === "ready" ? "text-emerald-400" : "text-yellow-300";
+  const readinessTone = readiness?.status === 'ready' ? 'text-emerald-400' : 'text-yellow-300';
 
   const opsCards = useMemo(
     () => [
       {
-        label: "Active 24h",
+        label: 'Active 24h',
         value: stats?.users?.active24h ?? 0,
       },
       {
-        label: "Open Offers",
+        label: 'Open Offers',
         value: stats?.flows?.openOffers ?? 0,
       },
       {
-        label: "Audited Tx",
+        label: 'Audited Tx',
         value: stats?.flows?.auditedTransactions ?? 0,
       },
       {
-        label: "Indexed",
+        label: 'Indexed',
         value: stats?.indexer?.commitments ?? 0,
       },
     ],
@@ -458,14 +458,19 @@ export default function DashboardPage() {
           <div className="relative flex min-h-[690px] w-full max-w-[380px] flex-col overflow-hidden rounded-[40px] border border-slate-800 bg-slate-900/80 p-6 pb-8 shadow-2xl backdrop-blur-2xl transition-all duration-500">
             <div className="mx-auto mb-8 h-1.5 w-12 rounded-full bg-slate-800" />
 
-            {activeView === "home" ? (
+            {activeView === 'home' ? (
               <div className="animate-in fade-in zoom-in-95 flex flex-1 flex-col duration-300">
                 <div className="mb-8 text-center">
                   <p className="bg-gradient-to-br from-white to-slate-400 bg-clip-text text-4xl font-bold tracking-tight text-transparent">
                     {totalDisplay}
                   </p>
                   <p className="mt-2 flex h-5 items-center justify-center gap-2 font-mono text-sm text-slate-500">
-                    <span className={cn("h-2 w-2 rounded-full", readiness?.status === "ready" ? "bg-emerald-400" : "bg-yellow-300")} />
+                    <span
+                      className={cn(
+                        'h-2 w-2 rounded-full',
+                        readiness?.status === 'ready' ? 'bg-emerald-400' : 'bg-yellow-300',
+                      )}
+                    />
                     {formatAddress(workspace.user.stellarPublicKey)}
                   </p>
                 </div>
@@ -482,14 +487,20 @@ export default function DashboardPage() {
                           />
                         </div>
                         <div>
-                          <p className="text-xl font-bold text-white">{isPrivate ? "******" : workspace.balances.public.usdc}</p>
+                          <p className="text-xl font-bold text-white">
+                            {isPrivate ? '******' : workspace.balances.public.usdc}
+                          </p>
                           <p className="text-sm font-medium text-slate-400">USDC</p>
                         </div>
                       </div>
                       {isPrivate && (
                         <div className="text-right">
-                          <p className="text-base font-bold text-indigo-400">{workspace.balances.private.usdc}</p>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Private</p>
+                          <p className="text-base font-bold text-indigo-400">
+                            {workspace.balances.private.usdc}
+                          </p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Private
+                          </p>
                         </div>
                       )}
                     </div>
@@ -504,14 +515,20 @@ export default function DashboardPage() {
                           />
                         </div>
                         <div>
-                          <p className="text-xl font-bold text-white">{isPrivate ? "******" : workspace.balances.public.xlm}</p>
+                          <p className="text-xl font-bold text-white">
+                            {isPrivate ? '******' : workspace.balances.public.xlm}
+                          </p>
                           <p className="text-sm font-medium text-slate-400">XLM</p>
                         </div>
                       </div>
                       {isPrivate && (
                         <div className="text-right">
-                          <p className="text-base font-bold text-indigo-400">{workspace.balances.private.xlm}</p>
-                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Private</p>
+                          <p className="text-base font-bold text-indigo-400">
+                            {workspace.balances.private.xlm}
+                          </p>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Private
+                          </p>
                         </div>
                       )}
                     </div>
@@ -520,9 +537,11 @@ export default function DashboardPage() {
 
                 <div className="mb-6 rounded-3xl border border-white/5 bg-slate-800/30 p-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Ops Snapshot</p>
-                    <span className={cn("text-[11px]", readinessTone)}>
-                      {readiness?.status === "ready" ? "Ready" : "Degraded"}
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
+                      Ops Snapshot
+                    </p>
+                    <span className={cn('text-[11px]', readinessTone)}>
+                      {readiness?.status === 'ready' ? 'Ready' : 'Degraded'}
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -534,9 +553,12 @@ export default function DashboardPage() {
                     ))}
                   </div>
                   <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Pending private queue</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Pending private queue
+                    </p>
                     <p className="mt-2 text-sm text-white">
-                      {workspace.pending.count} queued withdrawals | {workspace.pending.byAsset.usdc} USDC | {workspace.pending.byAsset.xlm} XLM
+                      {workspace.pending.count} queued withdrawals |{' '}
+                      {workspace.pending.byAsset.usdc} USDC | {workspace.pending.byAsset.xlm} XLM
                     </p>
                   </div>
                 </div>
@@ -549,7 +571,7 @@ export default function DashboardPage() {
                     Wallet <Wallet size={16} />
                   </Link>
                   <button
-                    onClick={() => setActiveView("send")}
+                    onClick={() => setActiveView('send')}
                     className="flex-1 rounded-2xl border border-white/5 bg-slate-800/50 py-4 text-sm font-medium transition-colors hover:bg-slate-800 flex items-center justify-center gap-2"
                   >
                     Transfer <ArrowRightLeft size={16} />
@@ -560,7 +582,7 @@ export default function DashboardPage() {
               <div className="animate-in slide-in-from-right-4 fade-in flex flex-1 flex-col duration-300">
                 <div className="mb-6 flex items-center">
                   <button
-                    onClick={() => setActiveView("home")}
+                    onClick={() => setActiveView('home')}
                     className="-ml-2 rounded-full p-2 text-slate-400 transition-colors hover:bg-white/5"
                   >
                     <ChevronLeft size={20} />
@@ -572,23 +594,39 @@ export default function DashboardPage() {
                   <div className="flex items-start gap-2 rounded-xl border border-slate-700/50 bg-slate-800/30 p-3">
                     <Info className="mt-0.5 shrink-0 text-slate-400" size={14} />
                     <p className="text-[11px] leading-tight text-slate-300">
-                      You are sending in{" "}
-                      <span className={isPrivate ? "font-bold text-indigo-400" : "font-bold text-blue-400"}>
-                        {isPrivate ? "Private Mode" : "Public Mode"}
+                      You are sending in{' '}
+                      <span
+                        className={
+                          isPrivate ? 'font-bold text-indigo-400' : 'font-bold text-blue-400'
+                        }
+                      >
+                        {isPrivate ? 'Private Mode' : 'Public Mode'}
                       </span>
-                      . {isPrivate ? "This route depends on exact private notes and proof generation." : "This route settles visibly on-chain."}
+                      .{' '}
+                      {isPrivate
+                        ? 'This route depends on exact private notes and proof generation.'
+                        : 'This route settles visibly on-chain.'}
                     </p>
                   </div>
 
                   <div className="rounded-xl border border-slate-700/50 bg-slate-900/50 p-3">
-                    <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">Fee Sponsorship</p>
-                    <p className={cn("text-xs leading-relaxed", sponsorship?.sponsored ? "text-emerald-300" : "text-slate-300")}>
-                      {sponsorship?.reason ?? "Checking whether this action can be sponsored..."}
+                    <p className="mb-1 text-[11px] uppercase tracking-[0.18em] text-slate-500">
+                      Fee Sponsorship
+                    </p>
+                    <p
+                      className={cn(
+                        'text-xs leading-relaxed',
+                        sponsorship?.sponsored ? 'text-emerald-300' : 'text-slate-300',
+                      )}
+                    >
+                      {sponsorship?.reason ?? 'Checking whether this action can be sponsored...'}
                     </p>
                   </div>
 
                   <div>
-                    <label className="ml-1 mb-1.5 block text-xs font-medium text-slate-400">Recipient</label>
+                    <label className="ml-1 mb-1.5 block text-xs font-medium text-slate-400">
+                      Recipient
+                    </label>
                     <Input
                       type="text"
                       value={recipient}
@@ -601,7 +639,9 @@ export default function DashboardPage() {
 
                   <div className="flex gap-3">
                     <div className="w-1/3">
-                      <label className="ml-1 mb-1.5 block text-xs font-medium text-slate-400">Asset</label>
+                      <label className="ml-1 mb-1.5 block text-xs font-medium text-slate-400">
+                        Asset
+                      </label>
                       <select
                         value={asset}
                         onChange={(event) => setAsset(event.target.value as WalletAsset)}
@@ -613,7 +653,9 @@ export default function DashboardPage() {
                       </select>
                     </div>
                     <div className="flex-1">
-                      <label className="ml-1 mb-1.5 block text-xs font-medium text-slate-400">Amount</label>
+                      <label className="ml-1 mb-1.5 block text-xs font-medium text-slate-400">
+                        Amount
+                      </label>
                       <Input
                         type="number"
                         value={amount}
@@ -626,21 +668,24 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="rounded-2xl border border-slate-700 bg-slate-900/50 p-3">
-                    <p className="text-xs uppercase tracking-wide text-slate-500">Current sending balance</p>
+                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                      Current sending balance
+                    </p>
                     <p className="mt-2 text-sm text-white">
                       {isPrivate
-                        ? `${workspace.balances.private[asset.toLowerCase() as "usdc" | "xlm"]} ${asset} available privately`
-                        : `${workspace.balances.public[asset.toLowerCase() as "usdc" | "xlm"]} ${asset} available publicly`}
+                        ? `${workspace.balances.private[asset.toLowerCase() as 'usdc' | 'xlm']} ${asset} available privately`
+                        : `${workspace.balances.public[asset.toLowerCase() as 'usdc' | 'xlm']} ${asset} available publicly`}
                     </p>
                   </div>
 
                   {status && (
                     <div
                       className={cn(
-                        "mt-4 rounded-xl border-l-4 p-3 text-xs font-medium",
-                        status.toLowerCase().includes("failed") || status.toLowerCase().includes("error")
-                          ? "border-red-500 bg-red-500/10 text-red-200"
-                          : "border-emerald-500 bg-emerald-500/10 text-emerald-200",
+                        'mt-4 rounded-xl border-l-4 p-3 text-xs font-medium',
+                        status.toLowerCase().includes('failed') ||
+                          status.toLowerCase().includes('error')
+                          ? 'border-red-500 bg-red-500/10 text-red-200'
+                          : 'border-emerald-500 bg-emerald-500/10 text-emerald-200',
                       )}
                     >
                       <p className="break-words">{status}</p>
@@ -662,7 +707,7 @@ export default function DashboardPage() {
                       disabled={!recipient || !amount}
                     >
                       <Send className="mr-2 h-4 w-4" />
-                      {isPrivate ? "Send Privately" : "Send Publicly"}
+                      {isPrivate ? 'Send Privately' : 'Send Publicly'}
                     </Button>
                   </div>
                 </div>
@@ -672,11 +717,14 @@ export default function DashboardPage() {
             <div className="mt-auto pt-6">
               <div className="space-y-3 rounded-2xl border border-white/5 bg-slate-800/50 p-4">
                 <p className="text-center text-sm font-medium text-slate-400">
-                  User: <span className="font-bold text-white">@{workspace.user.username || "Unknown"}</span>
+                  User:{' '}
+                  <span className="font-bold text-white">
+                    @{workspace.user.username || 'Unknown'}
+                  </span>
                 </p>
                 <div className="relative flex w-full items-center overflow-hidden rounded-lg border border-white/5 bg-slate-900/50 p-3 group">
                   <p className="w-full truncate pr-6 text-center font-mono text-xs text-slate-400">
-                    {workspace.user.stellarPublicKey || "Loading address..."}
+                    {workspace.user.stellarPublicKey || 'Loading address...'}
                   </p>
                   {workspace.user.stellarPublicKey && (
                     <button
@@ -697,17 +745,22 @@ export default function DashboardPage() {
           <div className="rounded-[28px] border border-white/5 bg-slate-900/60 p-6 backdrop-blur-xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Guidance & Status</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                  Guidance & Status
+                </p>
                 <h2 className="mt-2 text-xl font-semibold text-white">Operational view</h2>
               </div>
-              <span className={cn("text-sm font-medium", readinessTone)}>
-                {readiness?.status === "ready" ? "All systems ready" : "Indexer needs attention"}
+              <span className={cn('text-sm font-medium', readinessTone)}>
+                {readiness?.status === 'ready' ? 'All systems ready' : 'Indexer needs attention'}
               </span>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               {workspace.workspaceGuidance.map((entry) => (
-                <div key={entry} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={entry}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex items-start gap-3">
                     <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-indigo-300" />
                     <p className="text-sm leading-6 text-slate-300">{entry}</p>
@@ -719,21 +772,30 @@ export default function DashboardPage() {
             <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Indexer readiness</p>
               <p className="mt-2 text-sm text-white">
-                MongoDB: {readiness?.dependencies.mongodb ?? "unknown"} | Indexer: {readiness?.dependencies.indexer ?? "unknown"}
+                MongoDB: {readiness?.dependencies.mongodb ?? 'unknown'} | Indexer:{' '}
+                {readiness?.dependencies.indexer ?? 'unknown'}
               </p>
               {readiness?.lagging?.length ? (
                 <div className="mt-3 space-y-2">
                   {readiness.lagging.slice(0, 2).map((pool) => (
-                    <div key={pool.poolAddress} className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-yellow-100">
-                      <p className="font-medium">{pool.poolAddress.slice(0, 10)}...{pool.poolAddress.slice(-6)}</p>
+                    <div
+                      key={pool.poolAddress}
+                      className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-yellow-100"
+                    >
+                      <p className="font-medium">
+                        {pool.poolAddress.slice(0, 10)}...{pool.poolAddress.slice(-6)}
+                      </p>
                       <p className="mt-1 text-xs leading-5">
-                        Status: {pool.status} | Last ledger: {pool.lastProcessedLedger} | {pool.lastError || "Waiting for healthy sync"}
+                        Status: {pool.status} | Last ledger: {pool.lastProcessedLedger} |{' '}
+                        {pool.lastError || 'Waiting for healthy sync'}
                       </p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-slate-400">Tracked pools are syncing without lagging alerts.</p>
+                <p className="mt-3 text-sm text-slate-400">
+                  Tracked pools are syncing without lagging alerts.
+                </p>
               )}
             </div>
           </div>
@@ -741,7 +803,9 @@ export default function DashboardPage() {
           <div className="rounded-[28px] border border-white/5 bg-slate-900/60 p-6 backdrop-blur-xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Recent Activity</p>
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
+                  Recent Activity
+                </p>
                 <h2 className="mt-2 text-xl font-semibold text-white">Latest events</h2>
               </div>
               <Link href="/history" className="text-sm text-indigo-300 hover:text-indigo-200">
@@ -756,15 +820,23 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 workspace.recentHistory.slice(0, 5).map((entry) => (
-                  <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div
+                    key={entry.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <span className={cn("rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide", getHistoryStateTone(entry.state))}>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide',
+                              getHistoryStateTone(entry.state),
+                            )}
+                          >
                             {entry.state}
                           </span>
                           <span className="rounded-full border border-slate-700 bg-slate-900/80 px-2 py-1 text-[11px] uppercase tracking-wide text-slate-400">
-                            {entry.privateFlow ? "private" : entry.category}
+                            {entry.privateFlow ? 'private' : entry.category}
                           </span>
                         </div>
                         <p className="text-sm font-medium text-white">{entry.title}</p>
@@ -772,7 +844,9 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs text-slate-500">{entry.amountDisplay}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">{formatTimestamp(entry.date)}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          {formatTimestamp(entry.date)}
+                        </p>
                       </div>
                     </div>
                     {entry.txHash && (

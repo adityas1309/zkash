@@ -52,4 +52,3 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     clearTimeout(timeoutId);
   }
 }
-

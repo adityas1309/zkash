@@ -33,7 +33,8 @@ async function bootstrap() {
       resave: false,
       saveUninitialized: false,
       store: MongoStore.create({
-        mongoUrl: process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/lop',
+        mongoUrl:
+          process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://localhost:27017/lop',
       }),
       cookie: {
         secure: process.env.NODE_ENV === 'production',

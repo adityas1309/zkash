@@ -28,4 +28,4 @@ import { TransactionsModule } from '../transactions/transactions.module';
   providers: [SwapService],
   exports: [SwapService],
 })
-export class SwapModule { }
+export class SwapModule {}

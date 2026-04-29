@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { motion } from "framer-motion";
-import { Globe } from "./ui/Globe";
-import { Button } from "./ui/Button";
-import Link from "next/link";
-import { Badge } from "./ui/Badge";
-import { Shield, Wallet, Layers3, Activity } from "lucide-react";
-import { useUser } from "../hooks/useUser";
+import { motion } from 'framer-motion';
+import { Globe } from './ui/Globe';
+import { Button } from './ui/Button';
+import Link from 'next/link';
+import { Badge } from './ui/Badge';
+import { Shield, Wallet, Layers3, Activity } from 'lucide-react';
+import { useUser } from '../hooks/useUser';
 
 export function Hero() {
   const { user, loading, workspace } = useUser();
@@ -25,25 +25,27 @@ export function Hero() {
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
           className="flex flex-col items-center gap-4"
         >
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Badge variant="default">{workspace.network.label}</Badge>
             <Badge
               variant={
-                workspace.readiness.tone === "ready"
-                  ? "success"
-                  : workspace.readiness.tone === "attention"
-                    ? "warning"
-                    : "default"
+                workspace.readiness.tone === 'ready'
+                  ? 'success'
+                  : workspace.readiness.tone === 'attention'
+                    ? 'warning'
+                    : 'default'
               }
             >
               Readiness {workspace.readiness.score}
             </Badge>
             {user && (
-              <Badge variant={workspace.ops.status === "ready" ? "success" : "warning"}>
-                {workspace.ops.status === "ready" ? "Indexer Healthy" : `${workspace.ops.laggingPools} Lagging Pools`}
+              <Badge variant={workspace.ops.status === 'ready' ? 'success' : 'warning'}>
+                {workspace.ops.status === 'ready'
+                  ? 'Indexer Healthy'
+                  : `${workspace.ops.laggingPools} Lagging Pools`}
               </Badge>
             )}
           </div>
@@ -58,7 +60,7 @@ export function Hero() {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.4, ease: "backOut" }}
+          transition={{ duration: 0.5, delay: 0.4, ease: 'backOut' }}
           className="flex flex-wrap items-center justify-center gap-4"
         >
           {user ? (
@@ -104,9 +106,13 @@ export function Hero() {
               <Wallet className="h-5 w-5" />
             </div>
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Public wallet</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{workspace.wallet.public.xlm} XLM</p>
+            <p className="mt-2 text-2xl font-semibold text-white">
+              {workspace.wallet.public.xlm} XLM
+            </p>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              {user ? "Available for trustlines, fees, and direct public transfers." : "Wallet balances appear here after authentication."}
+              {user
+                ? 'Available for trustlines, fees, and direct public transfers.'
+                : 'Wallet balances appear here after authentication.'}
             </p>
           </div>
           <div className="rounded-[28px] border border-white/10 bg-slate-900/70 p-5 text-left backdrop-blur-md">
@@ -115,12 +121,12 @@ export function Hero() {
             </div>
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Private flow</p>
             <p className="mt-2 text-2xl font-semibold text-white">
-              {workspace.wallet.private.hasShieldedBalance ? "Seeded" : "Unseeded"}
+              {workspace.wallet.private.hasShieldedBalance ? 'Seeded' : 'Unseeded'}
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-400">
               {workspace.wallet.private.hasShieldedBalance
                 ? `${workspace.wallet.private.xlm} XLM and ${workspace.wallet.private.usdc} USDC already live in shielded flow.`
-                : "A first deposit unlocks private send, note splitting, and private swaps."}
+                : 'A first deposit unlocks private send, note splitting, and private swaps.'}
             </p>
           </div>
           <div className="rounded-[28px] border border-white/10 bg-slate-900/70 p-5 text-left backdrop-blur-md">
@@ -129,11 +135,15 @@ export function Hero() {
             </div>
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Checklist</p>
             <p className="mt-2 text-2xl font-semibold text-white">
-              {workspace.checklist.filter((item) => item.status === "complete").length}
-              <span className="text-base font-medium text-slate-400"> / {Math.max(workspace.checklist.length, 4)}</span>
+              {workspace.checklist.filter((item) => item.status === 'complete').length}
+              <span className="text-base font-medium text-slate-400">
+                {' '}
+                / {Math.max(workspace.checklist.length, 4)}
+              </span>
             </p>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              Setup steps mapped to actual wallet and indexer readiness instead of a generic onboarding script.
+              Setup steps mapped to actual wallet and indexer readiness instead of a generic
+              onboarding script.
             </p>
           </div>
           <div className="rounded-[28px] border border-white/10 bg-slate-900/70 p-5 text-left backdrop-blur-md">
@@ -141,9 +151,11 @@ export function Hero() {
               <Activity className="h-5 w-5" />
             </div>
             <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Ops signal</p>
-            <p className="mt-2 text-2xl font-semibold text-white">{workspace.ops.status === "ready" ? "Healthy" : "Watching"}</p>
+            <p className="mt-2 text-2xl font-semibold text-white">
+              {workspace.ops.status === 'ready' ? 'Healthy' : 'Watching'}
+            </p>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              {workspace.ops.status === "ready"
+              {workspace.ops.status === 'ready'
                 ? `${workspace.ops.trackedPools} tracked pools with no lagging sync lane right now.`
                 : `${workspace.ops.laggingPools} lagging pool lanes may slow private balance updates.`}
             </p>
@@ -161,34 +173,43 @@ export function Hero() {
             <div className="mt-4 space-y-3">
               {workspace.nextActions.map((item, index) => (
                 <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-                  <p className="text-xs uppercase tracking-wide text-indigo-300">Step {index + 1}</p>
+                  <p className="text-xs uppercase tracking-wide text-indigo-300">
+                    Step {index + 1}
+                  </p>
                   <p className="mt-2 text-sm leading-6 text-slate-200">{item}</p>
                 </div>
               ))}
             </div>
           </div>
           <div className="rounded-[28px] border border-white/10 bg-slate-900/75 p-6 text-left backdrop-blur-md">
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Readiness checklist</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+              Readiness checklist
+            </p>
             <div className="mt-4 space-y-3">
               {checklist.length ? (
                 checklist.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-white">{item.label}</p>
                       <Badge
                         variant={
-                          item.status === "complete"
-                            ? "success"
-                            : item.status === "attention"
-                              ? "warning"
-                              : "default"
+                          item.status === 'complete'
+                            ? 'success'
+                            : item.status === 'attention'
+                              ? 'warning'
+                              : 'default'
                         }
                       >
                         {item.status.toUpperCase()}
                       </Badge>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
-                    <p className="mt-2 text-xs uppercase tracking-wide text-indigo-300">{item.action}</p>
+                    <p className="mt-2 text-xs uppercase tracking-wide text-indigo-300">
+                      {item.action}
+                    </p>
                   </div>
                 ))
               ) : (

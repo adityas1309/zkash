@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { motion } from "framer-motion";
-import { Users, ArrowRightLeft, Activity, ShieldCheck } from "lucide-react";
-import { Card } from "./ui/Card";
-import { useEffect, useState } from "react";
+import { motion } from 'framer-motion';
+import { Users, ArrowRightLeft, Activity, ShieldCheck } from 'lucide-react';
+import { Card } from './ui/Card';
+import { useEffect, useState } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 type StatsCard = {
   icon: typeof Users;
@@ -13,14 +13,14 @@ type StatsCard = {
   value: number;
   suffix?: string;
   prefix?: string;
-  color: "indigo" | "purple" | "blue" | "violet";
+  color: 'indigo' | 'purple' | 'blue' | 'violet';
 };
 
 function AnimatedCounter({
   end,
   duration = 1.5,
-  prefix = "",
-  suffix = "",
+  prefix = '',
+  suffix = '',
 }: {
   end: number;
   duration?: number;
@@ -60,27 +60,27 @@ export function StatsSection() {
   const [stats, setStats] = useState<StatsCard[]>([
     {
       icon: Users,
-      label: "Active Users (24h)",
+      label: 'Active Users (24h)',
       value: 0,
-      color: "indigo",
+      color: 'indigo',
     },
     {
       icon: ArrowRightLeft,
-      label: "Tracked Swaps",
+      label: 'Tracked Swaps',
       value: 0,
-      color: "purple",
+      color: 'purple',
     },
     {
       icon: Activity,
-      label: "Indexed Commitments",
+      label: 'Indexed Commitments',
       value: 0,
-      color: "blue",
+      color: 'blue',
     },
     {
       icon: ShieldCheck,
-      label: "Healthy Pools",
+      label: 'Healthy Pools',
       value: 0,
-      color: "violet",
+      color: 'violet',
     },
   ]);
 
@@ -89,46 +89,45 @@ export function StatsSection() {
 
     const loadStats = async () => {
       try {
-        const res = await fetch(`${API_URL}/stats`, { cache: "no-store" });
+        const res = await fetch(`${API_URL}/stats`, { cache: 'no-store' });
         if (!res.ok) return;
 
         const data = await res.json();
         if (cancelled) return;
 
         const healthyPools = Array.isArray(data?.indexer?.pools)
-          ? data.indexer.pools.filter(
-              (pool: { status?: string }) => pool.status === "healthy",
-            ).length
+          ? data.indexer.pools.filter((pool: { status?: string }) => pool.status === 'healthy')
+              .length
           : 0;
 
         setStats([
           {
             icon: Users,
-            label: "Active Users (24h)",
+            label: 'Active Users (24h)',
             value: Number(data?.users?.active24h ?? 0),
-            color: "indigo",
+            color: 'indigo',
           },
           {
             icon: ArrowRightLeft,
-            label: "Tracked Swaps",
+            label: 'Tracked Swaps',
             value: Number(data?.flows?.swaps ?? 0),
-            color: "purple",
+            color: 'purple',
           },
           {
             icon: Activity,
-            label: "Indexed Commitments",
+            label: 'Indexed Commitments',
             value: Number(data?.indexer?.commitments ?? 0),
-            color: "blue",
+            color: 'blue',
           },
           {
             icon: ShieldCheck,
-            label: "Healthy Pools",
+            label: 'Healthy Pools',
             value: healthyPools,
-            color: "violet",
+            color: 'violet',
           },
         ]);
       } catch (error) {
-        console.error("Failed to load operational stats", error);
+        console.error('Failed to load operational stats', error);
       }
     };
 
@@ -154,15 +153,15 @@ export function StatsSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
           className="mb-16 text-center"
         >
           <h2 className="mb-4 font-secondary text-4xl font-bold tracking-tighter text-white md:text-5xl">
             Live <span className="text-indigo-500">Operational Trust Signals</span>
           </h2>
           <p className="mx-auto max-w-2xl text-lg leading-relaxed text-slate-400">
-            ZKASH now surfaces real backend usage, indexer freshness, and tracked
-            activity instead of relying on presentation-only numbers.
+            ZKASH now surfaces real backend usage, indexer freshness, and tracked activity instead
+            of relying on presentation-only numbers.
           </p>
         </motion.div>
 
@@ -170,24 +169,24 @@ export function StatsSection() {
           {stats.map((stat, index) => {
             const colorClasses = {
               indigo: {
-                bg: "bg-indigo-500/20",
-                text: "text-indigo-400",
-                glow: "shadow-indigo-500/20",
+                bg: 'bg-indigo-500/20',
+                text: 'text-indigo-400',
+                glow: 'shadow-indigo-500/20',
               },
               purple: {
-                bg: "bg-purple-500/20",
-                text: "text-purple-400",
-                glow: "shadow-purple-500/20",
+                bg: 'bg-purple-500/20',
+                text: 'text-purple-400',
+                glow: 'shadow-purple-500/20',
               },
               blue: {
-                bg: "bg-blue-500/20",
-                text: "text-blue-400",
-                glow: "shadow-blue-500/20",
+                bg: 'bg-blue-500/20',
+                text: 'text-blue-400',
+                glow: 'shadow-blue-500/20',
               },
               violet: {
-                bg: "bg-violet-500/20",
-                text: "text-violet-400",
-                glow: "shadow-violet-500/20",
+                bg: 'bg-violet-500/20',
+                text: 'text-violet-400',
+                glow: 'shadow-violet-500/20',
               },
             };
 
@@ -199,7 +198,7 @@ export function StatsSection() {
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1, ease: "easeOut" }}
+                transition={{ duration: 0.6, delay: index * 0.1, ease: 'easeOut' }}
               >
                 <Card
                   variant="glass"
@@ -211,12 +210,10 @@ export function StatsSection() {
                     <stat.icon className={`h-8 w-8 ${colors.text}`} />
                   </div>
 
-                  <div className={`mb-2 font-secondary text-4xl font-bold md:text-5xl ${colors.text}`}>
-                    <AnimatedCounter
-                      end={stat.value}
-                      prefix={stat.prefix}
-                      suffix={stat.suffix}
-                    />
+                  <div
+                    className={`mb-2 font-secondary text-4xl font-bold md:text-5xl ${colors.text}`}
+                  >
+                    <AnimatedCounter end={stat.value} prefix={stat.prefix} suffix={stat.suffix} />
                   </div>
 
                   <p className="text-sm font-medium text-slate-400">{stat.label}</p>
@@ -230,12 +227,12 @@ export function StatsSection() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8, delay: 0.4, ease: "easeOut" }}
+          transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
           className="mt-12 text-center"
         >
           <p className="text-sm text-slate-500">
-            Zero-knowledge transfers backed by live API stats, indexer health,
-            and continuously refreshed activity counters
+            Zero-knowledge transfers backed by live API stats, indexer health, and continuously
+            refreshed activity counters
           </p>
         </motion.div>
       </div>

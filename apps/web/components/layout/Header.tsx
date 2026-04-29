@@ -1,10 +1,10 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import Image from "next/image";
-import { useUser } from "@/hooks/useUser";
-import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
+import Link from 'next/link';
+import Image from 'next/image';
+import { useUser } from '@/hooks/useUser';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 
 export function Header() {
   const { user, loading, workspace } = useUser();
@@ -15,12 +15,7 @@ export function Header() {
       <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-[28px] px-6 py-4 shadow-lg">
         <Link href="/dashboard" className="flex items-center gap-3 group">
           <div className="relative w-8 h-8 group-hover:scale-105 transition-transform duration-300">
-            <Image
-              src="/logo/ZKash-logo.webp"
-              alt="Zellar Logo"
-              fill
-              className="object-contain"
-            />
+            <Image src="/logo/ZKash-logo.webp" alt="Zellar Logo" fill className="object-contain" />
           </div>
           <span className="font-bold text-2xl tracking-tight hidden sm:block text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-100 to-indigo-200">
             ZKash
@@ -34,27 +29,25 @@ export function Header() {
                 <div className="flex items-center gap-2">
                   <Badge
                     variant={
-                      workspace.readiness.tone === "ready"
-                        ? "success"
-                        : workspace.readiness.tone === "attention"
-                          ? "warning"
-                          : "default"
+                      workspace.readiness.tone === 'ready'
+                        ? 'success'
+                        : workspace.readiness.tone === 'attention'
+                          ? 'warning'
+                          : 'default'
                     }
                   >
                     {workspace.network.label}
                   </Badge>
                   {user && (
-                    <Badge
-                      variant={
-                        workspace.ops.status === "ready" ? "success" : "warning"
-                      }
-                    >
-                      {workspace.ops.status === "ready" ? "Ops Ready" : "Ops Degraded"}
+                    <Badge variant={workspace.ops.status === 'ready' ? 'success' : 'warning'}>
+                      {workspace.ops.status === 'ready' ? 'Ops Ready' : 'Ops Degraded'}
                     </Badge>
                   )}
                 </div>
                 <p className="mt-2 truncate text-xs text-slate-300">
-                  {user ? nextAction || "Workspace is ready for the next flow." : "Sign in to generate your wallet and readiness checklist."}
+                  {user
+                    ? nextAction || 'Workspace is ready for the next flow.'
+                    : 'Sign in to generate your wallet and readiness checklist.'}
                 </p>
               </>
             )}

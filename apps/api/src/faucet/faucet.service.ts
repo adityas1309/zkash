@@ -11,7 +11,10 @@ export class FaucetService {
   ) {}
 
   async requestXlm(address: string): Promise<{ success: boolean; txHash?: string; error?: string }>;
-  async requestXlm(userId: string, address: string): Promise<{ success: boolean; txHash?: string; error?: string }>;
+  async requestXlm(
+    userId: string,
+    address: string,
+  ): Promise<{ success: boolean; txHash?: string; error?: string }>;
   async requestXlm(
     userIdOrAddress: string,
     maybeAddress?: string,
@@ -27,7 +30,8 @@ export class FaucetService {
           asset: 'XLM',
           recipient: address,
           indexingStatus: 'not_required',
-          indexingDetail: 'Friendbot funding affects the public wallet directly without private indexing.',
+          indexingDetail:
+            'Friendbot funding affects the public wallet directly without private indexing.',
           metadata: {
             source: 'friendbot',
           },
@@ -82,9 +86,10 @@ export class FaucetService {
     const trustlineReady = publicUsdc > 0 || publicXlm > 0;
 
     const fundingEvents = history
-      .filter((entry) =>
-        ['faucet_xlm', 'deposit', 'withdraw_self', 'public_send'].includes(entry.operation) ||
-        entry.title.toLowerCase().includes('trustline'),
+      .filter(
+        (entry) =>
+          ['faucet_xlm', 'deposit', 'withdraw_self', 'public_send'].includes(entry.operation) ||
+          entry.title.toLowerCase().includes('trustline'),
       )
       .slice(0, 8);
 
@@ -112,7 +117,12 @@ export class FaucetService {
       {
         id: 'private_seed',
         label: 'Private balance seeding',
-        status: privateXlm > 0 || privateUsdc > 0 ? 'complete' : publicXlm > 0 || publicUsdc > 0 ? 'attention' : 'blocked',
+        status:
+          privateXlm > 0 || privateUsdc > 0
+            ? 'complete'
+            : publicXlm > 0 || publicUsdc > 0
+              ? 'attention'
+              : 'blocked',
         detail:
           privateXlm > 0 || privateUsdc > 0
             ? `Private balances are already seeded with ${walletWorkspace.balances.private.xlm} XLM and ${walletWorkspace.balances.private.usdc} USDC.`
@@ -168,7 +178,12 @@ export class FaucetService {
           id: 'private_seed',
           title: 'Seed private balances',
           action: 'deposit_private',
-          tone: privateXlm > 0 || privateUsdc > 0 ? 'ready' : publicXlm > 0 || publicUsdc > 0 ? 'attention' : 'blocked',
+          tone:
+            privateXlm > 0 || privateUsdc > 0
+              ? 'ready'
+              : publicXlm > 0 || publicUsdc > 0
+                ? 'attention'
+                : 'blocked',
           detail:
             privateXlm > 0 || privateUsdc > 0
               ? 'Private balances are already usable for shielded flows.'
@@ -191,8 +206,12 @@ export class FaucetService {
 
   async planFunding(userId: string, body: FundingPlanDto) {
     const workspace = await this.getFundingWorkspace(userId);
-    const publicBalance = Number(body.asset === 'USDC' ? workspace.balances.public.usdc : workspace.balances.public.xlm);
-    const privateBalance = Number(body.asset === 'USDC' ? workspace.balances.private.usdc : workspace.balances.private.xlm);
+    const publicBalance = Number(
+      body.asset === 'USDC' ? workspace.balances.public.usdc : workspace.balances.public.xlm,
+    );
+    const privateBalance = Number(
+      body.asset === 'USDC' ? workspace.balances.private.usdc : workspace.balances.private.xlm,
+    );
     const targetMap = {
       public_send: {
         headline: `Prepare ${body.asset} for visible wallet usage`,
@@ -226,14 +245,26 @@ export class FaucetService {
 
     const tone =
       body.target === 'public_send'
-        ? publicBalance > 0 ? 'ready' : 'attention'
+        ? publicBalance > 0
+          ? 'ready'
+          : 'attention'
         : body.target === 'private_flow'
-          ? privateBalance > 0 ? 'ready' : publicBalance > 0 ? 'attention' : 'blocked'
+          ? privateBalance > 0
+            ? 'ready'
+            : publicBalance > 0
+              ? 'attention'
+              : 'blocked'
           : body.target === 'fiat_sell'
             ? body.asset === 'XLM'
-              ? publicBalance > 0 ? 'ready' : privateBalance > 0 ? 'attention' : 'blocked'
+              ? publicBalance > 0
+                ? 'ready'
+                : privateBalance > 0
+                  ? 'attention'
+                  : 'blocked'
               : 'blocked'
-            : publicBalance > 0 || privateBalance > 0 ? 'attention' : 'blocked';
+            : publicBalance > 0 || privateBalance > 0
+              ? 'attention'
+              : 'blocked';
 
     return {
       asset: body.asset,
@@ -297,7 +328,9 @@ export class FaucetService {
         },
       ],
       nextActions: [
-        !workspace.fundingSignals.publicXlmReady ? 'Use Friendbot to fund visible XLM first.' : 'Visible XLM setup is already good enough to proceed.',
+        !workspace.fundingSignals.publicXlmReady
+          ? 'Use Friendbot to fund visible XLM first.'
+          : 'Visible XLM setup is already good enough to proceed.',
         body.asset === 'USDC' && Number(workspace.balances.public.usdc) === 0
           ? 'Add the USDC trustline before trying to source stablecoin liquidity.'
           : `No additional ${body.asset} trustline work is required for the selected route.`,

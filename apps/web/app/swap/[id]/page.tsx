@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { usePrivacy } from "@/context/PrivacyContext";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { usePrivacy } from '@/context/PrivacyContext';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -22,9 +22,9 @@ import {
   Sparkles,
   Wallet,
   XCircle,
-} from "lucide-react";
+} from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 interface SwapWorkspace {
   swap: {
@@ -52,13 +52,13 @@ interface SwapWorkspace {
     completedAt?: string;
     failedAt?: string;
     lastError?: string;
-    participantRole: "alice" | "bob" | null;
+    participantRole: 'alice' | 'bob' | null;
     proofReady: boolean;
     myProofSubmitted: boolean;
     counterpartyProofSubmitted: boolean;
-    lastActorRole?: "alice" | "bob";
+    lastActorRole?: 'alice' | 'bob';
   };
-  participantRole: "alice" | "bob";
+  participantRole: 'alice' | 'bob';
   counterparty: {
     username?: string;
     stellarPublicKey?: string;
@@ -87,12 +87,12 @@ interface SwapWorkspace {
     updatedAt?: string;
   }>;
   routeSummary: {
-    recommendedMode: "public" | "private";
+    recommendedMode: 'public' | 'private';
     public: string;
     private: string;
   };
   proofRequirement: {
-    asset: "USDC" | "XLM";
+    asset: 'USDC' | 'XLM';
     amount: number;
     publicBalance: number;
     privateBalance: number;
@@ -112,17 +112,17 @@ interface SwapWorkspace {
   };
   actionBoard: Array<{
     id: string;
-    severity: "critical" | "warning" | "info";
+    severity: 'critical' | 'warning' | 'info';
     title: string;
     detail: string;
     cta: string;
     href?: string;
-    action: "accept" | "prepare_proof" | "deposit" | "execute_public" | "execute_private" | "wait";
+    action: 'accept' | 'prepare_proof' | 'deposit' | 'execute_public' | 'execute_private' | 'wait';
   }>;
   journey: Array<{
     id: string;
     label: string;
-    status: "active" | "done" | "pending" | "blocked";
+    status: 'active' | 'done' | 'pending' | 'blocked';
     detail: string;
   }>;
   viewerWallet: {
@@ -158,26 +158,26 @@ interface SwapWorkspace {
 
 function formatTimestamp(value?: string) {
   if (!value) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   return date.toLocaleString();
 }
 
 function variantFor(value: string) {
-  if (value === "critical" || value === "failed" || value === "blocked") {
-    return "error" as const;
+  if (value === 'critical' || value === 'failed' || value === 'blocked') {
+    return 'error' as const;
   }
-  if (value === "warning" || value === "pending" || value === "active") {
-    return "warning" as const;
+  if (value === 'warning' || value === 'pending' || value === 'active') {
+    return 'warning' as const;
   }
-  if (value === "done" || value === "healthy" || value === "success" || value === "ready") {
-    return "success" as const;
+  if (value === 'done' || value === 'healthy' || value === 'success' || value === 'ready') {
+    return 'success' as const;
   }
-  return "default" as const;
+  return 'default' as const;
 }
 
 export default function SwapWorkspacePage() {
@@ -189,7 +189,7 @@ export default function SwapWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState('');
 
   const fetchWorkspace = async (showRefresh = false) => {
     if (showRefresh) {
@@ -197,12 +197,12 @@ export default function SwapWorkspacePage() {
     }
     try {
       const response = await fetch(`${API_URL}/swap/${swapId}/workspace`, {
-        credentials: "include",
+        credentials: 'include',
       });
       const data = await response.json().catch(() => null);
       setWorkspace(response.ok && data?.swap ? data : null);
     } catch (error) {
-      console.error("[SwapWorkspacePage] Failed to load swap workspace", error);
+      console.error('[SwapWorkspacePage] Failed to load swap workspace', error);
       setWorkspace(null);
     } finally {
       setLoading(false);
@@ -214,78 +214,78 @@ export default function SwapWorkspacePage() {
     fetchWorkspace();
   }, [swapId]);
 
-  const runSwapAction = async (action: SwapWorkspace["actionBoard"][number]["action"]) => {
+  const runSwapAction = async (action: SwapWorkspace['actionBoard'][number]['action']) => {
     if (!workspace) {
       return;
     }
 
     setActionLoading(action);
-    setStatusMessage("");
+    setStatusMessage('');
 
     try {
-      if (action === "deposit") {
+      if (action === 'deposit') {
         const payload = {
           asset: workspace.proofRequirement.asset,
           amount: workspace.proofRequirement.amount,
         };
         const response = await fetch(`${API_URL}/users/deposit`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(payload),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.success === false) {
-          throw new Error(data.error || "Deposit failed");
+          throw new Error(data.error || 'Deposit failed');
         }
-        setStatusMessage(data.message || "Deposit submitted to prepare the private route.");
-      } else if (action === "accept") {
+        setStatusMessage(data.message || 'Deposit submitted to prepare the private route.');
+      } else if (action === 'accept') {
         const response = await fetch(`${API_URL}/swap/${swapId}/accept`, {
-          method: "POST",
-          credentials: "include",
+          method: 'POST',
+          credentials: 'include',
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          throw new Error(data.error || "Accept failed");
+          throw new Error(data.error || 'Accept failed');
         }
-        setStatusMessage("Swap request accepted.");
-      } else if (action === "prepare_proof") {
+        setStatusMessage('Swap request accepted.');
+      } else if (action === 'prepare_proof') {
         const response = await fetch(`${API_URL}/swap/${swapId}/prepare-my-proof`, {
-          method: "POST",
-          credentials: "include",
+          method: 'POST',
+          credentials: 'include',
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.success === false) {
-          throw new Error(data.error || data.message || "Proof preparation failed");
+          throw new Error(data.error || data.message || 'Proof preparation failed');
         }
-        setStatusMessage(data.message || "Proof prepared and stored.");
-      } else if (action === "execute_public") {
+        setStatusMessage(data.message || 'Proof prepared and stored.');
+      } else if (action === 'execute_public') {
         const response = await fetch(`${API_URL}/swap/${swapId}/execute`, {
-          method: "POST",
-          credentials: "include",
+          method: 'POST',
+          credentials: 'include',
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.success === false) {
-          throw new Error(data.error || data.message || "Public execution failed");
+          throw new Error(data.error || data.message || 'Public execution failed');
         }
-        setStatusMessage(data.message || "Public execution submitted.");
-      } else if (action === "execute_private") {
+        setStatusMessage(data.message || 'Public execution submitted.');
+      } else if (action === 'execute_private') {
         const response = await fetch(`${API_URL}/swap/${swapId}/execute-private`, {
-          method: "POST",
-          credentials: "include",
+          method: 'POST',
+          credentials: 'include',
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || data.success === false) {
-          throw new Error(data.error || data.message || "Private execution failed");
+          throw new Error(data.error || data.message || 'Private execution failed');
         }
-        setStatusMessage(data.message || "Private execution submitted.");
+        setStatusMessage(data.message || 'Private execution submitted.');
       } else {
-        setStatusMessage("Status refreshed.");
+        setStatusMessage('Status refreshed.');
       }
 
       await fetchWorkspace();
     } catch (error) {
-      setStatusMessage((error as Error).message || "Action failed");
+      setStatusMessage((error as Error).message || 'Action failed');
     } finally {
       setActionLoading(null);
     }
@@ -332,15 +332,17 @@ export default function SwapWorkspacePage() {
             Manage one swap from request to settlement
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This workspace combines proof requirements, wallet readiness, route posture, audit flow, and the next
-            highest-value action so the lifecycle stops feeling fragmented.
+            This workspace combines proof requirements, wallet readiness, route posture, audit flow,
+            and the next highest-value action so the lifecycle stops feeling fragmented.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Badge variant={variantFor(workspace.swap.status)}>{workspace.swap.status}</Badge>
-          <Badge variant={isPrivate ? "success" : "warning"}>{isPrivate ? "Private mode" : "Public mode"}</Badge>
+          <Badge variant={isPrivate ? 'success' : 'warning'}>
+            {isPrivate ? 'Private mode' : 'Public mode'}
+          </Badge>
           <Button variant="ghost" onClick={() => fetchWorkspace(true)}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
@@ -349,27 +351,36 @@ export default function SwapWorkspacePage() {
       <section className="grid gap-4 md:grid-cols-4">
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Counterparty</p>
-          <p className="mt-2 text-2xl font-semibold text-white">@{workspace.counterparty.username || "Unknown"}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{workspace.participantRole} side of the current swap.</p>
+          <p className="mt-2 text-2xl font-semibold text-white">
+            @{workspace.counterparty.username || 'Unknown'}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {workspace.participantRole} side of the current swap.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Proof stage</p>
           <p className="mt-2 text-2xl font-semibold text-white">{workspace.proofs.status}</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
-            My proof {workspace.swap.myProofSubmitted ? "submitted" : "missing"}, counterparty {workspace.swap.counterpartyProofSubmitted ? "submitted" : "missing"}.
+            My proof {workspace.swap.myProofSubmitted ? 'submitted' : 'missing'}, counterparty{' '}
+            {workspace.swap.counterpartyProofSubmitted ? 'submitted' : 'missing'}.
           </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Execution</p>
           <p className="mt-2 text-2xl font-semibold text-white">{workspace.execution.status}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Public and private settlement readiness live here.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Public and private settlement readiness live here.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Funding need</p>
           <p className="mt-2 text-2xl font-semibold text-white">
             {workspace.proofRequirement.amount} {workspace.proofRequirement.asset}
           </p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Amount your side needs to fund or prove cleanly.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Amount your side needs to fund or prove cleanly.
+          </p>
         </Card>
       </section>
 
@@ -390,7 +401,9 @@ export default function SwapWorkspacePage() {
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={variantFor(highlightedAction.severity)}>{highlightedAction.severity}</Badge>
+                  <Badge variant={variantFor(highlightedAction.severity)}>
+                    {highlightedAction.severity}
+                  </Badge>
                   <Badge variant="default">{highlightedAction.action}</Badge>
                 </div>
                 <h3 className="mt-3 text-lg font-semibold text-white">{highlightedAction.title}</h3>
@@ -399,7 +412,10 @@ export default function SwapWorkspacePage() {
 
               <div className="grid gap-3 md:grid-cols-2">
                 {workspace.actionBoard.slice(1).map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                  >
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant={variantFor(item.severity)}>{item.severity}</Badge>
                       <Badge variant="default">{item.action}</Badge>
@@ -445,24 +461,32 @@ export default function SwapWorkspacePage() {
                 <Globe className="h-4 w-4 text-sky-300" />
                 <p className="font-semibold">Public route</p>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-400">{workspace.routeSummary.public}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                {workspace.routeSummary.public}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <div className="flex items-center gap-2 text-white">
                 <Shield className="h-4 w-4 text-emerald-300" />
                 <p className="font-semibold">Private route</p>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-400">{workspace.routeSummary.private}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                {workspace.routeSummary.private}
+              </p>
             </div>
           </div>
 
           <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={workspace.routeSummary.recommendedMode === "private" ? "success" : "warning"}>
+              <Badge
+                variant={
+                  workspace.routeSummary.recommendedMode === 'private' ? 'success' : 'warning'
+                }
+              >
                 Recommended {workspace.routeSummary.recommendedMode}
               </Badge>
-              <Badge variant={workspace.proofs.ready ? "success" : "warning"}>
-                {workspace.proofs.ready ? "Proofs ready" : "Proofs not ready"}
+              <Badge variant={workspace.proofs.ready ? 'success' : 'warning'}>
+                {workspace.proofs.ready ? 'Proofs ready' : 'Proofs not ready'}
               </Badge>
             </div>
           </div>
@@ -481,8 +505,13 @@ export default function SwapWorkspacePage() {
               <p className="mt-2 text-sm text-white">
                 {workspace.proofRequirement.publicBalance} {workspace.proofRequirement.asset}
               </p>
-              <Badge variant={workspace.proofRequirement.hasPublicFunding ? "success" : "warning"} className="mt-3">
-                {workspace.proofRequirement.hasPublicFunding ? "Can fund publicly" : "Needs more public balance"}
+              <Badge
+                variant={workspace.proofRequirement.hasPublicFunding ? 'success' : 'warning'}
+                className="mt-3"
+              >
+                {workspace.proofRequirement.hasPublicFunding
+                  ? 'Can fund publicly'
+                  : 'Needs more public balance'}
               </Badge>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -490,8 +519,13 @@ export default function SwapWorkspacePage() {
               <p className="mt-2 text-sm text-white">
                 {workspace.proofRequirement.privateBalance} {workspace.proofRequirement.asset}
               </p>
-              <Badge variant={workspace.proofRequirement.hasPrivateFunding ? "success" : "warning"} className="mt-3">
-                {workspace.proofRequirement.hasPrivateFunding ? "Can fund privately" : "Needs private funding"}
+              <Badge
+                variant={workspace.proofRequirement.hasPrivateFunding ? 'success' : 'warning'}
+                className="mt-3"
+              >
+                {workspace.proofRequirement.hasPrivateFunding
+                  ? 'Can fund privately'
+                  : 'Needs private funding'}
               </Badge>
             </div>
           </div>
@@ -504,8 +538,8 @@ export default function SwapWorkspacePage() {
               )}
               <p className="text-sm leading-6 text-slate-300">
                 {workspace.proofRequirement.exactProofLikely
-                  ? "Your private balance looks strong enough to attempt proof preparation, although exact note shape may still matter."
-                  : "This route still looks fragile for proof preparation, so expect deposit or note-shaping work before private execution becomes smooth."}
+                  ? 'Your private balance looks strong enough to attempt proof preparation, although exact note shape may still matter.'
+                  : 'This route still looks fragile for proof preparation, so expect deposit or note-shaping work before private execution becomes smooth.'}
               </p>
             </div>
           </div>
@@ -518,7 +552,10 @@ export default function SwapWorkspacePage() {
           </div>
           <div className="space-y-3">
             {workspace.journey.map((step) => (
-              <div key={step.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={step.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{step.label}</p>
                   <Badge variant={variantFor(step.status)}>{step.status}</Badge>
@@ -543,13 +580,20 @@ export default function SwapWorkspacePage() {
               </div>
             ) : (
               workspace.audits.map((audit) => (
-                <div key={audit.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={audit.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">{audit.operation.replaceAll("_", " ")}</p>
+                    <p className="text-sm font-semibold text-white">
+                      {audit.operation.replaceAll('_', ' ')}
+                    </p>
                     <Badge variant={variantFor(audit.state)}>{audit.state}</Badge>
                   </div>
                   <p className="mt-2 text-xs text-slate-500">{formatTimestamp(audit.createdAt)}</p>
-                  {audit.indexingDetail && <p className="mt-2 text-sm leading-6 text-slate-400">{audit.indexingDetail}</p>}
+                  {audit.indexingDetail && (
+                    <p className="mt-2 text-sm leading-6 text-slate-400">{audit.indexingDetail}</p>
+                  )}
                   {audit.error && <p className="mt-2 text-sm text-red-300">{audit.error}</p>}
                   {audit.txHash && (
                     <a
@@ -579,16 +623,19 @@ export default function SwapWorkspacePage() {
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-white">
-                      @{workspace.offerHealth.merchant.username || "Unknown"}
+                      @{workspace.offerHealth.merchant.username || 'Unknown'}
                     </p>
-                    <Badge variant={workspace.offerHealth.active ? "success" : "warning"}>
-                      {workspace.offerHealth.active ? "Offer live" : "Offer paused"}
+                    <Badge variant={workspace.offerHealth.active ? 'success' : 'warning'}>
+                      {workspace.offerHealth.active ? 'Offer live' : 'Offer paused'}
                     </Badge>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Rate {workspace.offerHealth.rate} with a ticket band of {workspace.offerHealth.min} to {workspace.offerHealth.max}.
+                    Rate {workspace.offerHealth.rate} with a ticket band of{' '}
+                    {workspace.offerHealth.min} to {workspace.offerHealth.max}.
                   </p>
-                  <p className="mt-2 text-sm text-slate-300">Seller reputation: {workspace.offerHealth.merchant.reputation}</p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Seller reputation: {workspace.offerHealth.merchant.reputation}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -610,7 +657,10 @@ export default function SwapWorkspacePage() {
                 </div>
               ) : (
                 workspace.recentRelatedSwaps.map((swap) => (
-                  <div key={swap.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div
+                    key={swap.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-white">
                         {swap.amountIn} XLM / {swap.amountOut} USDC
@@ -639,7 +689,9 @@ export default function SwapWorkspacePage() {
             Action Center
           </Button>
         </Link>
-        <div className="text-sm text-slate-500">Last refresh: {formatTimestamp(workspace.updatedAt)}</div>
+        <div className="text-sm text-slate-500">
+          Last refresh: {formatTimestamp(workspace.updatedAt)}
+        </div>
       </div>
     </main>
   );

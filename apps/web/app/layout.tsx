@@ -1,30 +1,26 @@
-import type { Metadata } from "next";
-import { Space_Grotesk, Sora } from "next/font/google";
-import "./globals.css";
-import { PrivacyProvider } from "@/context/PrivacyContext";
-import { NetworkProvider } from "@/context/NetworkContext";
-import { AppLayout } from "@/components/layout/AppLayout";
+import type { Metadata } from 'next';
+import { Space_Grotesk, Sora } from 'next/font/google';
+import './globals.css';
+import { PrivacyProvider } from '@/context/PrivacyContext';
+import { NetworkProvider } from '@/context/NetworkContext';
+import { AppLayout } from '@/components/layout/AppLayout';
 
 const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
+  subsets: ['latin'],
+  variable: '--font-space-grotesk',
 });
 
 const sora = Sora({
-  subsets: ["latin"],
-  variable: "--font-sora",
+  subsets: ['latin'],
+  variable: '--font-sora',
 });
 
 export const metadata: Metadata = {
-  title: "Private P2P - Stellar",
-  description: "Privacy-first P2P payments and swaps on Stellar",
+  title: 'Private P2P - Stellar',
+  description: 'Privacy-first P2P payments and swaps on Stellar',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body

@@ -23,7 +23,7 @@ let useNpx = true;
 try {
   require.resolve('snarkjs/build/cli.cjs');
   useNpx = false;
-} catch (_) { }
+} catch (_) {}
 
 const e1 = crypto.randomBytes(32).toString('hex');
 const e2 = crypto.randomBytes(32).toString('hex');
@@ -44,24 +44,48 @@ function sh(cmd) {
 console.log('Phase 1: Powers of Tau (BLS12-381)...');
 if (!fs.existsSync(ptauFinal)) {
   if (!fs.existsSync(ptau0)) {
-    sh(useNpx ? `npx snarkjs powersoftau new bls12381 15 "${ptau0}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau new bls12381 15 "${ptau0}"`);
+    sh(
+      useNpx
+        ? `npx snarkjs powersoftau new bls12381 15 "${ptau0}"`
+        : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau new bls12381 15 "${ptau0}"`,
+    );
   }
   if (!fs.existsSync(ptau1)) {
-    sh(useNpx ? `npx snarkjs powersoftau contribute "${ptau0}" "${ptau1}" --name="First" -e="${e1}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau contribute "${ptau0}" "${ptau1}" --name="First" -e="${e1}"`);
+    sh(
+      useNpx
+        ? `npx snarkjs powersoftau contribute "${ptau0}" "${ptau1}" --name="First" -e="${e1}"`
+        : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau contribute "${ptau0}" "${ptau1}" --name="First" -e="${e1}"`,
+    );
   }
-  sh(useNpx ? `npx snarkjs powersoftau prepare phase2 "${ptau1}" "${ptauFinal}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau prepare phase2 "${ptau1}" "${ptauFinal}"`);
+  sh(
+    useNpx
+      ? `npx snarkjs powersoftau prepare phase2 "${ptau1}" "${ptauFinal}"`
+      : `node "${require.resolve('snarkjs/build/cli.cjs')}" powersoftau prepare phase2 "${ptau1}" "${ptauFinal}"`,
+  );
 }
 
 console.log('Phase 2: Groth16 setup...');
 if (!fs.existsSync(zkeyFinal)) {
   if (!fs.existsSync(zkey0)) {
-    sh(useNpx ? `npx snarkjs groth16 setup "${r1cs}" "${ptauFinal}" "${zkey0}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" groth16 setup "${r1cs}" "${ptauFinal}" "${zkey0}"`);
+    sh(
+      useNpx
+        ? `npx snarkjs groth16 setup "${r1cs}" "${ptauFinal}" "${zkey0}"`
+        : `node "${require.resolve('snarkjs/build/cli.cjs')}" groth16 setup "${r1cs}" "${ptauFinal}" "${zkey0}"`,
+    );
   }
-  sh(useNpx ? `npx snarkjs zkey contribute "${zkey0}" "${zkeyFinal}" --name="Second" -e="${e2}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" zkey contribute "${zkey0}" "${zkeyFinal}" --name="Second" -e="${e2}"`);
+  sh(
+    useNpx
+      ? `npx snarkjs zkey contribute "${zkey0}" "${zkeyFinal}" --name="Second" -e="${e2}"`
+      : `node "${require.resolve('snarkjs/build/cli.cjs')}" zkey contribute "${zkey0}" "${zkeyFinal}" --name="Second" -e="${e2}"`,
+  );
 }
 
 console.log('Exporting verification key...');
-sh(useNpx ? `npx snarkjs zkey export verificationkey "${zkeyFinal}" "${vkeyJson}"` : `node "${require.resolve('snarkjs/build/cli.cjs')}" zkey export verificationkey "${zkeyFinal}" "${vkeyJson}"`);
+sh(
+  useNpx
+    ? `npx snarkjs zkey export verificationkey "${zkeyFinal}" "${vkeyJson}"`
+    : `node "${require.resolve('snarkjs/build/cli.cjs')}" zkey export verificationkey "${zkeyFinal}" "${vkeyJson}"`,
+);
 
 console.log('Done. Artifacts in', outputDir);
 console.log('Note: Soroban groth16_verifier uses BLS12-381. This zkey is BLS12-381.');

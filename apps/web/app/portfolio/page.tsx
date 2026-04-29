@@ -291,18 +291,22 @@ export default function PortfolioPage() {
                     ? 'Needs balancing'
                     : 'Blocked'}
               </Badge>
-              <Badge variant="default">Exposure {formatAmount(workspace.summary.totalExposure)}</Badge>
+              <Badge variant="default">
+                Exposure {formatAmount(workspace.summary.totalExposure)}
+              </Badge>
               <Badge variant="default">Updated {formatTimestamp(workspace.updatedAt)}</Badge>
             </div>
 
-            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">Portfolio Workspace</p>
+            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">
+              Portfolio Workspace
+            </p>
             <h1 className="mt-3 bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-3xl font-bold text-transparent md:text-5xl">
               See how public, private, and market activity are shaping your capital posture
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300 md:text-base">
-              This desk turns balances, route readiness, counterparty strength, and recent activity into a usable
-              portfolio view so you can decide where to add liquidity, when to move into shielded lanes, and which
-              workflow should handle the next adjustment.
+              This desk turns balances, route readiness, counterparty strength, and recent activity
+              into a usable portfolio view so you can decide where to add liquidity, when to move
+              into shielded lanes, and which workflow should handle the next adjustment.
             </p>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">
               {workspace.portfolioHealth.headline}
@@ -312,17 +316,23 @@ export default function PortfolioPage() {
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[32rem]">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Total exposure</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{formatAmount(workspace.summary.totalExposure)}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {formatAmount(workspace.summary.totalExposure)}
+              </p>
               <p className="mt-2 text-sm text-slate-400">Public and private balance combined.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Public lane</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{formatAmount(workspace.summary.publicExposure)}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {formatAmount(workspace.summary.publicExposure)}
+              </p>
               <p className="mt-2 text-sm text-slate-400">Recovery-ready visible capital.</p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Private lane</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{formatAmount(workspace.summary.privateExposure)}</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {formatAmount(workspace.summary.privateExposure)}
+              </p>
               <p className="mt-2 text-sm text-slate-400">Shielded route capacity and note power.</p>
             </div>
           </div>
@@ -367,7 +377,9 @@ export default function PortfolioPage() {
             <Activity className="h-4 w-4 text-violet-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Activity mix</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{highestFlow ? highestFlow.count : 0}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {highestFlow ? highestFlow.count : 0}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             {highestFlow
               ? `${highestFlow.label} is the heaviest activity lane right now.`
@@ -379,7 +391,9 @@ export default function PortfolioPage() {
             <Compass className="h-4 w-4 text-amber-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Allocation coverage</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{formatAmount(totalAllocationShare)}%</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {formatAmount(totalAllocationShare)}%
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Rounded allocation coverage across public/private USDC and XLM lanes.
           </p>
@@ -394,12 +408,17 @@ export default function PortfolioPage() {
           </div>
           <div className="space-y-4">
             {workspace.allocation.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-lg font-semibold text-white">{item.label}</p>
-                      <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${lanePillClass(item.lane)}`}>
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold ${lanePillClass(item.lane)}`}
+                      >
                         {item.lane}
                       </span>
                       <Badge variant="default">{item.asset}</Badge>
@@ -412,7 +431,9 @@ export default function PortfolioPage() {
                   </div>
                   <div className="grid gap-2 text-right">
                     <p className="text-2xl font-semibold text-white">{formatAmount(item.amount)}</p>
-                    <p className="text-sm text-slate-400">{formatAmount(item.share)}% of total portfolio</p>
+                    <p className="text-sm text-slate-400">
+                      {formatAmount(item.share)}% of total portfolio
+                    </p>
                   </div>
                 </div>
                 <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-900">
@@ -434,31 +455,39 @@ export default function PortfolioPage() {
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Balance headline</p>
-              <p className="mt-3 text-sm leading-7 text-slate-300">{deriveBalanceHeadline(workspace.summary)}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                {deriveBalanceHeadline(workspace.summary)}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Flow headline</p>
-              <p className="mt-3 text-sm leading-7 text-slate-300">{deriveFlowHeadline(workspace.flowMix)}</p>
+              <p className="mt-3 text-sm leading-7 text-slate-300">
+                {deriveFlowHeadline(workspace.flowMix)}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Stablecoin position</p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
                 USDC exposure is {formatAmount(workspace.summary.totalUsdc)} while XLM exposure is{' '}
-                {formatAmount(workspace.summary.totalXlm)}. This matters because stablecoin-heavy portfolios tend to
-                support swaps and fiat routing better, while XLM-heavy portfolios are easier to fund and recover.
+                {formatAmount(workspace.summary.totalXlm)}. This matters because stablecoin-heavy
+                portfolios tend to support swaps and fiat routing better, while XLM-heavy portfolios
+                are easier to fund and recover.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Relationship strength</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Relationship strength
+              </p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
                 Counterparty strength is currently{' '}
                 <span className="font-semibold text-white">
                   {deriveStrengthLabel(
-                    workspace.exposureSignals.find((item) => item.id === 'counterparty_strength')?.value ?? 0,
+                    workspace.exposureSignals.find((item) => item.id === 'counterparty_strength')
+                      ?.value ?? 0,
                   )}
                 </span>
-                , which affects how safely the portfolio can reuse known send routes instead of starting from a cold
-                path.
+                , which affects how safely the portfolio can reuse known send routes instead of
+                starting from a cold path.
               </p>
             </div>
           </div>
@@ -473,7 +502,10 @@ export default function PortfolioPage() {
           </div>
           <div className="space-y-4">
             {workspace.exposureSignals.map((signal) => (
-              <div key={signal.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={signal.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{signal.label}</p>
                   <Badge variant="default">{formatCompact(signal.value)}</Badge>
@@ -519,10 +551,14 @@ export default function PortfolioPage() {
             {workspace.flowMix.map((item) => {
               const share =
                 workspace.flowMix.reduce((sum, entry) => sum + entry.count, 0) > 0
-                  ? (item.count / workspace.flowMix.reduce((sum, entry) => sum + entry.count, 0)) * 100
+                  ? (item.count / workspace.flowMix.reduce((sum, entry) => sum + entry.count, 0)) *
+                    100
                   : 0;
               return (
-                <div key={item.label} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={item.label}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-white">{item.label}</p>
                     <Badge variant="default">{item.count}</Badge>
@@ -552,12 +588,16 @@ export default function PortfolioPage() {
           <div className="space-y-3">
             {workspace.rebalanceIdeas.length === 0 ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-6 text-slate-400">
-                The portfolio is not surfacing any obvious rebalance ideas right now. That usually means the wallet has
-                enough funding, route diversity, and operational freshness for the current usage level.
+                The portfolio is not surfacing any obvious rebalance ideas right now. That usually
+                means the wallet has enough funding, route diversity, and operational freshness for
+                the current usage level.
               </div>
             ) : (
               workspace.rebalanceIdeas.map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={item}
+                  className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
                   <p className="text-sm leading-6 text-slate-300">{item}</p>
                 </div>
@@ -603,12 +643,15 @@ export default function PortfolioPage() {
           <div className="space-y-3">
             {workspace.recentTitles.length === 0 ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-6 text-slate-400">
-                No recent drivers are available yet. Once sends, swaps, deposits, or recovery actions happen, this area
-                will show what most recently moved the portfolio.
+                No recent drivers are available yet. Once sends, swaps, deposits, or recovery
+                actions happen, this area will show what most recently moved the portfolio.
               </div>
             ) : (
               workspace.recentTitles.map((title, index) => (
-                <div key={`${title}-${index}`} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={`${title}-${index}`}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-indigo-500/20 bg-indigo-500/10 text-xs font-semibold text-indigo-200">
@@ -633,32 +676,43 @@ export default function PortfolioPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Visible operating lane</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Visible operating lane
+              </p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Public balances are still the easiest way to recover, fund trustlines, and execute simple wallet sends.
-                If this lane is too small, the whole portfolio feels fragile when a user needs immediate visible
-                settlement.
+                Public balances are still the easiest way to recover, fund trustlines, and execute
+                simple wallet sends. If this lane is too small, the whole portfolio feels fragile
+                when a user needs immediate visible settlement.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Shielded operating lane</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Shielded operating lane
+              </p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Private balances are what unlock the product’s differentiated behavior. Without them, the portfolio may
-                still work, but it is not yet exercising the strongest privacy surfaces.
+                Private balances are what unlock the product’s differentiated behavior. Without
+                them, the portfolio may still work, but it is not yet exercising the strongest
+                privacy surfaces.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Counterparty leverage</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Counterparty leverage
+              </p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Known counterparties reduce route uncertainty. A portfolio with strong relationship data can choose more
-                confidently between public and private sends instead of guessing every time.
+                Known counterparties reduce route uncertainty. A portfolio with strong relationship
+                data can choose more confidently between public and private sends instead of
+                guessing every time.
               </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Operational freshness</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">
+                Operational freshness
+              </p>
               <p className="mt-3 text-sm leading-7 text-slate-300">
-                Indexer and ops freshness shape how honest the portfolio feels. Even a funded wallet can feel wrong if
-                lag hides notes, pending withdrawals, or recent transaction outcomes.
+                Indexer and ops freshness shape how honest the portfolio feels. Even a funded wallet
+                can feel wrong if lag hides notes, pending withdrawals, or recent transaction
+                outcomes.
               </p>
             </div>
           </div>
@@ -689,7 +743,8 @@ export default function PortfolioPage() {
               <div>
                 <p className="text-sm font-semibold text-white">Open market workspace</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Use this when the next portfolio move depends on liquidity, pair discovery, or offer flow.
+                  Use this when the next portfolio move depends on liquidity, pair discovery, or
+                  offer flow.
                 </p>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-500" />
@@ -701,7 +756,8 @@ export default function PortfolioPage() {
               <div>
                 <p className="text-sm font-semibold text-white">Open status workspace</p>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  Check health, freshness, and remediation signals when the portfolio looks out of date.
+                  Check health, freshness, and remediation signals when the portfolio looks out of
+                  date.
                 </p>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-500" />
@@ -714,7 +770,9 @@ export default function PortfolioPage() {
                 className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-indigo-500/30 hover:bg-slate-900"
               >
                 <div>
-                  <p className="text-sm font-semibold text-white">View account on Stellar Explorer</p>
+                  <p className="text-sm font-semibold text-white">
+                    View account on Stellar Explorer
+                  </p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     Cross-check visible account posture directly on the network explorer.
                   </p>
@@ -729,10 +787,13 @@ export default function PortfolioPage() {
       <section className="flex flex-col gap-4 rounded-[28px] border border-slate-800 bg-slate-950/80 p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Next move</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Take the portfolio to the right workspace</h2>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Take the portfolio to the right workspace
+          </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            If capital posture looks balanced, move into send, swap, or fiat execution. If not, use funding, wallet,
-            or action-center flows to improve route strength before adding more activity.
+            If capital posture looks balanced, move into send, swap, or fiat execution. If not, use
+            funding, wallet, or action-center flows to improve route strength before adding more
+            activity.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

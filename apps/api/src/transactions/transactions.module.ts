@@ -5,9 +5,7 @@ import { TransactionAuditService } from './transaction-audit.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: TransactionAudit.name, schema: TransactionAuditSchema },
-    ]),
+    MongooseModule.forFeature([{ name: TransactionAudit.name, schema: TransactionAuditSchema }]),
   ],
   providers: [TransactionAuditService],
   exports: [TransactionAuditService, MongooseModule],

@@ -2,7 +2,13 @@ import { Body, Controller, Get, Param, Post, Put, Query, Req, UseGuards } from '
 import { Types } from 'mongoose';
 import { SessionAuthGuard } from '../auth/guards/session.guard';
 import { failureResponse, successResponse } from '../common/responses/transaction-response';
-import { CompleteSwapDto, ExecutePrivateSwapDto, RequestSwapDto, SubmitSwapProofDto, SwapActivityQueryDto } from './dto/swap.dto';
+import {
+  CompleteSwapDto,
+  ExecutePrivateSwapDto,
+  RequestSwapDto,
+  SubmitSwapProofDto,
+  SwapActivityQueryDto,
+} from './dto/swap.dto';
 import { SwapService } from './swap.service';
 
 @Controller('swap')
@@ -11,10 +17,7 @@ export class SwapController {
 
   @Post('request')
   @UseGuards(SessionAuthGuard)
-  request(
-    @Body() body: RequestSwapDto,
-    @Req() req: { user: { _id: Types.ObjectId } },
-  ) {
+  request(@Body() body: RequestSwapDto, @Req() req: { user: { _id: Types.ObjectId } }) {
     return this.swapService.request(
       req.user._id,
       new Types.ObjectId(body.bobId),
@@ -176,7 +179,8 @@ export class SwapController {
             'swap_execute_private',
             'Private swap execution requires proofs from both parties.',
             {
-              error: 'Submit proofs from both parties first, or provide all proof fields in the request body.',
+              error:
+                'Submit proofs from both parties first, or provide all proof fields in the request body.',
               indexing: {
                 status: 'pending',
                 detail: 'Proof collection is incomplete, so the private swap cannot execute yet.',

@@ -48,7 +48,11 @@ export class OffersController {
 
   @Put(':id')
   @UseGuards(SessionAuthGuard)
-  update(@Param('id') id: string, @Body() body: UpdateOfferDto, @Req() req: { user: { _id: Types.ObjectId } }) {
+  update(
+    @Param('id') id: string,
+    @Body() body: UpdateOfferDto,
+    @Req() req: { user: { _id: Types.ObjectId } },
+  ) {
     return this.offersService.update(id, req.user._id, body);
   }
 }

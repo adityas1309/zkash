@@ -20,7 +20,10 @@ export class PoolIndexerService implements OnModuleInit {
     private metrics: MetricsService,
     private logger: AppLoggerService,
   ) {
-    const secret = process.env.INDEXER_SIGNER_SECRET_KEY ?? process.env.ADMIN_SECRET_KEY ?? process.env.DEPLOYER_SECRET_KEY;
+    const secret =
+      process.env.INDEXER_SIGNER_SECRET_KEY ??
+      process.env.ADMIN_SECRET_KEY ??
+      process.env.DEPLOYER_SECRET_KEY;
     this.signerPublicKey = secret ? Keypair.fromSecret(secret).publicKey() : null;
   }
 
@@ -32,7 +35,8 @@ export class PoolIndexerService implements OnModuleInit {
   private async start() {
     if (!this.signerPublicKey) {
       this.logger.warnEvent('indexer', 'missing_signer', {
-        detail: 'No INDEXER_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY/DEPLOYER_SECRET_KEY configured; skipping pool sync.',
+        detail:
+          'No INDEXER_SIGNER_SECRET_KEY/ADMIN_SECRET_KEY/DEPLOYER_SECRET_KEY configured; skipping pool sync.',
       });
       return;
     }
@@ -108,7 +112,11 @@ export class PoolIndexerService implements OnModuleInit {
       );
 
       this.metrics.setIndexerCommitmentCount(network, poolAddress, leaves.length);
-      this.metrics.setIndexerLastSuccessfulSync(network, poolAddress, Math.floor(Date.now() / 1000));
+      this.metrics.setIndexerLastSuccessfulSync(
+        network,
+        poolAddress,
+        Math.floor(Date.now() / 1000),
+      );
       this.metrics.increment('indexer', 'sync_success');
     } catch (error) {
       this.metrics.incrementError('indexer', 'sync_failure');
@@ -129,4 +137,3 @@ export class PoolIndexerService implements OnModuleInit {
     }
   }
 }
-

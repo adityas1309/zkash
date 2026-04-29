@@ -9,7 +9,14 @@ import { PendingWithdrawal } from '../schemas/pending-withdrawal.schema';
 import { EncryptedNote } from '../schemas/encrypted-note.schema';
 import { SpendableNote } from '../schemas/spendable-note.schema';
 import { Swap } from '../schemas/swap.schema';
-import { Asset, Horizon, Keypair, Networks, TransactionBuilder, Operation } from '@stellar/stellar-sdk';
+import {
+  Asset,
+  Horizon,
+  Keypair,
+  Networks,
+  TransactionBuilder,
+  Operation,
+} from '@stellar/stellar-sdk';
 import * as nacl from 'tweetnacl';
 import * as naclUtil from 'tweetnacl-util';
 import { computeCommitment, type NoteFields } from '../zk/commitment';
@@ -49,7 +56,7 @@ export class UsersService {
     private logger: AppLoggerService,
     private sponsorshipService: SponsorshipService,
     private transactionAuditService: TransactionAuditService,
-  ) { }
+  ) {}
 
   async findById(id: string): Promise<User | null> {
     return this.userModel.findById(id).exec();
@@ -71,11 +78,12 @@ export class UsersService {
       console.log(`[UsersService] Fetching balances for ${user.stellarPublicKey}`);
       const account = await this.server.loadAccount(user.stellarPublicKey);
       const xlm = account.balances.find((b: any) => b.asset_type === 'native')?.balance ?? '0';
-      const usdc = account.balances.find(
-        (b: any) =>
-          (b.asset_type === 'credit_alphanum4' || b.asset_type === 'credit_alphanum12') &&
-          b.asset_code === 'USDC'
-      )?.balance ?? '0';
+      const usdc =
+        account.balances.find(
+          (b: any) =>
+            (b.asset_type === 'credit_alphanum4' || b.asset_type === 'credit_alphanum12') &&
+            b.asset_code === 'USDC',
+        )?.balance ?? '0';
 
       console.log(`[UsersService] Balances - XLM: ${xlm}, USDC: ${usdc}`);
       return { xlm, usdc };
@@ -100,9 +108,11 @@ export class UsersService {
       const account = await this.server.loadAccount(user.stellarPublicKey);
 
       const isMainnet = isMainnetContext();
-      const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
-        ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
-        : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
+      const usdcIssuer =
+        process.env.USDC_ISSUER ||
+        (isMainnet
+          ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+          : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
       const usdcAsset = new Asset('USDC', usdcIssuer);
 
       const tx = new TransactionBuilder(account, {
@@ -143,7 +153,11 @@ export class UsersService {
     }
 
     // Decrypt sender's secret key
-    const encryptionKey = this.authService.getDecryptionKeyForUser(sender, sender.googleId, sender.email);
+    const encryptionKey = this.authService.getDecryptionKeyForUser(
+      sender,
+      sender.googleId,
+      sender.email,
+    );
     const secretKey = this.authService.decrypt(sender.stellarSecretKeyEncrypted, encryptionKey);
     const keypair = Keypair.fromSecret(secretKey);
 
@@ -153,9 +167,11 @@ export class UsersService {
       let asset: Asset;
       if (assetCode === 'USDC') {
         const isMainnet = isMainnetContext();
-        const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
-          ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
-          : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
+        const usdcIssuer =
+          process.env.USDC_ISSUER ||
+          (isMainnet
+            ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
+            : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
         asset = new Asset('USDC', usdcIssuer);
       } else {
         asset = Asset.native();
@@ -166,11 +182,13 @@ export class UsersService {
         fee: '100',
         networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
-        .addOperation(Operation.payment({
-          destination: destinationPublicKey,
-          asset: asset,
-          amount: amount,
-        }))
+        .addOperation(
+          Operation.payment({
+            destination: destinationPublicKey,
+            asset: asset,
+            amount: amount,
+          }),
+        )
         .setTimeout(30)
         .build();
 
@@ -186,7 +204,8 @@ export class UsersService {
 
       let res: { hash: string };
       let sponsored = false;
-      let sponsorshipDetail = 'Sponsorship unavailable; transaction submitted with the sender paying the fee.';
+      let sponsorshipDetail =
+        'Sponsorship unavailable; transaction submitted with the sender paying the fee.';
 
       if (shouldSponsor && sponsorSecret) {
         const sponsorKeypair = Keypair.fromSecret(sponsorSecret);
@@ -226,12 +245,18 @@ export class UsersService {
         amount,
       });
       // Improve error message
-      const msg = (e as any)?.response?.data?.extras?.result_codes?.operations?.[0] || (e as Error).message;
+      const msg =
+        (e as any)?.response?.data?.extras?.result_codes?.operations?.[0] || (e as Error).message;
       throw new Error(`Payment failed: ${msg}`);
     }
   }
 
-  async sendPublic(userId: string, destination: string, amount: string, assetCode: string = 'XLM'): Promise<string> {
+  async sendPublic(
+    userId: string,
+    destination: string,
+    amount: string,
+    assetCode: string = 'XLM',
+  ): Promise<string> {
     const user = await this.findById(userId);
     if (!user) throw new Error('User not found');
     if (!user.googleId) throw new Error('Google ID required for decryption');
@@ -245,9 +270,11 @@ export class UsersService {
       let asset = Asset.native();
       if (assetCode !== 'XLM' && assetCode !== 'native') {
         const isMainnet = isMainnetContext();
-        const usdcIssuer = process.env.USDC_ISSUER || (isMainnet
-          ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
-          : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
+        const usdcIssuer =
+          process.env.USDC_ISSUER ||
+          (isMainnet
+            ? 'GA5ZSEJYB37JRC5EAOIRFPMQ6TAD5JIUGKWEAOSH4QALIQAMZOBEB7OA'
+            : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
         asset = new Asset('USDC', usdcIssuer);
       }
 
@@ -256,11 +283,13 @@ export class UsersService {
         fee: '100',
         networkPassphrase: isMainnet ? Networks.PUBLIC : Networks.TESTNET,
       })
-        .addOperation(Operation.payment({
-          destination: destination,
-          asset: asset,
-          amount: amount,
-        }))
+        .addOperation(
+          Operation.payment({
+            destination: destination,
+            asset: asset,
+            amount: amount,
+          }),
+        )
         .setTimeout(30)
         .build();
 
@@ -357,8 +386,12 @@ export class UsersService {
     asset: 'USDC' | 'XLM',
     amount: string,
   ): Promise<{ success: boolean; error?: string }> {
-    console.log(`[sendPrivate] START senderId=${senderId}, recipient=${recipientIdentifier}, asset=${asset}, amount=${amount}`);
-    const recipient = await this.findByUsername(recipientIdentifier) ?? await this.findByStellarPublicKey(recipientIdentifier);
+    console.log(
+      `[sendPrivate] START senderId=${senderId}, recipient=${recipientIdentifier}, asset=${asset}, amount=${amount}`,
+    );
+    const recipient =
+      (await this.findByUsername(recipientIdentifier)) ??
+      (await this.findByStellarPublicKey(recipientIdentifier));
     if (!recipient || !recipient.googleId) {
       console.log('[sendPrivate] FAIL: Recipient not found');
       return { success: false, error: 'Recipient not found' };
@@ -376,7 +409,9 @@ export class UsersService {
     const poolAddress =
       asset === 'USDC'
         ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
-        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ??
+          getContractAddress('SHIELDED_POOL_ADDRESS') ??
+          '');
     if (!poolAddress) {
       console.log('[sendPrivate] FAIL: Pool not configured');
       return { success: false, error: 'Pool not configured for this asset' };
@@ -386,15 +421,19 @@ export class UsersService {
     // For sendPrivate (transfer), we need a note of EXACT amount.
     // TODO: Implement splitting/merging to handle arbitrary amounts from larger notes.
     const notes = await this.getSpendableNotes(senderId, asset, amountBigInt);
-    const matchingNote = notes.find(n => n.value === amountBigInt);
+    const matchingNote = notes.find((n) => n.value === amountBigInt);
 
     if (!matchingNote) {
-      return { success: false, error: `No spendable private note of exact amount ${amount} found. Splitting not yet supported.` };
+      return {
+        success: false,
+        error: `No spendable private note of exact amount ${amount} found. Splitting not yet supported.`,
+      };
     }
 
     const notesToUse = [matchingNote]; // Use the matching note
     console.log(`[sendPrivate] spendable notes found: ${notes.length}`);
-    if (notes.length === 0) return { success: false, error: 'No spendable private balance. Deposit first.' };
+    if (notes.length === 0)
+      return { success: false, error: 'No spendable private balance. Deposit first.' };
 
     // Get sender's public key for the contract call
     const sender = await this.findById(senderId);
@@ -403,7 +442,9 @@ export class UsersService {
     const note = notesToUse[0];
     console.log(`[sendPrivate] note commitment: ${note.commitment}`);
     const stateRoot = await this.sorobanService.getMerkleRoot(poolAddress, sender.stellarPublicKey);
-    console.log(`[sendPrivate] stateRoot: ${Buffer.from(stateRoot).toString('hex').slice(0, 32)}...`);
+    console.log(
+      `[sendPrivate] stateRoot: ${Buffer.from(stateRoot).toString('hex').slice(0, 32)}...`,
+    );
 
     const leaves = await this.sorobanService.getCommitments(poolAddress, sender.stellarPublicKey);
     console.log(`[sendPrivate] on-chain leaves: ${leaves.length}`);
@@ -413,7 +454,9 @@ export class UsersService {
     if (stateIndex < 0) {
       console.log('[sendPrivate] FAIL: commitment not found on-chain');
       if (leaves.length > 0) {
-        console.log(`[sendPrivate] first leaf hex: ${Buffer.from(leaves[0]).toString('hex').slice(0, 32)}...`);
+        console.log(
+          `[sendPrivate] first leaf hex: ${Buffer.from(leaves[0]).toString('hex').slice(0, 32)}...`,
+        );
         console.log(`[sendPrivate] seeking commitment: ${note.commitment.slice(0, 32)}...`);
       }
       return { success: false, error: 'Deposit not indexed on-chain yet. Wait and retry.' };
@@ -422,14 +465,17 @@ export class UsersService {
     console.log(`[sendPrivate] computed ${stateSiblings.length} siblings, generating proof...`);
 
     try {
-      const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
-        { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
-        stateRoot,
-        amountBigInt,
-        { commitmentBytes, stateIndex, stateSiblings },
-      );
+      const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } =
+        await this.proofService.generateProof(
+          { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
+          stateRoot,
+          amountBigInt,
+          { commitmentBytes, stateIndex, stateSiblings },
+        );
       console.warn(`[sendPrivate] proofBytes HEX: ${Buffer.from(proofBytes).toString('hex')}`);
-      console.warn(`[sendPrivate] pubSignalsBytes HEX: ${Buffer.from(pubSignalsBytes).toString('hex')}`);
+      console.warn(
+        `[sendPrivate] pubSignalsBytes HEX: ${Buffer.from(pubSignalsBytes).toString('hex')}`,
+      );
       console.log(`[sendPrivate] proof generated, nullifierHash: ${nullifierHash.slice(0, 16)}...`);
 
       // Store 'nullifierHash' in PendingWithdrawal because the recipient interacts with the contract
@@ -445,8 +491,15 @@ export class UsersService {
       });
 
       try {
-        const recipientEncKey = this.authService.getDecryptionKeyForUser(recipient, recipient.googleId, recipient.email);
-        const recipientViewKeyHex = this.authService.decrypt(recipient.zkViewKeyEncrypted, recipientEncKey);
+        const recipientEncKey = this.authService.getDecryptionKeyForUser(
+          recipient,
+          recipient.googleId,
+          recipient.email,
+        );
+        const recipientViewKeyHex = this.authService.decrypt(
+          recipient.zkViewKeyEncrypted,
+          recipientEncKey,
+        );
         const recipientViewKey = new Uint8Array(Buffer.from(recipientViewKeyHex, 'hex'));
         const payload = JSON.stringify({ value: amountNum, asset });
         const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
@@ -492,14 +545,20 @@ export class UsersService {
    * Withdraw specific amount from private notes to self (public account).
    * Consumes SpendableNotes and calls contract withdraw immediately.
    */
-  async withdrawSelf(userId: string, asset: 'USDC' | 'XLM', amount: number): Promise<{ success: boolean; txHash?: string; error?: string }> {
+  async withdrawSelf(
+    userId: string,
+    asset: 'USDC' | 'XLM',
+    amount: number,
+  ): Promise<{ success: boolean; txHash?: string; error?: string }> {
     const user = await this.findById(userId);
     if (!user || !user.googleId) return { success: false, error: 'User not found' };
 
     const poolAddress =
       asset === 'USDC'
         ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
-        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ??
+          getContractAddress('SHIELDED_POOL_ADDRESS') ??
+          '');
     if (!poolAddress) return { success: false, error: 'Pool not configured' };
 
     // 1. Pick notes to spend.
@@ -507,13 +566,15 @@ export class UsersService {
 
     const notes = await this.getSpendableNotes(userId, asset, scaledAmount);
     // Find exact match
-    const note = notes.find(n => n.value === scaledAmount);
+    const note = notes.find((n) => n.value === scaledAmount);
 
     if (!note) {
-      const availableAmounts = notes.map(n => Number(n.value) / Number(UsersService.SCALE_FACTOR)).join(', ');
+      const availableAmounts = notes
+        .map((n) => Number(n.value) / Number(UsersService.SCALE_FACTOR))
+        .join(', ');
       return {
         success: false,
-        error: `No spendable note of exact amount ${amount} found. Partial unshielding from a single note is not supported yet. Available note amounts: [${availableAmounts}]`
+        error: `No spendable note of exact amount ${amount} found. Partial unshielding from a single note is not supported yet. Available note amounts: [${availableAmounts}]`,
       };
     }
 
@@ -533,8 +594,10 @@ export class UsersService {
         // Sanity check: Compute root from leaves to ensure consistency
         const computedRoot = await this.merkleTree.computeRootFromLeaves(leaves, 20);
         if (!Buffer.from(computedRoot).equals(Buffer.from(root))) {
-          console.warn(`[withdrawSelf] Root mismatch (OnChain vs Computed). Retrying (${retries} left)...`);
-          await new Promise(r => setTimeout(r, 2000));
+          console.warn(
+            `[withdrawSelf] Root mismatch (OnChain vs Computed). Retrying (${retries} left)...`,
+          );
+          await new Promise((r) => setTimeout(r, 2000));
           retries--;
           continue;
         }
@@ -543,8 +606,10 @@ export class UsersService {
         const idx = leaves.findIndex((l) => Buffer.from(l).equals(Buffer.from(comm)));
 
         if (idx < 0) {
-          console.warn(`[withdrawSelf] Note commitment not found on-chain. Retrying (${retries} left)...`);
-          await new Promise(r => setTimeout(r, 1000));
+          console.warn(
+            `[withdrawSelf] Note commitment not found on-chain. Retrying (${retries} left)...`,
+          );
+          await new Promise((r) => setTimeout(r, 1000));
           retries--;
           continue;
         }
@@ -557,7 +622,7 @@ export class UsersService {
       } catch (e) {
         console.warn(`[withdrawSelf] Error fetching state (${retries} left):`, e);
         retries--;
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 1000));
       }
     }
 
@@ -566,12 +631,13 @@ export class UsersService {
     }
 
     try {
-      const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } = await this.proofService.generateProof(
-        { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
-        stateRoot,
-        note.value,
-        { commitmentBytes, stateIndex, stateSiblings },
-      );
+      const { proofBytes, pubSignalsBytes, nullifierHash, nullifierSecret } =
+        await this.proofService.generateProof(
+          { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
+          stateRoot,
+          note.value,
+          { commitmentBytes, stateIndex, stateSiblings },
+        );
 
       // 3. Submit withdrawal to contract immediately
       const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
@@ -597,7 +663,6 @@ export class UsersService {
       });
 
       return { success: true, txHash };
-
     } catch (e: any) {
       this.metrics.incrementError('wallet', 'withdraw_failure');
       this.logger.errorEvent('wallet', 'withdraw_failure', e, { userId, asset, amount });
@@ -607,7 +672,9 @@ export class UsersService {
       // Handle Contract Error #1: NullifierUsed
       // This means the note was already spent on-chain. We should mark it as spent locally.
       if (msg.includes('Error(Contract, #1)')) {
-        console.warn(`[withdrawSelf] Note ${note.label} already spent on-chain (NullifierUsed). Marking as spent.`);
+        console.warn(
+          `[withdrawSelf] Note ${note.label} already spent on-chain (NullifierUsed). Marking as spent.`,
+        );
         try {
           // We can't use nullifierSecret here easily as it's not in scope if we didn't get return
           // But we have 'note' object from step 1
@@ -620,7 +687,10 @@ export class UsersService {
 
       // Handle Contract Error #3: InsufficientBalance
       if (msg.includes('Error(Contract, #3)')) {
-        return { success: false, error: `Pool Underfunded: Contract balance is lower than withdrawal amount ${amount}. This may be due to storage rent or state mismatch.` };
+        return {
+          success: false,
+          error: `Pool Underfunded: Contract balance is lower than withdrawal amount ${amount}. This may be due to storage rent or state mismatch.`,
+        };
       }
 
       return { success: false, error: msg };
@@ -628,14 +698,18 @@ export class UsersService {
   }
 
   /** Process pending withdrawals for the current user (submit withdraw txs to ShieldedPool). */
-  async processPendingWithdrawals(userId: string): Promise<{ processed: number; txHashes: string[] }> {
+  async processPendingWithdrawals(
+    userId: string,
+  ): Promise<{ processed: number; txHashes: string[] }> {
     const user = await this.findById(userId);
     if (!user || !user.googleId) throw new Error('User not found');
 
     const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
     const secretKey = this.authService.decrypt(user.stellarSecretKeyEncrypted, encKey);
 
-    const pending = await this.pendingWithdrawalModel.find({ recipientId: new Types.ObjectId(userId), processed: false }).exec();
+    const pending = await this.pendingWithdrawalModel
+      .find({ recipientId: new Types.ObjectId(userId), processed: false })
+      .exec();
     const txHashes: string[] = [];
 
     for (const p of pending) {
@@ -644,7 +718,9 @@ export class UsersService {
           p.poolAddress ||
           (p.asset === 'USDC'
             ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
-            : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? ''));
+            : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ??
+              getContractAddress('SHIELDED_POOL_ADDRESS') ??
+              ''));
         if (!poolAddressForPending) {
           throw new Error('Pool address not configured for pending withdrawal asset');
         }
@@ -661,7 +737,9 @@ export class UsersService {
         // Log if mismatch (just for debug)
         const storedNullifier = Buffer.from(p.nullifier, 'hex');
         if (!storedNullifier.equals(nullifierHashFromSignals)) {
-          console.warn(`[processPendingWithdrawals] Correcting nullifier for withdrawal ${p._id}. Stored: ${p.nullifier}, Actual Hash: ${nullifierHashFromSignals.toString('hex')}`);
+          console.warn(
+            `[processPendingWithdrawals] Correcting nullifier for withdrawal ${p._id}. Stored: ${p.nullifier}, Actual Hash: ${nullifierHashFromSignals.toString('hex')}`,
+          );
         }
 
         const hash = await this.sorobanService.invokeShieldedPoolWithdraw(
@@ -705,7 +783,11 @@ export class UsersService {
   }
 
   /** Deposit to shielded pool: create spendable note, call contract, store note encrypted. */
-  async deposit(userId: string, asset: 'USDC' | 'XLM', amount: number): Promise<{ txHash: string; error?: string }> {
+  async deposit(
+    userId: string,
+    asset: 'USDC' | 'XLM',
+    amount: number,
+  ): Promise<{ txHash: string; error?: string }> {
     const DEPOSIT_TIMEOUT_MS = 120_000; // 2 min for RPC/sendTransaction on testnet
 
     try {
@@ -715,7 +797,9 @@ export class UsersService {
       const poolAddress =
         asset === 'USDC'
           ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
-          : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
+          : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ??
+            getContractAddress('SHIELDED_POOL_ADDRESS') ??
+            '');
       if (!poolAddress) return { txHash: '', error: 'Pool not configured for this asset' };
 
       const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
@@ -786,11 +870,7 @@ export class UsersService {
         const viewKey = new Uint8Array(Buffer.from(viewKeyHex, 'hex'));
         const payload = JSON.stringify({ value: amount, asset });
         const noteNonce = nacl.randomBytes(nacl.secretbox.nonceLength);
-        const noteCiphertext = nacl.secretbox(
-          naclUtil.decodeUTF8(payload),
-          noteNonce,
-          viewKey,
-        );
+        const noteCiphertext = nacl.secretbox(naclUtil.decodeUTF8(payload), noteNonce, viewKey);
         const noteCombined = Buffer.concat([Buffer.from(noteNonce), Buffer.from(noteCiphertext)]);
         await this.encryptedNoteModel.create({
           commitment: '',
@@ -801,7 +881,10 @@ export class UsersService {
           poolAddress,
         });
       } catch (e) {
-        console.error('[UsersService] deposit: failed to create EncryptedNote for private balance:', e);
+        console.error(
+          '[UsersService] deposit: failed to create EncryptedNote for private balance:',
+          e,
+        );
       }
 
       this.metrics.increment('wallet', 'deposit_success');
@@ -896,9 +979,11 @@ export class UsersService {
       existing.privateFlows += entry.privateFlow ? 1 : 0;
       const candidateDate = typeof entry.date === 'string' ? entry.date : undefined;
       existing.latestAt =
-        existing.latestAt && candidateDate && new Date(existing.latestAt).getTime() > new Date(candidateDate).getTime()
+        existing.latestAt &&
+        candidateDate &&
+        new Date(existing.latestAt).getTime() > new Date(candidateDate).getTime()
           ? existing.latestAt
-          : candidateDate ?? existing.latestAt;
+          : (candidateDate ?? existing.latestAt);
       counterparties.set(key, existing);
     }
 
@@ -966,9 +1051,13 @@ export class UsersService {
     const totalPrivate = spendableNotes.reduce((sum, note) => sum + note.value, 0n);
     const totalPrivateDisplay = Number(totalPrivate) / Number(UsersService.SCALE_FACTOR);
     const publicBalance = Number(body.asset === 'USDC' ? balances.usdc : balances.xlm);
-    const privateBalance = Number(body.asset === 'USDC' ? privateBalances.usdc : privateBalances.xlm);
+    const privateBalance = Number(
+      body.asset === 'USDC' ? privateBalances.usdc : privateBalances.xlm,
+    );
     const recentCounterpartyTouch = history.find(
-      (entry) => entry.participants?.counterparty?.toLowerCase() === recipientPreview.username?.toLowerCase(),
+      (entry) =>
+        entry.participants?.counterparty?.toLowerCase() ===
+        recipientPreview.username?.toLowerCase(),
     );
 
     const publicSponsorship = await this.previewSponsorship(userId, {
@@ -995,7 +1084,10 @@ export class UsersService {
           ? 'Visible balance is sufficient for a direct public send.'
           : 'Public balance is lower than the requested amount, so this route needs a top-up first.',
       sponsorship: publicSponsorship,
-      nextAction: publicBalance >= amount ? 'Send directly from the public wallet.' : `Fund ${body.asset} publicly before sending.`,
+      nextAction:
+        publicBalance >= amount
+          ? 'Send directly from the public wallet.'
+          : `Fund ${body.asset} publicly before sending.`,
     };
 
     const privateRoute = {
@@ -1023,14 +1115,13 @@ export class UsersService {
             : `Deposit ${body.asset} into the shielded pool before attempting this route.`,
     };
 
-    const recommendedMode =
-      privateRoute.ready
-        ? 'private'
-        : publicRoute.ready
-          ? 'public'
-          : privateRoute.canSplit
-            ? 'private'
-            : 'public';
+    const recommendedMode = privateRoute.ready
+      ? 'private'
+      : publicRoute.ready
+        ? 'public'
+        : privateRoute.canSplit
+          ? 'private'
+          : 'public';
 
     return {
       recipient: recipientPreview,
@@ -1066,7 +1157,10 @@ export class UsersService {
    * Helper for SwapService: Generate a random note for a user without saving it yet.
    * Returns the NoteFields and commitment.
    */
-  async generateNote(userId: string, amount: number): Promise<{ noteFields: NoteFields; commitmentBytes: Uint8Array }> {
+  async generateNote(
+    userId: string,
+    amount: number,
+  ): Promise<{ noteFields: NoteFields; commitmentBytes: Uint8Array }> {
     const randomBigInt = (): bigint => {
       const buf = Buffer.from(nacl.randomBytes(31));
       return BigInt('0x' + buf.toString('hex'));
@@ -1094,7 +1188,7 @@ export class UsersService {
     poolAddress: string,
     noteFields: NoteFields,
     commitmentBytes: Uint8Array,
-    txHash: string
+    txHash: string,
   ): Promise<void> {
     const user = await this.findById(userId);
     if (!user || !user.googleId) throw new Error('User not found for saving note');
@@ -1131,11 +1225,7 @@ export class UsersService {
       const viewKey = new Uint8Array(Buffer.from(viewKeyHex, 'hex'));
       const payload = JSON.stringify({ value: 1, asset });
       const noteNonce = nacl.randomBytes(nacl.secretbox.nonceLength);
-      const noteCiphertext = nacl.secretbox(
-        naclUtil.decodeUTF8(payload),
-        noteNonce,
-        viewKey,
-      );
+      const noteCiphertext = nacl.secretbox(naclUtil.decodeUTF8(payload), noteNonce, viewKey);
       const noteCombined = Buffer.concat([Buffer.from(noteNonce), Buffer.from(noteCiphertext)]);
       await this.encryptedNoteModel.create({
         commitment: '',
@@ -1155,14 +1245,18 @@ export class UsersService {
     userId: string,
     asset: 'USDC' | 'XLM',
     minValue?: bigint,
-  ): Promise<Array<{ label: bigint; value: bigint; nullifier: bigint; secret: bigint; commitment: string }>> {
+  ): Promise<
+    Array<{ label: bigint; value: bigint; nullifier: bigint; secret: bigint; commitment: string }>
+  > {
     const user = await this.findById(userId);
     if (!user || !user.googleId) return [];
 
     const poolAddress =
       asset === 'USDC'
         ? (getContractAddress('SHIELDED_POOL_ADDRESS') ?? '')
-        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? getContractAddress('SHIELDED_POOL_ADDRESS') ?? '');
+        : (getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ??
+          getContractAddress('SHIELDED_POOL_ADDRESS') ??
+          '');
     if (!poolAddress) return [];
 
     const encKey = this.authService.getDecryptionKeyForUser(user, user.googleId, user.email);
@@ -1170,7 +1264,13 @@ export class UsersService {
       .find({ userId: user._id, asset, poolAddress, spent: false })
       .exec();
 
-    const out: Array<{ label: bigint; value: bigint; nullifier: bigint; secret: bigint; commitment: string }> = [];
+    const out: Array<{
+      label: bigint;
+      value: bigint;
+      nullifier: bigint;
+      secret: bigint;
+      commitment: string;
+    }> = [];
     for (const note of notes) {
       try {
         const combined = Buffer.from(note.ciphertext, 'base64');
@@ -1258,7 +1358,9 @@ export class UsersService {
         const hashHex = nullifierHash.toString(16).padStart(64, '0');
 
         // Debug logging
-        console.log(`[markNoteSpent] Checking note ${note._id}: ComputedHash=${hashHex} vs Target=${targetHex}`);
+        console.log(
+          `[markNoteSpent] Checking note ${note._id}: ComputedHash=${hashHex} vs Target=${targetHex}`,
+        );
 
         if (hashHex === targetHex) {
           console.log(`[markNoteSpent] Marked note ${note._id} as spent (matched hash)`);
@@ -1270,14 +1372,20 @@ export class UsersService {
         console.warn(`[markNoteSpent] Error processing note ${note._id}:`, e);
       }
     }
-    console.warn(`[markNoteSpent] No note found for nullifier ${nullifierHex}. Checked ${notes.length} notes.`);
+    console.warn(
+      `[markNoteSpent] No note found for nullifier ${nullifierHex}. Checked ${notes.length} notes.`,
+    );
   }
 
   /**
    * Split a note by withdrawing it to public and re-depositing the exact required amount.
    * The change remains in the public balance.
    */
-  async splitNote(userId: string, asset: 'USDC' | 'XLM', amount: number): Promise<{ success: boolean; error?: string }> {
+  async splitNote(
+    userId: string,
+    asset: 'USDC' | 'XLM',
+    amount: number,
+  ): Promise<{ success: boolean; error?: string }> {
     const user = await this.findById(userId);
     if (!user || !user.googleId) return { success: false, error: 'User not found' };
 
@@ -1285,13 +1393,16 @@ export class UsersService {
 
     // 1. Find a note larger than amount
     const notes = await this.getSpendableNotes(user._id.toString(), asset);
-    const largerNote = notes.find(n => n.value > targetAmount);
+    const largerNote = notes.find((n) => n.value > targetAmount);
 
     if (!largerNote) {
       // Try merging: check if total balance is enough
       const total = notes.reduce((sum, n) => sum + n.value, 0n);
       if (total < targetAmount) {
-        return { success: false, error: `Insufficient private balance. Total: ${Number(total) / Number(UsersService.SCALE_FACTOR)}` };
+        return {
+          success: false,
+          error: `Insufficient private balance. Total: ${Number(total) / Number(UsersService.SCALE_FACTOR)}`,
+        };
       }
 
       // Merge strategy: Withdraw ALL notes, then deposit target amount.
@@ -1308,7 +1419,8 @@ export class UsersService {
       for (const n of notesToWithdraw) {
         const floatVal = Number(n.value) / Number(UsersService.SCALE_FACTOR);
         const wRes = await this.withdrawSelf(userId, asset, floatVal);
-        if (!wRes.success) return { success: false, error: `Failed to withdraw note during merge: ${wRes.error}` };
+        if (!wRes.success)
+          return { success: false, error: `Failed to withdraw note during merge: ${wRes.error}` };
       }
     } else {
       // 2. Withdraw the larger note
@@ -1319,7 +1431,7 @@ export class UsersService {
     }
 
     // 3. Wait a bit for ledger confirmation (simple delay for now, ideally watch event)
-    await new Promise(r => setTimeout(r, 6000));
+    await new Promise((r) => setTimeout(r, 6000));
 
     // 4. Deposit the EXACT amount
     console.log(`[splitNote] Re-depositing exact amount ${amount}...`);
@@ -1335,26 +1447,27 @@ export class UsersService {
       throw new Error('User not found');
     }
 
-    const [balances, privateBalances, pendingWithdrawals, recentHistory, withdrawalSponsorship] = await Promise.all([
-      this.getBalances(userId),
-      this.getPrivateBalance(userId),
-      this.pendingWithdrawalModel
-        .find({ recipientId: new Types.ObjectId(userId), processed: false })
-        .sort({ createdAt: -1 })
-        .limit(12)
-        .lean()
-        .exec(),
-      this.getHistory(userId),
-      Promise.all(
-        (['USDC', 'XLM'] as const).map(async (asset) => {
-          const preview = await this.previewSponsorship(userId, {
-            asset: asset as WalletAsset,
-            operation: 'withdraw_self',
-          });
-          return [asset, preview] as const;
-        }),
-      ),
-    ]);
+    const [balances, privateBalances, pendingWithdrawals, recentHistory, withdrawalSponsorship] =
+      await Promise.all([
+        this.getBalances(userId),
+        this.getPrivateBalance(userId),
+        this.pendingWithdrawalModel
+          .find({ recipientId: new Types.ObjectId(userId), processed: false })
+          .sort({ createdAt: -1 })
+          .limit(12)
+          .lean()
+          .exec(),
+        this.getHistory(userId),
+        Promise.all(
+          (['USDC', 'XLM'] as const).map(async (asset) => {
+            const preview = await this.previewSponsorship(userId, {
+              asset: asset as WalletAsset,
+              operation: 'withdraw_self',
+            });
+            return [asset, preview] as const;
+          }),
+        ),
+      ]);
 
     const totalPendingByAsset = pendingWithdrawals.reduce(
       (accumulator, item: any) => {
@@ -1393,29 +1506,33 @@ export class UsersService {
         sponsorship: {
           supported: false,
           sponsored: false,
-          reason: pendingWithdrawals.length > 0
-            ? 'Pending withdrawals will process with the existing proof queue.'
-            : 'No pending withdrawals waiting for processing.',
+          reason:
+            pendingWithdrawals.length > 0
+              ? 'Pending withdrawals will process with the existing proof queue.'
+              : 'No pending withdrawals waiting for processing.',
         },
       },
     ];
 
-    const privateShareUsdc = Number(balances.usdc) + Number(privateBalances.usdc) > 0
-      ? Number(
-          (
-            (Number(privateBalances.usdc) / (Number(balances.usdc) + Number(privateBalances.usdc))) *
-            100
-          ).toFixed(1),
-        )
-      : 0;
-    const privateShareXlm = Number(balances.xlm) + Number(privateBalances.xlm) > 0
-      ? Number(
-          (
-            (Number(privateBalances.xlm) / (Number(balances.xlm) + Number(privateBalances.xlm))) *
-            100
-          ).toFixed(1),
-        )
-      : 0;
+    const privateShareUsdc =
+      Number(balances.usdc) + Number(privateBalances.usdc) > 0
+        ? Number(
+            (
+              (Number(privateBalances.usdc) /
+                (Number(balances.usdc) + Number(privateBalances.usdc))) *
+              100
+            ).toFixed(1),
+          )
+        : 0;
+    const privateShareXlm =
+      Number(balances.xlm) + Number(privateBalances.xlm) > 0
+        ? Number(
+            (
+              (Number(privateBalances.xlm) / (Number(balances.xlm) + Number(privateBalances.xlm))) *
+              100
+            ).toFixed(1),
+          )
+        : 0;
 
     return {
       user: {
@@ -1458,7 +1575,8 @@ export class UsersService {
         pendingWithdrawals.length > 0
           ? `There are ${pendingWithdrawals.length} pending withdrawals still waiting on processing or retries.`
           : 'No pending withdrawals are queued right now.',
-        Number(privateBalances.usdc) > Number(balances.usdc) || Number(privateBalances.xlm) > Number(balances.xlm)
+        Number(privateBalances.usdc) > Number(balances.usdc) ||
+        Number(privateBalances.xlm) > Number(balances.xlm)
           ? 'A larger share of your holdings currently sits in private notes than in the public wallet.'
           : 'Your public wallet currently carries at least as much visible balance as your private pool.',
       ],
@@ -1469,8 +1587,18 @@ export class UsersService {
     const objectId = new Types.ObjectId(userId);
     const [audits, encNotes, withdrawals, swaps] = await Promise.all([
       this.transactionAuditService.listRecentForUser(userId, 40),
-      this.encryptedNoteModel.find({ recipientId: objectId }).sort({ createdAt: -1 }).limit(20).lean().exec(),
-      this.pendingWithdrawalModel.find({ recipientId: objectId }).sort({ createdAt: -1 }).limit(20).lean().exec(),
+      this.encryptedNoteModel
+        .find({ recipientId: objectId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean()
+        .exec(),
+      this.pendingWithdrawalModel
+        .find({ recipientId: objectId })
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean()
+        .exec(),
       this.swapModel
         .find({ $or: [{ aliceId: objectId }, { bobId: objectId }] })
         .sort({ updatedAt: -1, createdAt: -1 })
@@ -1515,9 +1643,12 @@ export class UsersService {
       const metadata = (audit.metadata ?? {}) as Record<string, unknown>;
       const operation = String(audit.operation ?? 'activity');
       const swapId = typeof metadata.swapId === 'string' ? metadata.swapId : undefined;
-      const swapMatch = swapId ? swaps.find((swap: any) => swap._id?.toString() === swapId) : undefined;
+      const swapMatch = swapId
+        ? swaps.find((swap: any) => swap._id?.toString() === swapId)
+        : undefined;
       const participantRole = swapMatch
-        ? (swapMatch.aliceId as any)?.toString?.() === userId || (swapMatch.aliceId as any)?._id?.toString?.() === userId
+        ? (swapMatch.aliceId as any)?.toString?.() === userId ||
+          (swapMatch.aliceId as any)?._id?.toString?.() === userId
           ? 'alice'
           : 'bob'
         : undefined;
@@ -1531,7 +1662,13 @@ export class UsersService {
       timeline.push({
         id: `audit:${audit._id}`,
         source: 'audit',
-        category: operation.startsWith('swap') ? 'swap' : operation.includes('private') || operation.includes('deposit') || operation.includes('withdraw') ? 'private' : 'wallet',
+        category: operation.startsWith('swap')
+          ? 'swap'
+          : operation.includes('private') ||
+              operation.includes('deposit') ||
+              operation.includes('withdraw')
+            ? 'private'
+            : 'wallet',
         operation,
         title: this.describeAuditTitle(operation),
         detail:
@@ -1543,7 +1680,8 @@ export class UsersService {
         state: audit.state,
         asset: audit.asset,
         amount: audit.amount,
-        amountDisplay: audit.amount || (operation.includes('private') ? 'Private amount' : 'Not available'),
+        amountDisplay:
+          audit.amount || (operation.includes('private') ? 'Private amount' : 'Not available'),
         txHash: audit.txHash,
         sponsorship: {
           attempted: !!audit.sponsorshipAttempted,
@@ -1574,7 +1712,10 @@ export class UsersService {
         source: 'encrypted_note',
         category: 'private',
         operation: note.txHash === 'pending' ? 'pending_private_transfer' : 'encrypted_note_credit',
-        title: note.txHash === 'pending' ? 'Pending private transfer received' : 'Private balance note received',
+        title:
+          note.txHash === 'pending'
+            ? 'Pending private transfer received'
+            : 'Private balance note received',
         detail:
           note.txHash === 'pending'
             ? 'A private note was created for you, but the matching withdrawal or indexer confirmation has not completed yet.'
@@ -1596,7 +1737,8 @@ export class UsersService {
         },
         privateFlow: true,
         date: note.createdAt,
-        statusLabel: note.txHash === 'pending' ? 'Waiting on chain follow-up' : 'Private note stored',
+        statusLabel:
+          note.txHash === 'pending' ? 'Waiting on chain follow-up' : 'Private note stored',
       });
     }
 
@@ -1643,7 +1785,9 @@ export class UsersService {
     for (const swap of swaps as any[]) {
       const swapId = swap._id?.toString?.() ?? String(swap._id);
       const role =
-        swap.aliceId?.toString?.() === userId || swap.aliceId?._id?.toString?.() === userId ? 'alice' : 'bob';
+        swap.aliceId?.toString?.() === userId || swap.aliceId?._id?.toString?.() === userId
+          ? 'alice'
+          : 'bob';
       const counterparty = role === 'alice' ? swap.bobId?.username : swap.aliceId?.username;
       const hasAudit = audits.some((audit: any) => String(audit.metadata?.swapId ?? '') === swapId);
       if (hasAudit || knownSwapIds.has(`swap:${swapId}`)) {
@@ -1682,14 +1826,20 @@ export class UsersService {
           role,
           counterparty,
         },
-        privateFlow: swap.proofStatus === 'ready' || swap.status === 'proofs_pending' || swap.status === 'proofs_ready' || swap.status === 'executing',
+        privateFlow:
+          swap.proofStatus === 'ready' ||
+          swap.status === 'proofs_pending' ||
+          swap.status === 'proofs_ready' ||
+          swap.status === 'executing',
         date: swap.updatedAt ?? swap.createdAt,
         statusLabel: this.describeSwapState(swap.status, swap.executionStatus),
       });
     }
 
     return timeline
-      .sort((left, right) => new Date(right.date ?? 0).getTime() - new Date(left.date ?? 0).getTime())
+      .sort(
+        (left, right) => new Date(right.date ?? 0).getTime() - new Date(left.date ?? 0).getTime(),
+      )
       .slice(0, 60);
   }
 
@@ -1717,8 +1867,10 @@ export class UsersService {
         category,
         count: entries.length,
         completed: entries.filter((item) => item.state === 'success').length,
-        pending: entries.filter((item) => item.state === 'pending' || item.state === 'queued').length,
-        failed: entries.filter((item) => item.state === 'failed' || item.state === 'retryable').length,
+        pending: entries.filter((item) => item.state === 'pending' || item.state === 'queued')
+          .length,
+        failed: entries.filter((item) => item.state === 'failed' || item.state === 'retryable')
+          .length,
         latestAt: entries[0]?.date,
       };
     });
@@ -1783,24 +1935,29 @@ export class UsersService {
 
     const actionQueue = [
       pending.find((item) => item.operation === 'pending_withdrawal'),
-      pending.find((item) => item.operation === 'swap_lifecycle' || item.operation.startsWith('swap_')),
+      pending.find(
+        (item) => item.operation === 'swap_lifecycle' || item.operation.startsWith('swap_'),
+      ),
       failed.find((item) => item.state === 'retryable'),
-      pending.find((item) => item.indexing?.status === 'pending' || item.indexing?.status === 'lagging'),
+      pending.find(
+        (item) => item.indexing?.status === 'pending' || item.indexing?.status === 'lagging',
+      ),
       !walletWorkspace.balances.private.usdc && !walletWorkspace.balances.private.xlm
-        ? {
+        ? ({
             id: 'synthetic:first_private_deposit',
             source: 'audit',
             category: 'private',
             operation: 'first_private_deposit',
             title: 'Seed the first private balance',
-            detail: 'No private balance activity is present yet, so the first deposit will unlock the full shielded history trail.',
+            detail:
+              'No private balance activity is present yet, so the first deposit will unlock the full shielded history trail.',
             state: 'queued',
             amountDisplay: 'Not started',
             sponsorship: { attempted: false, sponsored: false },
             privateFlow: true,
             date: new Date().toISOString(),
             statusLabel: 'Suggested next action',
-          } as any
+          } as any)
         : undefined,
     ]
       .filter(Boolean)
@@ -1864,22 +2021,25 @@ export class UsersService {
   }
 
   async getActionCenterWorkspace(userId: string) {
-    const [user, walletWorkspace, historyWorkspace, authWorkspace, readiness, recentSwaps, audits] = await Promise.all([
-      this.findById(userId),
-      this.getWalletWorkspace(userId),
-      this.getHistoryWorkspace(userId),
-      this.authService.getAuthWorkspace(userId),
-      this.opsService.getReadiness(),
-      this.swapModel
-        .find({ $or: [{ aliceId: new Types.ObjectId(userId) }, { bobId: new Types.ObjectId(userId) }] })
-        .populate('aliceId', 'username')
-        .populate('bobId', 'username')
-        .sort({ updatedAt: -1, createdAt: -1 })
-        .limit(24)
-        .lean()
-        .exec(),
-      this.transactionAuditService.listRecentForUser(userId, 24),
-    ]);
+    const [user, walletWorkspace, historyWorkspace, authWorkspace, readiness, recentSwaps, audits] =
+      await Promise.all([
+        this.findById(userId),
+        this.getWalletWorkspace(userId),
+        this.getHistoryWorkspace(userId),
+        this.authService.getAuthWorkspace(userId),
+        this.opsService.getReadiness(),
+        this.swapModel
+          .find({
+            $or: [{ aliceId: new Types.ObjectId(userId) }, { bobId: new Types.ObjectId(userId) }],
+          })
+          .populate('aliceId', 'username')
+          .populate('bobId', 'username')
+          .sort({ updatedAt: -1, createdAt: -1 })
+          .limit(24)
+          .lean()
+          .exec(),
+        this.transactionAuditService.listRecentForUser(userId, 24),
+      ]);
 
     if (!user) {
       throw new Error('User not found');
@@ -1927,7 +2087,10 @@ export class UsersService {
     if (!authWorkspace.wallet.private.hasShieldedBalance) {
       priorities.push({
         id: 'private-seed',
-        severity: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.public.hasUsdcTrustline ? 'caution' : 'info',
+        severity:
+          authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.public.hasUsdcTrustline
+            ? 'caution'
+            : 'info',
         lane: 'private',
         label: 'Seed the first private balance',
         detail:
@@ -2003,31 +2166,47 @@ export class UsersService {
       if (swap.status === 'requested' && participantRole === 'bob') {
         action = 'Accept buyer request';
         urgency = 'caution';
-        detail = 'A buyer has already requested this swap and it still needs seller acceptance before any proof or settlement work can begin.';
-      } else if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_bob' && participantRole === 'bob') {
+        detail =
+          'A buyer has already requested this swap and it still needs seller acceptance before any proof or settlement work can begin.';
+      } else if (
+        swap.status === 'proofs_pending' &&
+        swap.proofStatus === 'awaiting_bob' &&
+        participantRole === 'bob'
+      ) {
         action = 'Prepare seller proof';
         urgency = 'critical';
-        detail = 'The buyer side is already waiting on the seller proof, so this private swap cannot progress until an exact-value note is prepared.';
-      } else if (swap.status === 'proofs_pending' && swap.proofStatus === 'awaiting_alice' && participantRole === 'alice') {
+        detail =
+          'The buyer side is already waiting on the seller proof, so this private swap cannot progress until an exact-value note is prepared.';
+      } else if (
+        swap.status === 'proofs_pending' &&
+        swap.proofStatus === 'awaiting_alice' &&
+        participantRole === 'alice'
+      ) {
         action = 'Prepare buyer proof';
         urgency = 'critical';
-        detail = 'The seller side is already waiting on the buyer proof, so this private swap still needs the initiating side to finish note preparation.';
+        detail =
+          'The seller side is already waiting on the buyer proof, so this private swap still needs the initiating side to finish note preparation.';
       } else if (swap.status === 'proofs_ready') {
         action = 'Execute private swap';
         urgency = 'critical';
-        detail = 'Both proofs are ready, so this swap is now blocked on someone actually finalizing private execution.';
+        detail =
+          'Both proofs are ready, so this swap is now blocked on someone actually finalizing private execution.';
       } else if (swap.status === 'executing') {
         action = 'Watch active execution';
         urgency = 'info';
-        detail = 'This swap is already in execution, so the right next step is status monitoring rather than another user action.';
+        detail =
+          'This swap is already in execution, so the right next step is status monitoring rather than another user action.';
       } else if (swap.status === 'failed') {
         action = 'Review failed swap';
         urgency = 'critical';
-        detail = swap.lastError || 'A recent swap failed and should be reviewed before more market flow is accepted.';
+        detail =
+          swap.lastError ||
+          'A recent swap failed and should be reviewed before more market flow is accepted.';
       } else {
         action = 'Inspect swap lifecycle';
         urgency = 'info';
-        detail = 'This swap has meaningful lifecycle signal, but no immediate intervention is required.';
+        detail =
+          'This swap has meaningful lifecycle signal, but no immediate intervention is required.';
       }
 
       return {
@@ -2067,16 +2246,25 @@ export class UsersService {
     });
 
     const quickWins = [
-      !authWorkspace.wallet.public.hasXlm ? 'Use Friendbot to fund visible XLM before trying trustlines or deposits.' : undefined,
+      !authWorkspace.wallet.public.hasXlm
+        ? 'Use Friendbot to fund visible XLM before trying trustlines or deposits.'
+        : undefined,
       !authWorkspace.wallet.public.hasUsdcTrustline && authWorkspace.wallet.public.hasXlm
         ? 'Add the USDC trustline so stablecoin funding and swap routes stop failing at the wallet layer.'
         : undefined,
-      walletWorkspace.pending.count > 0 ? 'Process queued withdrawals to get delayed private funds back into visible balances.' : undefined,
-      !authWorkspace.wallet.private.hasShieldedBalance && (authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.public.hasUsdcTrustline)
+      walletWorkspace.pending.count > 0
+        ? 'Process queued withdrawals to get delayed private funds back into visible balances.'
+        : undefined,
+      !authWorkspace.wallet.private.hasShieldedBalance &&
+      (authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.public.hasUsdcTrustline)
         ? 'Make the first deposit into the shielded pool so private send and private swap routes become realistic.'
         : undefined,
-      topFailureBucket ? `Review ${topFailureBucket.label.toLowerCase()} in history before repeating the same action path.` : undefined,
-      readiness.status !== 'ready' ? 'Check status before assuming a balance or note issue is your fault instead of an indexing delay.' : undefined,
+      topFailureBucket
+        ? `Review ${topFailureBucket.label.toLowerCase()} in history before repeating the same action path.`
+        : undefined,
+      readiness.status !== 'ready'
+        ? 'Check status before assuming a balance or note issue is your fault instead of an indexing delay.'
+        : undefined,
     ].filter(Boolean);
 
     const routeCards = [
@@ -2084,50 +2272,65 @@ export class UsersService {
         id: 'funding',
         label: 'Funding desk',
         href: '/wallet/fund',
-        readiness: !authWorkspace.wallet.public.hasXlm ? 'critical' : !authWorkspace.wallet.public.hasUsdcTrustline ? 'caution' : 'ready',
-        detail: 'Handle faucet funding, trustline preparation, and the first private-balance seeding plan.',
+        readiness: !authWorkspace.wallet.public.hasXlm
+          ? 'critical'
+          : !authWorkspace.wallet.public.hasUsdcTrustline
+            ? 'caution'
+            : 'ready',
+        detail:
+          'Handle faucet funding, trustline preparation, and the first private-balance seeding plan.',
       },
       {
         id: 'wallet',
         label: 'Wallet workspace',
         href: '/wallet',
         readiness: walletWorkspace.pending.count > 0 ? 'caution' : 'ready',
-        detail: 'Process pending withdrawals, inspect sponsorship, and manage public/private balances directly.',
+        detail:
+          'Process pending withdrawals, inspect sponsorship, and manage public/private balances directly.',
       },
       {
         id: 'send',
         label: 'Send planner',
         href: '/wallet/send',
-        readiness: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance ? 'ready' : 'caution',
-        detail: 'Preflight public or private transfers with route guidance instead of trial-and-error submissions.',
+        readiness:
+          authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
+            ? 'ready'
+            : 'caution',
+        detail:
+          'Preflight public or private transfers with route guidance instead of trial-and-error submissions.',
       },
       {
         id: 'swap',
         label: 'Swap desk',
         href: '/swap/my',
-        readiness: urgentSwapItems.length > 0 ? 'critical' : swapSummaries.length > 0 ? 'caution' : 'info',
-        detail: 'Handle requests, proofs, private execution, and failed market flows that are still waiting on action.',
+        readiness:
+          urgentSwapItems.length > 0 ? 'critical' : swapSummaries.length > 0 ? 'caution' : 'info',
+        detail:
+          'Handle requests, proofs, private execution, and failed market flows that are still waiting on action.',
       },
       {
         id: 'history',
         label: 'History desk',
         href: '/history',
         readiness: historyWorkspace.summary.failed > 0 ? 'caution' : 'ready',
-        detail: 'Use the timeline and failure buckets when the same issue is starting to repeat across recent actions.',
+        detail:
+          'Use the timeline and failure buckets when the same issue is starting to repeat across recent actions.',
       },
       {
         id: 'status',
         label: 'Status workspace',
         href: '/status',
         readiness: readiness.status === 'ready' ? 'ready' : 'critical',
-        detail: 'Inspect lagging pools and operational freshness before blaming the wallet or market layer.',
+        detail:
+          'Inspect lagging pools and operational freshness before blaming the wallet or market layer.',
       },
       {
         id: 'account',
         label: 'Account center',
         href: '/account',
         readiness: 'info',
-        detail: 'Review identity, session state, and guarded account controls without leaving the workspace flow.',
+        detail:
+          'Review identity, session state, and guarded account controls without leaving the workspace flow.',
       },
     ];
 
@@ -2228,13 +2431,14 @@ export class UsersService {
   }
 
   async getContactsWorkspace(userId: string) {
-    const [user, historyWorkspace, sendWorkspace, walletWorkspace, authWorkspace] = await Promise.all([
-      this.findById(userId),
-      this.getHistoryWorkspace(userId),
-      this.getSendWorkspace(userId),
-      this.getWalletWorkspace(userId),
-      this.authService.getAuthWorkspace(userId),
-    ]);
+    const [user, historyWorkspace, sendWorkspace, walletWorkspace, authWorkspace] =
+      await Promise.all([
+        this.findById(userId),
+        this.getHistoryWorkspace(userId),
+        this.getSendWorkspace(userId),
+        this.getWalletWorkspace(userId),
+        this.authService.getAuthWorkspace(userId),
+      ]);
 
     if (!user) {
       throw new Error('User not found');
@@ -2297,7 +2501,8 @@ export class UsersService {
           const userRecord = await this.findByUsername(contact.counterparty);
           const publicKey = userRecord?.stellarPublicKey;
           const preferredAsset =
-            contact.privateFlows >= contact.swapFlows && Number(walletWorkspace.balances.private.usdc || 0) > 0
+            contact.privateFlows >= contact.swapFlows &&
+            Number(walletWorkspace.balances.private.usdc || 0) > 0
               ? 'USDC'
               : Number(walletWorkspace.balances.public.xlm || 0) > 0
                 ? 'XLM'
@@ -2325,7 +2530,8 @@ export class UsersService {
 
           const recommendedRoute =
             preview?.recommendedMode ??
-            (contact.privateFlows > contact.interactions / 2 && authWorkspace.wallet.private.hasShieldedBalance
+            (contact.privateFlows > contact.interactions / 2 &&
+            authWorkspace.wallet.private.hasShieldedBalance
               ? 'private'
               : 'public');
 
@@ -2387,8 +2593,10 @@ export class UsersService {
     );
 
     const routeBreakdown = {
-      publicPreferred: contactCards.filter((contact) => contact.recommendedRoute === 'public').length,
-      privatePreferred: contactCards.filter((contact) => contact.recommendedRoute === 'private').length,
+      publicPreferred: contactCards.filter((contact) => contact.recommendedRoute === 'public')
+        .length,
+      privatePreferred: contactCards.filter((contact) => contact.recommendedRoute === 'private')
+        .length,
       blocked: contactCards.filter((contact) => contact.routeReadiness === 'blocked').length,
       attention: contactCards.filter((contact) => contact.routeReadiness === 'attention').length,
     };
@@ -2399,7 +2607,8 @@ export class UsersService {
             id: 'contacts-fund-xlm',
             severity: 'critical',
             title: 'Fund visible XLM before using contacts as a send list',
-            detail: 'Most contact relationships will still fail on public sends or route planning until the visible wallet can pay fees.',
+            detail:
+              'Most contact relationships will still fail on public sends or route planning until the visible wallet can pay fees.',
             href: '/wallet/fund',
           }
         : undefined,
@@ -2408,7 +2617,8 @@ export class UsersService {
             id: 'contacts-seed-private',
             severity: 'warning',
             title: 'Seed a private balance before leaning on shielded contacts',
-            detail: 'Several counterparties are good candidates for private routing, but the wallet still needs an actual private balance first.',
+            detail:
+              'Several counterparties are good candidates for private routing, but the wallet still needs an actual private balance first.',
             href: '/wallet/fund',
           }
         : undefined,
@@ -2470,7 +2680,14 @@ export class UsersService {
   }
 
   async getPortfolioWorkspace(userId: string) {
-    const [user, walletWorkspace, historyWorkspace, actionWorkspace, contactsWorkspace, authWorkspace] = await Promise.all([
+    const [
+      user,
+      walletWorkspace,
+      historyWorkspace,
+      actionWorkspace,
+      contactsWorkspace,
+      authWorkspace,
+    ] = await Promise.all([
       this.findById(userId),
       this.getWalletWorkspace(userId),
       this.getHistoryWorkspace(userId),
@@ -2529,10 +2746,13 @@ export class UsersService {
       },
     ];
 
-    const categoryCounts = historyWorkspace.categoryBreakdown.reduce<Record<string, number>>((acc, item: any) => {
-      acc[item.category] = item.count;
-      return acc;
-    }, {});
+    const categoryCounts = historyWorkspace.categoryBreakdown.reduce<Record<string, number>>(
+      (acc, item: any) => {
+        acc[item.category] = item.count;
+        return acc;
+      },
+      {},
+    );
 
     const momentumScore = Math.max(
       5,
@@ -2606,7 +2826,8 @@ export class UsersService {
       totalUsdc === 0 && authWorkspace.wallet.public.hasUsdcTrustline
         ? 'USDC trustline exists, but the portfolio still lacks stablecoin exposure. Seed USDC if you want better swap and fiat flexibility.'
         : undefined,
-      contactsWorkspace.summary.privatePreferred > contactsWorkspace.summary.publicPreferred && privateExposure === 0
+      contactsWorkspace.summary.privatePreferred > contactsWorkspace.summary.publicPreferred &&
+      privateExposure === 0
         ? 'Your relationship graph is skewing toward private-friendly counterparties, but the wallet still lacks shielded capital to use that advantage.'
         : undefined,
       historyWorkspace.summary.failed > 0
@@ -2640,8 +2861,10 @@ export class UsersService {
           contactsWorkspace.contacts.length > 0
             ? Number(
                 (
-                  contactsWorkspace.contacts.reduce((sum: number, item: any) => sum + item.trustScore, 0) /
-                  contactsWorkspace.contacts.length
+                  contactsWorkspace.contacts.reduce(
+                    (sum: number, item: any) => sum + item.trustScore,
+                    0,
+                  ) / contactsWorkspace.contacts.length
                 ).toFixed(1),
               )
             : 0,
@@ -2687,29 +2910,42 @@ export class UsersService {
         id: 'funding',
         label: 'Funding desk',
         href: '/wallet/fund',
-        tone: !authWorkspace.wallet.public.hasXlm ? 'critical' : !authWorkspace.wallet.private.hasShieldedBalance ? 'warning' : 'info',
-        detail: 'Use this when the portfolio still needs XLM, trustline preparation, or a first shielded deposit.',
+        tone: !authWorkspace.wallet.public.hasXlm
+          ? 'critical'
+          : !authWorkspace.wallet.private.hasShieldedBalance
+            ? 'warning'
+            : 'info',
+        detail:
+          'Use this when the portfolio still needs XLM, trustline preparation, or a first shielded deposit.',
       },
       {
         id: 'wallet',
         label: 'Wallet workspace',
         href: '/wallet',
         tone: walletWorkspace.pending.count > 0 ? 'warning' : 'info',
-        detail: 'Best place to process pending withdrawals and correct public/private balance drift.',
+        detail:
+          'Best place to process pending withdrawals and correct public/private balance drift.',
       },
       {
         id: 'actions',
         label: 'Action center',
         href: '/actions',
-        tone: actionWorkspace.summary.critical > 0 ? 'critical' : actionWorkspace.summary.caution > 0 ? 'warning' : 'info',
-        detail: 'Use this when route blockers, proof queues, or readiness issues are already waiting in line.',
+        tone:
+          actionWorkspace.summary.critical > 0
+            ? 'critical'
+            : actionWorkspace.summary.caution > 0
+              ? 'warning'
+              : 'info',
+        detail:
+          'Use this when route blockers, proof queues, or readiness issues are already waiting in line.',
       },
       {
         id: 'contacts',
         label: 'Contacts workspace',
         href: '/contacts',
         tone: contactsWorkspace.summary.blocked > 0 ? 'warning' : 'info',
-        detail: 'Use this when the portfolio should lean on known counterparties instead of cold routing.',
+        detail:
+          'Use this when the portfolio should lean on known counterparties instead of cold routing.',
       },
     ];
 
@@ -2733,20 +2969,18 @@ export class UsersService {
       flowMix,
       actionLinks,
       portfolioHealth: {
-        tone:
-          !authWorkspace.wallet.public.hasXlm
-            ? 'blocked'
-            : historyWorkspace.summary.failed > historyWorkspace.summary.completed
+        tone: !authWorkspace.wallet.public.hasXlm
+          ? 'blocked'
+          : historyWorkspace.summary.failed > historyWorkspace.summary.completed
+            ? 'attention'
+            : actionWorkspace.lanes.ops.status !== 'ready'
               ? 'attention'
-              : actionWorkspace.lanes.ops.status !== 'ready'
-                ? 'attention'
-                : 'ready',
-        headline:
-          !authWorkspace.wallet.public.hasXlm
-            ? 'Portfolio still needs visible funding before it can act like a real operating wallet.'
-            : privateExposure === 0
-              ? 'Portfolio is usable, but it is still overly dependent on visible balances.'
-              : 'Portfolio is diversified across visible and shielded balance surfaces.',
+              : 'ready',
+        headline: !authWorkspace.wallet.public.hasXlm
+          ? 'Portfolio still needs visible funding before it can act like a real operating wallet.'
+          : privateExposure === 0
+            ? 'Portfolio is usable, but it is still overly dependent on visible balances.'
+            : 'Portfolio is diversified across visible and shielded balance surfaces.',
       },
       recentTitles: historyWorkspace.latestEntries.slice(0, 8).map((entry: any) => entry.title),
       updatedAt: new Date().toISOString(),
@@ -2788,7 +3022,9 @@ export class UsersService {
     const totalPrivate = privateXlm + privateUsdc;
     const totalExposure = totalPublic + totalPrivate;
     const topContact = contactsWorkspace.contacts[0];
-    const readyRoutes = portfolioWorkspace.routeRisk.filter((item: any) => item.tone === 'ready').length;
+    const readyRoutes = portfolioWorkspace.routeRisk.filter(
+      (item: any) => item.tone === 'ready',
+    ).length;
     const laggingPools = readiness.lagging.length;
     const privatePreferredContacts = contactsWorkspace.summary.privatePreferred;
     const failureCount = historyWorkspace.summary.failed;
@@ -2799,14 +3035,16 @@ export class UsersService {
     const hasPrivateBalance = authWorkspace.wallet.private.hasShieldedBalance;
 
     const sponsorshipPairs = await Promise.all(
-      ([
-        { operation: 'public_send', asset: WalletAsset.XLM },
-        { operation: 'public_send', asset: WalletAsset.USDC },
-        { operation: 'deposit', asset: WalletAsset.XLM },
-        { operation: 'deposit', asset: WalletAsset.USDC },
-        { operation: 'withdraw_self', asset: WalletAsset.XLM },
-        { operation: 'withdraw_self', asset: WalletAsset.USDC },
-      ] as const).map(async (entry) => ({
+      (
+        [
+          { operation: 'public_send', asset: WalletAsset.XLM },
+          { operation: 'public_send', asset: WalletAsset.USDC },
+          { operation: 'deposit', asset: WalletAsset.XLM },
+          { operation: 'deposit', asset: WalletAsset.USDC },
+          { operation: 'withdraw_self', asset: WalletAsset.XLM },
+          { operation: 'withdraw_self', asset: WalletAsset.USDC },
+        ] as const
+      ).map(async (entry) => ({
         operation: entry.operation,
         asset: entry.asset,
         preview: await this.previewSponsorship(userId, {
@@ -2845,8 +3083,13 @@ export class UsersService {
           totalPublic > 0
             ? 'Visible funds are already available, so public sends, trustline management, and fast recovery remain reachable.'
             : 'Visible funds are missing, so direct wallet operations still depend on fresh funding first.',
-        nextStep: totalPublic > 0 ? 'Use wallet, send, or fiat routes without waiting on a first deposit.' : 'Open the funding desk and add visible XLM first.',
-        sponsorship: sponsorBoard.find((item) => item.operation === 'public_send' && item.asset === 'XLM') ?? sponsorBoard[0],
+        nextStep:
+          totalPublic > 0
+            ? 'Use wallet, send, or fiat routes without waiting on a first deposit.'
+            : 'Open the funding desk and add visible XLM first.',
+        sponsorship:
+          sponsorBoard.find((item) => item.operation === 'public_send' && item.asset === 'XLM') ??
+          sponsorBoard[0],
       },
       {
         id: 'private_wallet_lane',
@@ -2865,7 +3108,9 @@ export class UsersService {
             : totalPublic > 0
               ? 'Make the first deposit to unlock private sends and more protected market execution.'
               : 'Fund visible balance first, then seed a first private deposit.',
-        sponsorship: sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM') ?? sponsorBoard[2],
+        sponsorship:
+          sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM') ??
+          sponsorBoard[2],
       },
       {
         id: 'relationship_lane',
@@ -2878,7 +3123,12 @@ export class UsersService {
         nextStep: topContact
           ? `Use contacts or send planning before repeating a transfer to @${topContact.username}.`
           : 'Build the first reliable transfer relationship before leaning on route memory.',
-        sponsorship: sponsorBoard.find((item) => item.operation === 'public_send' && item.asset === (topContact?.preferredAsset ?? 'USDC')) ?? sponsorBoard[1],
+        sponsorship:
+          sponsorBoard.find(
+            (item) =>
+              item.operation === 'public_send' &&
+              item.asset === (topContact?.preferredAsset ?? 'USDC'),
+          ) ?? sponsorBoard[1],
       },
       {
         id: 'ops_lane',
@@ -2891,8 +3141,14 @@ export class UsersService {
             : laggingPools > 0
               ? 'Lagging indexer pools can distort how fast the product reflects deposits, withdrawals, and proof outcomes.'
               : 'Dependencies still need operator attention before the app should be trusted as fully current.',
-        nextStep: readiness.status === 'ready' ? 'Use the product normally while monitoring the status desk.' : 'Open status and remediation surfaces before assuming balances are fresh.',
-        sponsorship: sponsorBoard.find((item) => item.operation === 'withdraw_self' && item.asset === 'USDC') ?? sponsorBoard[5],
+        nextStep:
+          readiness.status === 'ready'
+            ? 'Use the product normally while monitoring the status desk.'
+            : 'Open status and remediation surfaces before assuming balances are fresh.',
+        sponsorship:
+          sponsorBoard.find(
+            (item) => item.operation === 'withdraw_self' && item.asset === 'USDC',
+          ) ?? sponsorBoard[5],
       },
     ];
 
@@ -2906,22 +3162,29 @@ export class UsersService {
         headline: hasFunding
           ? 'Visible XLM is already funded, so the wallet has the minimum capital needed for fees and direct actions.'
           : 'The fastest way to improve every route is still to add visible XLM first.',
-        detail:
-          hasFunding
-            ? 'This scenario is already in good shape. From here the playbook is about maintaining enough visible balance to keep public sends, trustline actions, and recovery flows cheap and predictable.'
-            : 'Without visible XLM the wallet remains brittle. Deposits, trustline setup, public sends, and even fallback flows all feel worse until fees are funded.',
+        detail: hasFunding
+          ? 'This scenario is already in good shape. From here the playbook is about maintaining enough visible balance to keep public sends, trustline actions, and recovery flows cheap and predictable.'
+          : 'Without visible XLM the wallet remains brittle. Deposits, trustline setup, public sends, and even fallback flows all feel worse until fees are funded.',
         status: hasFunding ? 'Executable now' : 'Blocked by missing visible XLM',
         requirements: [
-          hasFunding ? 'Visible XLM is present for fees and direct payment routes.' : 'Friendbot or another XLM funding path must succeed first.',
-          hasTrustline ? 'USDC trustline is already reachable once stablecoin liquidity is available.' : 'Trustline can be added immediately after XLM funding.',
+          hasFunding
+            ? 'Visible XLM is present for fees and direct payment routes.'
+            : 'Friendbot or another XLM funding path must succeed first.',
+          hasTrustline
+            ? 'USDC trustline is already reachable once stablecoin liquidity is available.'
+            : 'Trustline can be added immediately after XLM funding.',
           readiness.status === 'ready'
             ? 'Indexer and readiness surfaces are healthy enough for the wallet to feel current.'
             : 'Ops freshness should still be checked if new balances do not appear quickly.',
         ],
         blockers: [
           !hasFunding ? 'Public fee balance is still zero.' : undefined,
-          laggingPools > 0 ? `${laggingPools} pool lane(s) are lagging and may delay confidence in follow-up flows.` : undefined,
-          failureCount > 0 ? `${failureCount} recent failed or retryable actions mean the first next step should stay simple and visible.` : undefined,
+          laggingPools > 0
+            ? `${laggingPools} pool lane(s) are lagging and may delay confidence in follow-up flows.`
+            : undefined,
+          failureCount > 0
+            ? `${failureCount} recent failed or retryable actions mean the first next step should stay simple and visible.`
+            : undefined,
         ].filter(Boolean),
         steps: [
           'Open the funding desk and confirm the account has testnet XLM.',
@@ -2955,16 +3218,22 @@ export class UsersService {
           : totalPublic > 0
             ? 'A first private deposit is the cleanest way to unlock the app’s differentiated behavior.'
             : 'Private flow is still blocked because the wallet lacks visible capital to deposit.',
-        detail:
-          hasPrivateBalance
-            ? 'This scenario is no longer theoretical. The wallet already has note-based capital, which means the next decision is about shaping or using it well.'
-            : totalPublic > 0
-              ? 'The product has visible funds available, but until some of that capital is deposited into the shielded pool, private sends and protected route planning stay mostly aspirational.'
-              : 'There is no visible source balance yet, so a private note cannot be created. Funding comes first.',
-        status: hasPrivateBalance ? 'Executable now' : totalPublic > 0 ? 'Ready after deposit' : 'Blocked until visible funding exists',
+        detail: hasPrivateBalance
+          ? 'This scenario is no longer theoretical. The wallet already has note-based capital, which means the next decision is about shaping or using it well.'
+          : totalPublic > 0
+            ? 'The product has visible funds available, but until some of that capital is deposited into the shielded pool, private sends and protected route planning stay mostly aspirational.'
+            : 'There is no visible source balance yet, so a private note cannot be created. Funding comes first.',
+        status: hasPrivateBalance
+          ? 'Executable now'
+          : totalPublic > 0
+            ? 'Ready after deposit'
+            : 'Blocked until visible funding exists',
         requirements: [
-          totalPublic > 0 ? 'Visible balance exists to fund the initial deposit.' : 'Visible balance is still required before a deposit can be made.',
-          sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM')?.supported
+          totalPublic > 0
+            ? 'Visible balance exists to fund the initial deposit.'
+            : 'Visible balance is still required before a deposit can be made.',
+          sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM')
+            ?.supported
             ? 'Deposit sponsorship policy is available for at least one asset.'
             : 'Deposit sponsorship may fall back to the user fee path.',
           readiness.status === 'ready'
@@ -2973,8 +3242,12 @@ export class UsersService {
         ],
         blockers: [
           !totalPublic ? 'No visible source balance is available for a first deposit.' : undefined,
-          !hasTrustline && publicUsdc === 0 ? 'USDC trustline is not ready yet, which limits stablecoin private seeding.' : undefined,
-          laggingPools > 0 ? 'Lagging indexer pools may slow confidence after the deposit settles.' : undefined,
+          !hasTrustline && publicUsdc === 0
+            ? 'USDC trustline is not ready yet, which limits stablecoin private seeding.'
+            : undefined,
+          laggingPools > 0
+            ? 'Lagging indexer pools may slow confidence after the deposit settles.'
+            : undefined,
         ].filter(Boolean),
         steps: [
           'Choose the asset whose visible balance you can afford to move into the shielded lane.',
@@ -2991,7 +3264,12 @@ export class UsersService {
           { label: 'Private XLM', value: walletWorkspace.balances.private.xlm },
           { label: 'Private USDC', value: walletWorkspace.balances.private.usdc },
           { label: 'Private contacts', value: String(privatePreferredContacts) },
-          { label: 'Deposit sponsorship', value: sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM')?.tone ?? 'blocked' },
+          {
+            label: 'Deposit sponsorship',
+            value:
+              sponsorBoard.find((item) => item.operation === 'deposit' && item.asset === 'XLM')
+                ?.tone ?? 'blocked',
+          },
         ],
         recommendation: hasPrivateBalance
           ? 'Use existing private capital deliberately instead of letting it sit idle without route advantage.'
@@ -3006,13 +3284,16 @@ export class UsersService {
         headline: topContact
           ? `@${topContact.username} is your strongest reusable route today.`
           : 'No trusted counterparty is strong enough yet to anchor a repeat route.',
-        detail:
-          topContact
-            ? `This scenario turns relationship history into execution confidence. ${topContact.interactions} prior touch(es), ${topContact.privateFlows} private flow(s), and a trust score of ${topContact.trustScore} mean this is the least-cold send relationship in the workspace.`
-            : 'Before a repeat route can be treated as a safe default, the wallet needs at least one successful, well-understood transfer relationship to learn from.',
-        status: topContact ? `Recommended via ${topContact.recommendedRoute}` : 'Blocked by missing relationship signal',
+        detail: topContact
+          ? `This scenario turns relationship history into execution confidence. ${topContact.interactions} prior touch(es), ${topContact.privateFlows} private flow(s), and a trust score of ${topContact.trustScore} mean this is the least-cold send relationship in the workspace.`
+          : 'Before a repeat route can be treated as a safe default, the wallet needs at least one successful, well-understood transfer relationship to learn from.',
+        status: topContact
+          ? `Recommended via ${topContact.recommendedRoute}`
+          : 'Blocked by missing relationship signal',
         requirements: [
-          topContact ? `Known counterparty: @${topContact.username}.` : 'A repeat counterparty is not established yet.',
+          topContact
+            ? `Known counterparty: @${topContact.username}.`
+            : 'A repeat counterparty is not established yet.',
           topContact?.routeReadiness === 'ready'
             ? 'Recommended route already looks executable.'
             : topContact
@@ -3027,7 +3308,9 @@ export class UsersService {
           topContact && topContact.routeReadiness !== 'ready'
             ? `Route to @${topContact.username} still needs preparation before it should be treated as low-risk.`
             : undefined,
-          topContact && topContact.failedTouches > 0 ? `${topContact.failedTouches} prior failure touch(es) mean route memory should be used with care.` : undefined,
+          topContact && topContact.failedTouches > 0
+            ? `${topContact.failedTouches} prior failure touch(es) mean route memory should be used with care.`
+            : undefined,
         ].filter(Boolean),
         steps: [
           'Open the contacts workspace and review the recommended route for the strongest counterparty.',
@@ -3064,7 +3347,10 @@ export class UsersService {
           pendingCount > 0 || failureCount > 0
             ? `There are ${pendingCount} pending item(s) and ${failureCount} failed or retryable touch(es). Until some of that is cleared, portfolio quality and route confidence can be deceptively lower than the raw balances suggest.`
             : 'Recent activity is not carrying unusual queue pressure or repeated failures, so the workspace can safely bias toward new execution instead of remediation.',
-        status: pendingCount > 0 || failureCount > 0 ? 'Remediation advised' : 'Clean enough to keep building',
+        status:
+          pendingCount > 0 || failureCount > 0
+            ? 'Remediation advised'
+            : 'Clean enough to keep building',
         requirements: [
           pendingCount > 0
             ? 'Pending withdrawals or queued actions should be reviewed for settlement or retry.'
@@ -3077,8 +3363,12 @@ export class UsersService {
             : 'Degraded ops posture means some cleanup results may take longer to feel visible.',
         ],
         blockers: [
-          laggingPools > 0 ? 'Lagging pools can blur whether a cleanup has fully settled.' : undefined,
-          pendingCount === 0 && failureCount === 0 ? undefined : 'Jumping straight into more activity can compound ambiguity instead of improving clarity.',
+          laggingPools > 0
+            ? 'Lagging pools can blur whether a cleanup has fully settled.'
+            : undefined,
+          pendingCount === 0 && failureCount === 0
+            ? undefined
+            : 'Jumping straight into more activity can compound ambiguity instead of improving clarity.',
         ].filter(Boolean),
         steps: [
           'Open wallet or history depending on whether queue pressure or failures are more visible.',
@@ -3106,7 +3396,12 @@ export class UsersService {
         id: 'grow_market_and_fiat_optionality',
         title: 'Grow market and fiat optionality',
         lane: 'market',
-        tone: totalExposure > 0 ? actionWorkspace.lanes.market.total > 0 ? 'ready' : 'attention' : 'blocked',
+        tone:
+          totalExposure > 0
+            ? actionWorkspace.lanes.market.total > 0
+              ? 'ready'
+              : 'attention'
+            : 'blocked',
         destination: actionWorkspace.lanes.market.total > 0 ? '/swap' : '/fiat',
         headline:
           totalExposure > 0
@@ -3125,7 +3420,9 @@ export class UsersService {
               : 'Planning-ready but early'
             : 'Blocked until capital exists',
         requirements: [
-          totalExposure > 0 ? 'At least some funded capital exists to support swap or fiat planning.' : 'Capital must be funded before meaningful market planning can happen.',
+          totalExposure > 0
+            ? 'At least some funded capital exists to support swap or fiat planning.'
+            : 'Capital must be funded before meaningful market planning can happen.',
           authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
             ? 'At least one route lane is funded enough to explore execution planning.'
             : 'Neither public nor private lanes are funded enough yet.',
@@ -3138,7 +3435,9 @@ export class UsersService {
           actionWorkspace.lanes.market.proofsPending > 0
             ? `${actionWorkspace.lanes.market.proofsPending} proof-stage task(s) are still waiting and may deserve cleanup before more growth moves.`
             : undefined,
-          !authWorkspace.wallet.public.hasUsdcTrustline ? 'Stablecoin optionality is still limited until the USDC trustline is enabled.' : undefined,
+          !authWorkspace.wallet.public.hasUsdcTrustline
+            ? 'Stablecoin optionality is still limited until the USDC trustline is enabled.'
+            : undefined,
         ].filter(Boolean),
         steps: [
           'Open swap if you want liquidity discovery, queue visibility, or offer-driven execution planning.',
@@ -3189,7 +3488,7 @@ export class UsersService {
         id: 'playbook-send',
         label: 'Send planner',
         href: '/wallet/send',
-        tone: topContact ? topContact.routeReadiness === 'ready' ? 'info' : 'warning' : 'warning',
+        tone: topContact ? (topContact.routeReadiness === 'ready' ? 'info' : 'warning') : 'warning',
         detail: topContact
           ? `Best for validating amount shape and route choice before sending to @${topContact.username}.`
           : 'Use this to create the first clean route relationship and teach the system a reusable counterparty pattern.',
@@ -3199,9 +3498,10 @@ export class UsersService {
         label: 'Status cockpit',
         href: '/status',
         tone: readiness.status === 'ready' ? 'info' : 'warning',
-        detail: readiness.status === 'ready'
-          ? 'Use this to confirm the app stays fresh while you keep executing.'
-          : 'Open this before trusting stale-looking notes, balances, or queue results.',
+        detail:
+          readiness.status === 'ready'
+            ? 'Use this to confirm the app stays fresh while you keep executing.'
+            : 'Open this before trusting stale-looking notes, balances, or queue results.',
       },
     ];
 
@@ -3233,7 +3533,8 @@ export class UsersService {
               : 'Balanced',
       marketShape:
         actionWorkspace.lanes.market.total > 0
-          ? actionWorkspace.lanes.market.proofsReady > 0 || actionWorkspace.lanes.market.requested > 0
+          ? actionWorkspace.lanes.market.proofsReady > 0 ||
+            actionWorkspace.lanes.market.requested > 0
             ? 'Active with follow-up pressure'
             : 'Active and relatively calm'
           : 'Early',
@@ -3276,7 +3577,16 @@ export class UsersService {
   }
 
   async getSettlementWorkspace(userId: string) {
-    const [user, walletWorkspace, historyWorkspace, actionWorkspace, portfolioWorkspace, authWorkspace, readiness, audits] = await Promise.all([
+    const [
+      user,
+      walletWorkspace,
+      historyWorkspace,
+      actionWorkspace,
+      portfolioWorkspace,
+      authWorkspace,
+      readiness,
+      audits,
+    ] = await Promise.all([
       this.findById(userId),
       this.getWalletWorkspace(userId),
       this.getHistoryWorkspace(userId),
@@ -3300,7 +3610,10 @@ export class UsersService {
     const privatePendingEntries = historyWorkspace.latestEntries.filter(
       (item: any) =>
         item.privateFlow &&
-        (item.state === 'pending' || item.state === 'queued' || item.indexing?.status === 'pending' || item.indexing?.status === 'lagging'),
+        (item.state === 'pending' ||
+          item.state === 'queued' ||
+          item.indexing?.status === 'pending' ||
+          item.indexing?.status === 'lagging'),
     );
     const retryableEntries = historyWorkspace.latestEntries.filter(
       (item: any) => item.state === 'retryable' || item.state === 'failed',
@@ -3310,9 +3623,13 @@ export class UsersService {
         item.privateFlow &&
         (item.indexing?.status === 'lagging' || item.indexing?.status === 'pending'),
     );
-    const sponsoredEntries = historyWorkspace.latestEntries.filter((item: any) => item.sponsorship?.sponsored);
+    const sponsoredEntries = historyWorkspace.latestEntries.filter(
+      (item: any) => item.sponsorship?.sponsored,
+    );
     const publicSettlementEntries = historyWorkspace.latestEntries.filter(
-      (item: any) => !item.privateFlow && (item.state === 'pending' || item.state === 'queued' || item.state === 'retryable'),
+      (item: any) =>
+        !item.privateFlow &&
+        (item.state === 'pending' || item.state === 'queued' || item.state === 'retryable'),
     );
 
     const totals = pendingWithdrawals.reduce(
@@ -3340,7 +3657,12 @@ export class UsersService {
           asset,
           operation: 'withdraw_self',
           amount: 1,
-        }).then((preview) => ({ key: `withdraw_self_${asset}`, asset, operation: 'withdraw_self', preview })),
+        }).then((preview) => ({
+          key: `withdraw_self_${asset}`,
+          asset,
+          operation: 'withdraw_self',
+          preview,
+        })),
       ]),
     );
 
@@ -3365,20 +3687,17 @@ export class UsersService {
 
       const assetTone =
         item.asset === 'USDC'
-          ? Number(walletWorkspace.balances.public.usdc || 0) === 0 && Number(walletWorkspace.balances.private.usdc || 0) > 0
+          ? Number(walletWorkspace.balances.public.usdc || 0) === 0 &&
+            Number(walletWorkspace.balances.private.usdc || 0) > 0
             ? 'attention'
             : 'info'
-          : Number(walletWorkspace.balances.public.xlm || 0) === 0 && Number(walletWorkspace.balances.private.xlm || 0) > 0
+          : Number(walletWorkspace.balances.public.xlm || 0) === 0 &&
+              Number(walletWorkspace.balances.private.xlm || 0) > 0
             ? 'attention'
             : 'info';
 
       const status =
-        matchingAudit?.state ??
-        (item.processed
-          ? 'success'
-          : item.txHash
-            ? 'pending'
-            : 'queued');
+        matchingAudit?.state ?? (item.processed ? 'success' : item.txHash ? 'pending' : 'queued');
 
       return {
         id: item._id.toString(),
@@ -3408,10 +3727,7 @@ export class UsersService {
             ? 'Stablecoin withdrawals are useful when the next route needs visible liquidity or fiat planning.'
             : 'XLM withdrawals are useful when the next route needs fee coverage, visible payments, or simpler recovery.',
         ],
-        destination:
-          status === 'queued'
-            ? '/wallet'
-            : '/history',
+        destination: status === 'queued' ? '/wallet' : '/history',
         assetTone,
       };
     });
@@ -3423,7 +3739,8 @@ export class UsersService {
         tone:
           publicSettlementEntries.length > 0
             ? 'attention'
-            : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+                Number(walletWorkspace.balances.public.usdc || 0) > 0
               ? 'ready'
               : 'blocked',
         count: publicSettlementEntries.length,
@@ -3431,7 +3748,8 @@ export class UsersService {
         detail:
           publicSettlementEntries.length > 0
             ? 'Visible settlement is already carrying pending or retry pressure, so the public wallet may not fully reflect intended state yet.'
-            : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+                Number(walletWorkspace.balances.public.usdc || 0) > 0
               ? 'Visible balances are already funded enough that settlement can complete without depending entirely on fresh deposits.'
               : 'Visible settlement remains weak because the wallet still lacks meaningful public liquidity.',
         nextStep:
@@ -3447,7 +3765,8 @@ export class UsersService {
             ? 'attention'
             : authWorkspace.wallet.private.hasShieldedBalance
               ? 'ready'
-              : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+              : Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+                  Number(walletWorkspace.balances.public.usdc || 0) > 0
                 ? 'info'
                 : 'blocked',
         count: privatePendingEntries.length,
@@ -3457,7 +3776,8 @@ export class UsersService {
             ? 'Private settlement is waiting on proof completion, queue processing, or indexer freshness, so note-based balances may still be in motion.'
             : authWorkspace.wallet.private.hasShieldedBalance
               ? 'Shielded balances already exist and no unusual pending settlement pressure is visible right now.'
-              : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+              : Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+                  Number(walletWorkspace.balances.public.usdc || 0) > 0
                 ? 'Shielded settlement is reachable, but it still depends on the first deposit before any private balance can settle back out.'
                 : 'Shielded settlement is blocked until visible capital exists and a private note can be created.',
         nextStep:
@@ -3490,7 +3810,12 @@ export class UsersService {
       {
         id: 'ops_lane',
         label: 'Indexer freshness lane',
-        tone: readiness.status === 'ready' ? 'ready' : readiness.lagging.length > 0 ? 'attention' : 'blocked',
+        tone:
+          readiness.status === 'ready'
+            ? 'ready'
+            : readiness.lagging.length > 0
+              ? 'attention'
+              : 'blocked',
         count: readiness.lagging.length,
         total: `${readiness.counts.trackedPools} tracked pools`,
         detail:
@@ -3533,19 +3858,22 @@ export class UsersService {
         id: 'public_to_private',
         label: 'Public to private',
         tone:
-          Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+          Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+          Number(walletWorkspace.balances.public.usdc || 0) > 0
             ? authWorkspace.wallet.private.hasShieldedBalance
               ? 'ready'
               : 'info'
             : 'blocked',
         summary:
-          Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+          Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+          Number(walletWorkspace.balances.public.usdc || 0) > 0
             ? authWorkspace.wallet.private.hasShieldedBalance
               ? 'Visible capital can continue feeding the private lane when you want to deepen protected route capacity.'
               : 'The wallet has visible capital, so the first private settlement path is available whenever you want to unlock it.'
             : 'Public capital is missing, so the next private settlement path cannot start yet.',
         nextStep:
-          Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.public.usdc || 0) > 0
+          Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+          Number(walletWorkspace.balances.public.usdc || 0) > 0
             ? 'Use deposit flows deliberately instead of over-exposing the visible lane.'
             : 'Fund visible balance first before trying to improve private settlement posture.',
       },
@@ -3593,7 +3921,8 @@ export class UsersService {
       {
         id: 'indexer_pressure',
         label: 'Indexer pressure',
-        tone: laggingPrivateEntries.length > 0 || readiness.lagging.length > 0 ? 'attention' : 'ready',
+        tone:
+          laggingPrivateEntries.length > 0 || readiness.lagging.length > 0 ? 'attention' : 'ready',
         detail:
           laggingPrivateEntries.length > 0 || readiness.lagging.length > 0
             ? 'Settlement may feel stale because the indexer still has lagging work across private note visibility or pool sync lanes.'
@@ -3603,11 +3932,13 @@ export class UsersService {
         id: 'public_liquidity_pressure',
         label: 'Public liquidity pressure',
         tone:
-          Number(walletWorkspace.balances.public.xlm || 0) === 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+          Number(walletWorkspace.balances.public.xlm || 0) === 0 &&
+          Number(walletWorkspace.balances.public.usdc || 0) === 0
             ? 'blocked'
             : 'info',
         detail:
-          Number(walletWorkspace.balances.public.xlm || 0) === 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+          Number(walletWorkspace.balances.public.xlm || 0) === 0 &&
+          Number(walletWorkspace.balances.public.usdc || 0) === 0
             ? 'Visible settlement is fragile because there is no public balance to absorb or confirm next steps cleanly.'
             : 'Public liquidity exists, so settlement does not rely entirely on future funding.',
       },
@@ -3641,25 +3972,28 @@ export class UsersService {
             href: '/status',
           }
         : undefined,
-      !authWorkspace.wallet.private.hasShieldedBalance && portfolioWorkspace.summary.publicExposure > 0
+      !authWorkspace.wallet.private.hasShieldedBalance &&
+      portfolioWorkspace.summary.publicExposure > 0
         ? {
             id: 'settlement-seed-private',
             severity: 'info',
             title: 'Seed private capital so settlement has a second lane',
-            detail: 'Visible exposure exists, but all settlement still depends on public routing and public confirmation.',
+            detail:
+              'Visible exposure exists, but all settlement still depends on public routing and public confirmation.',
             href: '/wallet',
           }
         : undefined,
     ].filter(Boolean);
 
     const settlementTimeline = historyWorkspace.latestEntries
-      .filter((item: any) =>
-        item.operation.includes('deposit') ||
-        item.operation.includes('withdraw') ||
-        item.operation.includes('split') ||
-        item.indexing?.status === 'pending' ||
-        item.indexing?.status === 'lagging' ||
-        item.privateFlow,
+      .filter(
+        (item: any) =>
+          item.operation.includes('deposit') ||
+          item.operation.includes('withdraw') ||
+          item.operation.includes('split') ||
+          item.indexing?.status === 'pending' ||
+          item.indexing?.status === 'lagging' ||
+          item.privateFlow,
       )
       .slice(0, 18)
       .map((item: any) => ({
@@ -3684,13 +4018,16 @@ export class UsersService {
         privateBalance: walletWorkspace.balances.private.usdc,
         queuedAmount: totals.usdc.toFixed(7).replace(/\.?0+$/, '') || '0',
         tone:
-          Number(walletWorkspace.balances.private.usdc || 0) > 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+          Number(walletWorkspace.balances.private.usdc || 0) > 0 &&
+          Number(walletWorkspace.balances.public.usdc || 0) === 0
             ? 'attention'
-            : Number(walletWorkspace.balances.public.usdc || 0) > 0 || Number(walletWorkspace.balances.private.usdc || 0) > 0
+            : Number(walletWorkspace.balances.public.usdc || 0) > 0 ||
+                Number(walletWorkspace.balances.private.usdc || 0) > 0
               ? 'ready'
               : 'blocked',
         detail:
-          Number(walletWorkspace.balances.private.usdc || 0) > 0 && Number(walletWorkspace.balances.public.usdc || 0) === 0
+          Number(walletWorkspace.balances.private.usdc || 0) > 0 &&
+          Number(walletWorkspace.balances.public.usdc || 0) === 0
             ? 'USDC value exists privately, but visible stablecoin settlement still depends on withdrawal processing.'
             : Number(walletWorkspace.balances.public.usdc || 0) > 0
               ? 'USDC is already visible enough to support swap, fiat, or repeat payment routes.'
@@ -3702,13 +4039,16 @@ export class UsersService {
         privateBalance: walletWorkspace.balances.private.xlm,
         queuedAmount: totals.xlm.toFixed(7).replace(/\.?0+$/, '') || '0',
         tone:
-          Number(walletWorkspace.balances.private.xlm || 0) > 0 && Number(walletWorkspace.balances.public.xlm || 0) === 0
+          Number(walletWorkspace.balances.private.xlm || 0) > 0 &&
+          Number(walletWorkspace.balances.public.xlm || 0) === 0
             ? 'attention'
-            : Number(walletWorkspace.balances.public.xlm || 0) > 0 || Number(walletWorkspace.balances.private.xlm || 0) > 0
+            : Number(walletWorkspace.balances.public.xlm || 0) > 0 ||
+                Number(walletWorkspace.balances.private.xlm || 0) > 0
               ? 'ready'
               : 'blocked',
         detail:
-          Number(walletWorkspace.balances.private.xlm || 0) > 0 && Number(walletWorkspace.balances.public.xlm || 0) === 0
+          Number(walletWorkspace.balances.private.xlm || 0) > 0 &&
+          Number(walletWorkspace.balances.public.xlm || 0) === 0
             ? 'Fee-bearing XLM is trapped privately until withdrawal settlement catches up.'
             : Number(walletWorkspace.balances.public.xlm || 0) > 0
               ? 'Visible XLM already supports fee payment and fast public settlement.'
@@ -3811,16 +4151,20 @@ export class UsersService {
       totalCapital: Number(totalCapital.toFixed(4)),
       visibleCapital: Number(totalVisible.toFixed(4)),
       shieldedCapital: Number(totalShielded.toFixed(4)),
-      queuedCapital: Number((Number(walletWorkspace.pending.byAsset.xlm || 0) + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
-      dryPowder:
-        Number(
-          (
-            Math.max(publicXlm, 0) +
-            Math.max(publicUsdc, 0) +
-            Math.max(privateXlm * 0.4, 0) +
-            Math.max(privateUsdc * 0.4, 0)
-          ).toFixed(4),
-        ),
+      queuedCapital: Number(
+        (
+          Number(walletWorkspace.pending.byAsset.xlm || 0) +
+          Number(walletWorkspace.pending.byAsset.usdc || 0)
+        ).toFixed(4),
+      ),
+      dryPowder: Number(
+        (
+          Math.max(publicXlm, 0) +
+          Math.max(publicUsdc, 0) +
+          Math.max(privateXlm * 0.4, 0) +
+          Math.max(privateUsdc * 0.4, 0)
+        ).toFixed(4),
+      ),
     };
 
     const deploymentWindows = [
@@ -3845,7 +4189,8 @@ export class UsersService {
         label: 'Shielded send window',
         tone: totalShielded > 0 ? 'ready' : totalVisible > 0 ? 'attention' : 'blocked',
         availableCapital: Number(totalShielded.toFixed(4)),
-        routeCount: privatePreferredContacts > 0 ? privatePreferredContacts : totalShielded > 0 ? 1 : 0,
+        routeCount:
+          privatePreferredContacts > 0 ? privatePreferredContacts : totalShielded > 0 ? 1 : 0,
         summary:
           totalShielded > 0
             ? 'Shielded balances are deployable for protected sends, note-driven planning, and more privacy-native route choices.'
@@ -3864,12 +4209,10 @@ export class UsersService {
         id: 'market_window',
         label: 'Market liquidity window',
         tone:
-          totalCapital > 0
-            ? marketLoad > 0 || openOffers > 0
-              ? 'ready'
-              : 'attention'
-            : 'blocked',
-        availableCapital: Number((publicUsdc + privateUsdc + publicXlm * 0.3 + privateXlm * 0.3).toFixed(4)),
+          totalCapital > 0 ? (marketLoad > 0 || openOffers > 0 ? 'ready' : 'attention') : 'blocked',
+        availableCapital: Number(
+          (publicUsdc + privateUsdc + publicXlm * 0.3 + privateXlm * 0.3).toFixed(4),
+        ),
         routeCount: openOffers + marketLoad,
         summary:
           totalCapital > 0
@@ -3894,7 +4237,14 @@ export class UsersService {
             : totalVisible > 0
               ? 'ready'
               : 'blocked',
-        availableCapital: Number((publicXlm + publicUsdc + Number(walletWorkspace.pending.byAsset.xlm || 0) + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+        availableCapital: Number(
+          (
+            publicXlm +
+            publicUsdc +
+            Number(walletWorkspace.pending.byAsset.xlm || 0) +
+            Number(walletWorkspace.pending.byAsset.usdc || 0)
+          ).toFixed(4),
+        ),
         routeCount: settlementWorkspace.summary.readyLanes,
         summary:
           queuedWithdrawals > 0 || retryable > 0
@@ -3903,7 +4253,8 @@ export class UsersService {
               ? 'Visible capital and a calm queue make recovery and follow-up deployment relatively safe.'
               : 'Recovery flexibility is weak because the public lane lacks enough settled liquidity.',
         strongestAsset:
-          publicXlm + Number(walletWorkspace.pending.byAsset.xlm || 0) >= publicUsdc + Number(walletWorkspace.pending.byAsset.usdc || 0)
+          publicXlm + Number(walletWorkspace.pending.byAsset.xlm || 0) >=
+          publicUsdc + Number(walletWorkspace.pending.byAsset.usdc || 0)
             ? 'XLM'
             : 'USDC',
         nextMove:
@@ -3933,7 +4284,12 @@ export class UsersService {
         label: 'Public USDC',
         amount: publicUsdc,
         share: totalCapital > 0 ? Number(((publicUsdc / totalCapital) * 100).toFixed(1)) : 0,
-        tone: publicUsdc > 0 ? 'ready' : authWorkspace.wallet.public.hasUsdcTrustline ? 'attention' : 'blocked',
+        tone:
+          publicUsdc > 0
+            ? 'ready'
+            : authWorkspace.wallet.public.hasUsdcTrustline
+              ? 'attention'
+              : 'blocked',
         role: 'stable visible payments, fiat readiness, and public market use',
         risk:
           publicUsdc > 0
@@ -3994,14 +4350,20 @@ export class UsersService {
         id: 'private_idle',
         label: 'Shielded idle capital',
         tone:
-          totalShielded > 0 && queuedWithdrawals === 0 && privatePreferredContacts === 0 && marketLoad === 0
+          totalShielded > 0 &&
+          queuedWithdrawals === 0 &&
+          privatePreferredContacts === 0 &&
+          marketLoad === 0
             ? 'attention'
             : totalShielded > 0
               ? 'info'
               : 'blocked',
         amount: Number(totalShielded.toFixed(4)),
         detail:
-          totalShielded > 0 && queuedWithdrawals === 0 && privatePreferredContacts === 0 && marketLoad === 0
+          totalShielded > 0 &&
+          queuedWithdrawals === 0 &&
+          privatePreferredContacts === 0 &&
+          marketLoad === 0
             ? 'Private capital exists, but there is little current route pressure using its privacy advantage.'
             : totalShielded > 0
               ? 'Shielded capital is present, though it may still be strategically useful even if not immediately deployed.'
@@ -4011,7 +4373,12 @@ export class UsersService {
         id: 'queued_idle',
         label: 'Queued capital',
         tone: queuedWithdrawals > 0 ? 'attention' : 'ready',
-        amount: Number((Number(walletWorkspace.pending.byAsset.xlm || 0) + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+        amount: Number(
+          (
+            Number(walletWorkspace.pending.byAsset.xlm || 0) +
+            Number(walletWorkspace.pending.byAsset.usdc || 0)
+          ).toFixed(4),
+        ),
         detail:
           queuedWithdrawals > 0
             ? 'This capital is not idle in a helpful sense. It is waiting on settlement and should not be counted twice.'
@@ -4021,7 +4388,7 @@ export class UsersService {
         id: 'blocked_relationship_liquidity',
         label: 'Blocked relationship liquidity',
         tone: blockedContacts > 0 ? 'attention' : 'ready',
-        amount: Number(((blockedContacts * 0.5) + privatePreferredContacts * 0.2).toFixed(1)),
+        amount: Number((blockedContacts * 0.5 + privatePreferredContacts * 0.2).toFixed(1)),
         detail:
           blockedContacts > 0
             ? `${blockedContacts} contact route(s) are blocked, which means some liquidity cannot be used as cleanly as the raw balances suggest.`
@@ -4049,7 +4416,12 @@ export class UsersService {
       {
         id: 'seed-private-optionality',
         title: 'Convert visible capital into private optionality',
-        tone: totalVisible > 0 && totalShielded === 0 ? 'attention' : totalShielded > 0 ? 'ready' : 'blocked',
+        tone:
+          totalVisible > 0 && totalShielded === 0
+            ? 'attention'
+            : totalShielded > 0
+              ? 'ready'
+              : 'blocked',
         destination: '/wallet',
         capital: Number((publicUsdc + publicXlm).toFixed(4)),
         summary:
@@ -4074,7 +4446,9 @@ export class UsersService {
               ? 'attention'
               : 'blocked',
         destination: publicUsdc > 0 ? '/fiat' : '/settlement',
-        capital: Number((publicUsdc + privateUsdc + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4)),
+        capital: Number(
+          (publicUsdc + privateUsdc + Number(walletWorkspace.pending.byAsset.usdc || 0)).toFixed(4),
+        ),
         summary:
           publicUsdc > 0
             ? 'Stablecoin liquidity is already public enough for fiat, swaps, or repeat payments.'
@@ -4161,7 +4535,8 @@ export class UsersService {
             id: 'liquidity-fund-xlm',
             severity: 'critical',
             title: 'Restore visible XLM before trying to deploy capital elsewhere',
-            detail: 'Fee liquidity is the narrowest choke point in the whole system when visible XLM is absent.',
+            detail:
+              'Fee liquidity is the narrowest choke point in the whole system when visible XLM is absent.',
             href: '/wallet/fund',
           }
         : undefined,
@@ -4170,7 +4545,8 @@ export class UsersService {
             id: 'liquidity-seed-private',
             severity: 'warning',
             title: 'Create a private deployment lane instead of leaving all capital visible',
-            detail: 'Right now the wallet is over-dependent on public liquidity for every route choice.',
+            detail:
+              'Right now the wallet is over-dependent on public liquidity for every route choice.',
             href: '/wallet',
           }
         : undefined,
@@ -4179,7 +4555,8 @@ export class UsersService {
             id: 'liquidity-process-queue',
             severity: 'warning',
             title: 'Settle queued withdrawals before double-counting that capital',
-            detail: 'Queued value is real, but it is not fully redeployable until settlement completes.',
+            detail:
+              'Queued value is real, but it is not fully redeployable until settlement completes.',
             href: '/settlement',
           }
         : undefined,
@@ -4187,8 +4564,10 @@ export class UsersService {
         ? {
             id: 'liquidity-use-market',
             severity: 'info',
-            title: 'Use one market or fiat route so capital starts learning real deployment behavior',
-            detail: 'There is funded capital and active usage around the product, but your own deployment graph is still light.',
+            title:
+              'Use one market or fiat route so capital starts learning real deployment behavior',
+            detail:
+              'There is funded capital and active usage around the product, but your own deployment graph is still light.',
             href: '/swap',
           }
         : undefined,
@@ -4209,7 +4588,13 @@ export class UsersService {
         id: 'private-route',
         label: 'Private route',
         tone: totalShielded > 0 ? 'ready' : totalVisible > 0 ? 'attention' : 'blocked',
-        score: Math.max(0, Math.min(100, Math.round(privateXlm * 9 + privateUsdc * 9 + privatePreferredContacts * 6))),
+        score: Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(privateXlm * 9 + privateUsdc * 9 + privatePreferredContacts * 6),
+          ),
+        ),
         detail:
           totalShielded > 0
             ? 'Best for protected transfer and privacy-led deployment.'
@@ -4220,7 +4605,7 @@ export class UsersService {
       {
         id: 'market-route',
         label: 'Market route',
-        tone: totalCapital > 0 ? marketLoad > 0 || openOffers > 0 ? 'ready' : 'info' : 'blocked',
+        tone: totalCapital > 0 ? (marketLoad > 0 || openOffers > 0 ? 'ready' : 'info') : 'blocked',
         score: Math.max(0, Math.min(100, Math.round((openOffers + swaps) * 5 + totalCapital * 3))),
         detail:
           totalCapital > 0
@@ -4230,8 +4615,19 @@ export class UsersService {
       {
         id: 'recovery-route',
         label: 'Recovery route',
-        tone: queuedWithdrawals > 0 || retryable > 0 ? 'attention' : totalVisible > 0 ? 'ready' : 'blocked',
-        score: Math.max(0, Math.min(100, Math.round((publicXlm + publicUsdc) * 4 + settlementWorkspace.summary.readyLanes * 9))),
+        tone:
+          queuedWithdrawals > 0 || retryable > 0
+            ? 'attention'
+            : totalVisible > 0
+              ? 'ready'
+              : 'blocked',
+        score: Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round((publicXlm + publicUsdc) * 4 + settlementWorkspace.summary.readyLanes * 9),
+          ),
+        ),
         detail:
           queuedWithdrawals > 0 || retryable > 0
             ? 'Important right now because some capital still needs clarity before reuse.'
@@ -4266,7 +4662,9 @@ export class UsersService {
         windows: deploymentWindows.length,
         readyWindows: deploymentWindows.filter((item) => item.tone === 'ready').length,
         blockedWindows: deploymentWindows.filter((item) => item.tone === 'blocked').length,
-        routeScoreAverage: Math.round(routeRadar.reduce((sum, item) => sum + item.score, 0) / routeRadar.length),
+        routeScoreAverage: Math.round(
+          routeRadar.reduce((sum, item) => sum + item.score, 0) / routeRadar.length,
+        ),
         activeUsers,
         dryPowder: capitalSummary.dryPowder,
       },
@@ -4352,9 +4750,12 @@ export class UsersService {
   }
 
   private async resolveRecipientPreview(recipientIdentifier: string) {
-    const looksLikePublicKey = recipientIdentifier.startsWith('G') && recipientIdentifier.length === 56;
+    const looksLikePublicKey =
+      recipientIdentifier.startsWith('G') && recipientIdentifier.length === 56;
     const byUsername = looksLikePublicKey ? null : await this.findByUsername(recipientIdentifier);
-    const byPublicKey = looksLikePublicKey ? await this.findByStellarPublicKey(recipientIdentifier) : null;
+    const byPublicKey = looksLikePublicKey
+      ? await this.findByStellarPublicKey(recipientIdentifier)
+      : null;
     const resolvedUser = byUsername ?? byPublicKey;
 
     return {
@@ -4362,7 +4763,8 @@ export class UsersService {
       resolved: !!resolvedUser || looksLikePublicKey,
       type: resolvedUser ? 'user' : looksLikePublicKey ? 'public_key' : 'unknown',
       username: resolvedUser?.username,
-      stellarPublicKey: resolvedUser?.stellarPublicKey ?? (looksLikePublicKey ? recipientIdentifier : undefined),
+      stellarPublicKey:
+        resolvedUser?.stellarPublicKey ?? (looksLikePublicKey ? recipientIdentifier : undefined),
       reputation: resolvedUser?.reputation ?? null,
       displayLabel: resolvedUser?.username
         ? `@${resolvedUser.username}`
@@ -4379,7 +4781,11 @@ export class UsersService {
     state: string;
   }) {
     const detail = `${entry.detail} ${entry.indexing?.detail ?? ''}`.toLowerCase();
-    if (detail.includes('index') || entry.indexing?.status === 'pending' || entry.indexing?.status === 'lagging') {
+    if (
+      detail.includes('index') ||
+      entry.indexing?.status === 'pending' ||
+      entry.indexing?.status === 'lagging'
+    ) {
       return 'indexing_delay';
     }
     if (detail.includes('proof')) {
@@ -4409,7 +4815,9 @@ export class UsersService {
     }
   }
 
-  private computeHistoryVelocity(timeline: Array<{ date: string | Date | undefined; state: string }>) {
+  private computeHistoryVelocity(
+    timeline: Array<{ date: string | Date | undefined; state: string }>,
+  ) {
     const now = Date.now();
     const dayMs = 24 * 60 * 60 * 1000;
     const recent24h = timeline.filter((item) => {
@@ -4428,19 +4836,15 @@ export class UsersService {
       last24h: {
         total: recent24h.length,
         successful: successful24h,
-        pending: recent24h.filter((item) => item.state === 'pending' || item.state === 'queued').length,
+        pending: recent24h.filter((item) => item.state === 'pending' || item.state === 'queued')
+          .length,
       },
       last7d: {
         total: recent7d.length,
         successful: successful7d,
         dailyAverage: Number((recent7d.length / 7).toFixed(2)),
       },
-      momentum:
-        recent24h.length >= 8
-          ? 'high'
-          : recent24h.length >= 3
-            ? 'moderate'
-            : 'light',
+      momentum: recent24h.length >= 8 ? 'high' : recent24h.length >= 3 ? 'moderate' : 'light',
     };
   }
 }

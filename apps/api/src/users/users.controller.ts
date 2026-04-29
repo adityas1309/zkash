@@ -2,12 +2,17 @@ import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/comm
 import { Throttle } from '@nestjs/throttler';
 import { UsersService } from './users.service';
 import { SessionAuthGuard } from '../auth/guards/session.guard';
-import { BalanceActionDto, SendPaymentDto, SendPreviewDto, SponsorshipPreviewDto } from '../common/dto/wallet.dto';
+import {
+  BalanceActionDto,
+  SendPaymentDto,
+  SendPreviewDto,
+  SponsorshipPreviewDto,
+} from '../common/dto/wallet.dto';
 import { failureResponse, successResponse } from '../common/responses/transaction-response';
 
 @Controller('users')
 export class UsersController {
-  constructor(private usersService: UsersService) { }
+  constructor(private usersService: UsersService) {}
 
   @Get('me')
   @UseGuards(SessionAuthGuard)
@@ -20,7 +25,8 @@ export class UsersController {
     const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { stellarSecretKeyEncrypted, zkSpendingKeyEncrypted, zkViewKeyEncrypted, ...safe } = userObj;
+    const { stellarSecretKeyEncrypted, zkSpendingKeyEncrypted, zkViewKeyEncrypted, ...safe } =
+      userObj;
     return safe;
   }
 
@@ -119,7 +125,12 @@ export class UsersController {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async sendPayment(@Req() req: any, @Body() body: SendPaymentDto) {
     try {
-      const result = await this.usersService.sendPayment(req.user._id, body.recipient, body.asset, body.amount);
+      const result = await this.usersService.sendPayment(
+        req.user._id,
+        body.recipient,
+        body.asset,
+        body.amount,
+      );
       return successResponse('public_send', 'Public payment submitted successfully.', {
         txHash: result.txHash,
         indexing: { status: 'not_required' },
@@ -141,23 +152,35 @@ export class UsersController {
   @UseGuards(SessionAuthGuard)
   @Throttle({ default: { limit: 15, ttl: 60_000 } })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async sendPrivate(
-    @Req() req: any,
-    @Body() body: SendPaymentDto,
-  ) {
-    const result = await this.usersService.sendPrivate(req.user._id, body.recipient, body.asset, body.amount);
+  async sendPrivate(@Req() req: any, @Body() body: SendPaymentDto) {
+    const result = await this.usersService.sendPrivate(
+      req.user._id,
+      body.recipient,
+      body.asset,
+      body.amount,
+    );
     if (!result.success) {
       return failureResponse('private_send', result.error ?? 'Private payment failed.', {
         error: result.error,
-        indexing: { status: 'pending', detail: 'Recipient withdrawal indexing may still be pending.' },
+        indexing: {
+          status: 'pending',
+          detail: 'Recipient withdrawal indexing may still be pending.',
+        },
         sponsorship: { attempted: false, sponsored: false },
       });
     }
 
-    return successResponse('private_send', 'Private payment submitted. Recipient can process withdrawal after indexing.', {
-      indexing: { status: 'pending', detail: 'Recipient withdrawal will appear after the indexer processes the commitment.' },
-      sponsorship: { attempted: false, sponsored: false },
-    });
+    return successResponse(
+      'private_send',
+      'Private payment submitted. Recipient can process withdrawal after indexing.',
+      {
+        indexing: {
+          status: 'pending',
+          detail: 'Recipient withdrawal will appear after the indexer processes the commitment.',
+        },
+        sponsorship: { attempted: false, sponsored: false },
+      },
+    );
   }
 
   @Post('withdrawals/process')
@@ -176,14 +199,20 @@ export class UsersController {
     if (!result.success) {
       return failureResponse('withdraw_self', result.error ?? 'Private withdrawal failed.', {
         error: result.error,
-        indexing: { status: 'tracked', detail: 'Public balance should reflect the withdrawal once the chain confirms it.' },
+        indexing: {
+          status: 'tracked',
+          detail: 'Public balance should reflect the withdrawal once the chain confirms it.',
+        },
         sponsorship: { attempted: false, sponsored: false },
       });
     }
 
     return successResponse('withdraw_self', 'Private balance withdrawn to the public wallet.', {
       txHash: result.txHash,
-      indexing: { status: 'tracked', detail: 'Public balance will refresh after on-chain confirmation.' },
+      indexing: {
+        status: 'tracked',
+        detail: 'Public balance will refresh after on-chain confirmation.',
+      },
       sponsorship: { attempted: false, sponsored: false },
     });
   }
@@ -198,13 +227,19 @@ export class UsersController {
       if (result.error) {
         return failureResponse('deposit', 'Deposit failed.', {
           error: result.error,
-          indexing: { status: 'lagging', detail: 'Private balance will not update until the deposit is confirmed and indexed.' },
+          indexing: {
+            status: 'lagging',
+            detail: 'Private balance will not update until the deposit is confirmed and indexed.',
+          },
           sponsorship: { attempted: false, sponsored: false },
         });
       }
       return successResponse('deposit', 'Deposit submitted to the shielded pool.', {
         txHash: result.txHash,
-        indexing: { status: 'pending', detail: 'Private balance will update once the canonical indexer syncs the new note.' },
+        indexing: {
+          status: 'pending',
+          detail: 'Private balance will update once the canonical indexer syncs the new note.',
+        },
         sponsorship: { attempted: false, sponsored: false },
       });
     } catch (e) {
@@ -212,7 +247,11 @@ export class UsersController {
       console.error('[UsersController] deposit failed:', e);
       return failureResponse('deposit', 'Deposit failed.', {
         error: message,
-        indexing: { status: 'lagging', detail: 'The request did not complete cleanly; no private balance update should be assumed.' },
+        indexing: {
+          status: 'lagging',
+          detail:
+            'The request did not complete cleanly; no private balance update should be assumed.',
+        },
         sponsorship: { attempted: false, sponsored: false },
       });
     }
@@ -227,7 +266,10 @@ export class UsersController {
     if (!result.success) {
       return failureResponse('split_note', result.error ?? 'Split failed.', {
         error: result.error,
-        indexing: { status: 'pending', detail: 'If any withdrawal leg was sent, private balances may take time to settle.' },
+        indexing: {
+          status: 'pending',
+          detail: 'If any withdrawal leg was sent, private balances may take time to settle.',
+        },
         sponsorship: { attempted: false, sponsored: false },
       });
     }

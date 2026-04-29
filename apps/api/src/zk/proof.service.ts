@@ -35,14 +35,21 @@ export class ProofService {
   private zkeyPath: string;
 
   constructor(private merkleTree: MerkleTreeService) {
-    this.wasmPath = this.resolveCircuitPath(
-      process.env.CIRCUIT_WASM_PATH,
-      ['packages', 'circuits', 'private_transfer', 'build', 'main_js', 'main.wasm']
-    );
-    this.zkeyPath = this.resolveCircuitPath(
-      process.env.CIRCUIT_ZKEY_PATH,
-      ['packages', 'circuits', 'private_transfer', 'output', 'main_final.zkey']
-    );
+    this.wasmPath = this.resolveCircuitPath(process.env.CIRCUIT_WASM_PATH, [
+      'packages',
+      'circuits',
+      'private_transfer',
+      'build',
+      'main_js',
+      'main.wasm',
+    ]);
+    this.zkeyPath = this.resolveCircuitPath(process.env.CIRCUIT_ZKEY_PATH, [
+      'packages',
+      'circuits',
+      'private_transfer',
+      'output',
+      'main_final.zkey',
+    ]);
   }
 
   private resolveCircuitPath(envPath: string | undefined, defaultSegments: string[]): string {
@@ -89,7 +96,12 @@ export class ProofService {
       /** Siblings (depth 20) for the leaf. */
       stateSiblings?: Uint8Array[];
     },
-  ): Promise<{ proofBytes: Uint8Array; pubSignalsBytes: Uint8Array; nullifierHash: string; nullifierSecret: string }> {
+  ): Promise<{
+    proofBytes: Uint8Array;
+    pubSignalsBytes: Uint8Array;
+    nullifierHash: string;
+    nullifierSecret: string;
+  }> {
     if (stateRoot.length !== 32) throw new Error('stateRoot must be 32 bytes');
 
     const stateRootBigInt = bytesToBigInt(stateRoot);
@@ -108,11 +120,17 @@ export class ProofService {
 
     // Optional sanity check: recompute root from path.
     if (opts.commitmentBytes) {
-      const recomputed = await this.merkleTree.computeRootFromPath(opts.commitmentBytes, stateIndex, opts.stateSiblings);
+      const recomputed = await this.merkleTree.computeRootFromPath(
+        opts.commitmentBytes,
+        stateIndex,
+        opts.stateSiblings,
+      );
       const ok = Buffer.from(recomputed).equals(Buffer.from(stateRoot));
 
       if (!ok) {
-        throw new Error(`Merkle path does not match stateRoot (commitment/index/siblings mismatch). Expected: ${Buffer.from(stateRoot).toString('hex')}, Got: ${Buffer.from(recomputed).toString('hex')}`);
+        throw new Error(
+          `Merkle path does not match stateRoot (commitment/index/siblings mismatch). Expected: ${Buffer.from(stateRoot).toString('hex')}, Got: ${Buffer.from(recomputed).toString('hex')}`,
+        );
       }
     }
 
@@ -133,10 +151,14 @@ export class ProofService {
     console.log('[ProofService] Input to Witness:', JSON.stringify(input, null, 2));
 
     if (!fs.existsSync(this.wasmPath)) {
-      throw new Error(`WASM not found at ${this.wasmPath}. Run: pnpm run build (in packages/circuits)`);
+      throw new Error(
+        `WASM not found at ${this.wasmPath}. Run: pnpm run build (in packages/circuits)`,
+      );
     }
     if (!fs.existsSync(this.zkeyPath)) {
-      throw new Error(`zkey not found at ${this.zkeyPath}. Run: pnpm run setup (in packages/circuits)`);
+      throw new Error(
+        `zkey not found at ${this.zkeyPath}. Run: pnpm run setup (in packages/circuits)`,
+      );
     }
 
     // Use require to match working reproduction script and avoid ESM/Jest issues
@@ -163,7 +185,10 @@ export class ProofService {
       // Write witness to temporary file to avoid buffer type mismatches in Jest/NestJS
       // Vercel Serverless functions can only write to /tmp
       const os = require('os');
-      const tempWtnsPath = path.join(os.tmpdir(), `temp_witness_${Date.now()}_${Math.random().toString(36).substring(7)}.wtns`);
+      const tempWtnsPath = path.join(
+        os.tmpdir(),
+        `temp_witness_${Date.now()}_${Math.random().toString(36).substring(7)}.wtns`,
+      );
       console.log(`[ProofService] Writing WTNS to ${tempWtnsPath}`);
       fs.writeFileSync(tempWtnsPath, wtnsBuff);
 
@@ -185,7 +210,6 @@ export class ProofService {
         nullifierHash: bigIntToBytes32Hex(BigInt(result.publicSignals[0])),
         nullifierSecret: bigIntToBytes32Hex(BigInt(input.nullifier)),
       };
-
     } catch (err) {
       console.error('[ProofService] CRITICAL ERROR in generateProof:', err);
       throw err;

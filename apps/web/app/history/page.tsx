@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/Badge";
-import { Card } from "@/components/ui/Card";
-import { PrivacyToggle } from "@/components/ui/PrivacyToggle";
-import { usePrivacy } from "@/context/PrivacyContext";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
+import { PrivacyToggle } from '@/components/ui/PrivacyToggle';
+import { usePrivacy } from '@/context/PrivacyContext';
 import {
   AlertCircle,
   ArrowLeft,
@@ -22,16 +22,16 @@ import {
   TriangleAlert,
   Users,
   XCircle,
-} from "lucide-react";
+} from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
-type HistoryState = "success" | "pending" | "failed" | "retryable" | "queued";
-type HistoryCategory = "wallet" | "private" | "swap" | "system";
+type HistoryState = 'success' | 'pending' | 'failed' | 'retryable' | 'queued';
+type HistoryCategory = 'wallet' | 'private' | 'swap' | 'system';
 
 interface HistoryEntry {
   id: string;
-  source: "audit" | "encrypted_note" | "withdrawal" | "swap";
+  source: 'audit' | 'encrypted_note' | 'withdrawal' | 'swap';
   category: HistoryCategory;
   operation: string;
   title: string;
@@ -51,7 +51,7 @@ interface HistoryEntry {
     detail?: string;
   };
   participants?: {
-    role?: "alice" | "bob";
+    role?: 'alice' | 'bob';
     counterparty?: string;
   };
   privateFlow: boolean;
@@ -84,7 +84,7 @@ interface HistoryWorkspace {
       successful: number;
       dailyAverage: number;
     };
-    momentum: "high" | "moderate" | "light";
+    momentum: 'high' | 'moderate' | 'light';
   };
   categoryBreakdown: Array<{
     category: HistoryCategory;
@@ -132,38 +132,38 @@ interface HistoryWorkspace {
 }
 
 function getStateVariant(state: HistoryState) {
-  if (state === "success") {
-    return "success" as const;
+  if (state === 'success') {
+    return 'success' as const;
   }
-  if (state === "failed") {
-    return "error" as const;
+  if (state === 'failed') {
+    return 'error' as const;
   }
-  if (state === "retryable") {
-    return "warning" as const;
+  if (state === 'retryable') {
+    return 'warning' as const;
   }
-  return "default" as const;
+  return 'default' as const;
 }
 
 function getCategoryVariant(category: HistoryCategory) {
-  if (category === "swap") {
-    return "warning" as const;
+  if (category === 'swap') {
+    return 'warning' as const;
   }
-  if (category === "private") {
-    return "success" as const;
+  if (category === 'private') {
+    return 'success' as const;
   }
-  if (category === "wallet") {
-    return "default" as const;
+  if (category === 'wallet') {
+    return 'default' as const;
   }
-  return "error" as const;
+  return 'error' as const;
 }
 
 function formatTimestamp(value?: string) {
   if (!value) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   return date.toLocaleString();
 }
@@ -187,7 +187,9 @@ function MetricCard({
           <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3 text-indigo-300">{icon}</div>
+        <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3 text-indigo-300">
+          {icon}
+        </div>
       </div>
     </Card>
   );
@@ -197,18 +199,20 @@ export default function HistoryPage() {
   const { isPrivate, togglePrivacy } = usePrivacy();
   const [workspace, setWorkspace] = useState<HistoryWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
-  const [categoryFilter, setCategoryFilter] = useState<"all" | HistoryCategory>("all");
-  const [stateFilter, setStateFilter] = useState<"all" | HistoryState>("all");
-  const [focusMode, setFocusMode] = useState<"timeline" | "recovery" | "relationships">("timeline");
+  const [categoryFilter, setCategoryFilter] = useState<'all' | HistoryCategory>('all');
+  const [stateFilter, setStateFilter] = useState<'all' | HistoryState>('all');
+  const [focusMode, setFocusMode] = useState<'timeline' | 'recovery' | 'relationships'>('timeline');
 
   const fetchHistoryWorkspace = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/users/history/workspace`, { credentials: "include" });
+      const response = await fetch(`${API_URL}/users/history/workspace`, {
+        credentials: 'include',
+      });
       const data = await response.json().catch(() => null);
       setWorkspace(data);
     } catch (error) {
-      console.error("[HistoryPage] Failed to fetch history workspace", error);
+      console.error('[HistoryPage] Failed to fetch history workspace', error);
       setWorkspace(null);
     } finally {
       setLoading(false);
@@ -222,10 +226,10 @@ export default function HistoryPage() {
   const filteredHistory = useMemo(() => {
     const timeline = workspace?.timeline ?? [];
     return timeline.filter((item) => {
-      if (categoryFilter !== "all" && item.category !== categoryFilter) {
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) {
         return false;
       }
-      if (stateFilter !== "all" && item.state !== stateFilter) {
+      if (stateFilter !== 'all' && item.state !== stateFilter) {
         return false;
       }
       return true;
@@ -271,13 +275,15 @@ export default function HistoryPage() {
       <main className="relative z-10 mx-auto w-full max-w-7xl space-y-8 pt-4">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Activity Intelligence Workspace</p>
+            <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+              Activity Intelligence Workspace
+            </p>
             <h1 className="mt-2 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-3xl font-bold text-transparent">
               History & Recovery Desk
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-              This workspace shows not just what happened, but what is blocked, who you interact with most, where failures cluster,
-              and which items should be resolved next.
+              This workspace shows not just what happened, but what is blocked, who you interact
+              with most, where failures cluster, and which items should be resolved next.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -347,15 +353,17 @@ export default function HistoryPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Velocity</p>
-                <h2 className="mt-2 text-xl font-semibold text-white">Activity momentum and readiness signals</h2>
+                <h2 className="mt-2 text-xl font-semibold text-white">
+                  Activity momentum and readiness signals
+                </h2>
               </div>
               <Badge
                 variant={
-                  workspace.velocity.momentum === "high"
-                    ? "success"
-                    : workspace.velocity.momentum === "moderate"
-                      ? "warning"
-                      : "default"
+                  workspace.velocity.momentum === 'high'
+                    ? 'success'
+                    : workspace.velocity.momentum === 'moderate'
+                      ? 'warning'
+                      : 'default'
                 }
               >
                 {workspace.velocity.momentum.toUpperCase()} MOMENTUM
@@ -364,25 +372,33 @@ export default function HistoryPage() {
             <div className="mt-5 grid gap-4 md:grid-cols-3">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Last 24h</p>
-                <p className="mt-2 text-3xl font-semibold text-white">{workspace.velocity.last24h.total}</p>
+                <p className="mt-2 text-3xl font-semibold text-white">
+                  {workspace.velocity.last24h.total}
+                </p>
                 <p className="mt-2 text-sm text-slate-400">
-                  {workspace.velocity.last24h.successful} successful, {workspace.velocity.last24h.pending} still waiting.
+                  {workspace.velocity.last24h.successful} successful,{' '}
+                  {workspace.velocity.last24h.pending} still waiting.
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Last 7d</p>
-                <p className="mt-2 text-3xl font-semibold text-white">{workspace.velocity.last7d.total}</p>
+                <p className="mt-2 text-3xl font-semibold text-white">
+                  {workspace.velocity.last7d.total}
+                </p>
                 <p className="mt-2 text-sm text-slate-400">
-                  {workspace.velocity.last7d.successful} successful with {workspace.velocity.last7d.dailyAverage} avg/day.
+                  {workspace.velocity.last7d.successful} successful with{' '}
+                  {workspace.velocity.last7d.dailyAverage} avg/day.
                 </p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Wallet signals</p>
                 <p className="mt-2 text-lg font-semibold text-white">
-                  {workspace.walletSignals.privateXlm} XLM private / {workspace.walletSignals.pendingWithdrawals} queued
+                  {workspace.walletSignals.privateXlm} XLM private /{' '}
+                  {workspace.walletSignals.pendingWithdrawals} queued
                 </p>
                 <p className="mt-2 text-sm text-slate-400">
-                  Private and withdrawal signals help explain why the history feed is moving or stalling.
+                  Private and withdrawal signals help explain why the history feed is moving or
+                  stalling.
                 </p>
               </div>
             </div>
@@ -396,16 +412,23 @@ export default function HistoryPage() {
             <div className="mt-5 grid gap-3">
               {workspace.actionQueue.length ? (
                 workspace.actionQueue.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                  >
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-white">{item.title}</p>
-                      <Badge variant={getStateVariant(item.state)}>{item.state.toUpperCase()}</Badge>
+                      <Badge variant={getStateVariant(item.state)}>
+                        {item.state.toUpperCase()}
+                      </Badge>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
                     <div className="mt-3 flex items-center gap-2">
-                      <Badge variant={getCategoryVariant(item.category)}>{item.category.toUpperCase()}</Badge>
+                      <Badge variant={getCategoryVariant(item.category)}>
+                        {item.category.toUpperCase()}
+                      </Badge>
                       <span className="text-xs uppercase tracking-wide text-slate-500">
-                        {item.operation.replaceAll("_", " ")}
+                        {item.operation.replaceAll('_', ' ')}
                       </span>
                     </div>
                   </div>
@@ -429,10 +452,14 @@ export default function HistoryPage() {
 
               <div className="space-y-4">
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">Category</span>
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">
+                    Category
+                  </span>
                   <select
                     value={categoryFilter}
-                    onChange={(event) => setCategoryFilter(event.target.value as typeof categoryFilter)}
+                    onChange={(event) =>
+                      setCategoryFilter(event.target.value as typeof categoryFilter)
+                    }
                     className="w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none transition focus:border-indigo-500"
                   >
                     <option value="all">All categories</option>
@@ -444,7 +471,9 @@ export default function HistoryPage() {
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">State</span>
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">
+                    State
+                  </span>
                   <select
                     value={stateFilter}
                     onChange={(event) => setStateFilter(event.target.value as typeof stateFilter)}
@@ -460,7 +489,9 @@ export default function HistoryPage() {
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">View focus</span>
+                  <span className="mb-2 block text-xs uppercase tracking-wide text-slate-500">
+                    View focus
+                  </span>
                   <select
                     value={focusMode}
                     onChange={(event) => setFocusMode(event.target.value as typeof focusMode)}
@@ -476,7 +507,8 @@ export default function HistoryPage() {
                   <p className="text-xs uppercase tracking-wide text-slate-500">Visible entries</p>
                   <p className="mt-2 text-3xl font-semibold text-white">{filteredHistory.length}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Filters isolate the exact slice you need, while the focus mode swaps the right-hand intelligence panel.
+                    Filters isolate the exact slice you need, while the focus mode swaps the
+                    right-hand intelligence panel.
                   </p>
                 </div>
               </div>
@@ -489,15 +521,23 @@ export default function HistoryPage() {
               </div>
               <div className="space-y-3">
                 {workspace.categoryBreakdown.map((bucket) => (
-                  <div key={bucket.category} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div
+                    key={bucket.category}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3"
+                  >
                     <div className="flex items-center justify-between gap-3">
-                      <Badge variant={getCategoryVariant(bucket.category)}>{bucket.category.toUpperCase()}</Badge>
+                      <Badge variant={getCategoryVariant(bucket.category)}>
+                        {bucket.category.toUpperCase()}
+                      </Badge>
                       <span className="text-sm font-medium text-white">{bucket.count}</span>
                     </div>
                     <p className="mt-2 text-xs text-slate-400">
-                      {bucket.completed} completed, {bucket.pending} pending, {bucket.failed} blocked
+                      {bucket.completed} completed, {bucket.pending} pending, {bucket.failed}{' '}
+                      blocked
                     </p>
-                    <p className="mt-2 text-xs text-slate-500">Latest: {formatTimestamp(bucket.latestAt)}</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Latest: {formatTimestamp(bucket.latestAt)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -505,7 +545,7 @@ export default function HistoryPage() {
           </div>
 
           <div className="space-y-6">
-            {focusMode === "recovery" && (
+            {focusMode === 'recovery' && (
               <Card variant="glass">
                 <div className="mb-4 flex items-center gap-2">
                   <TriangleAlert className="h-5 w-5 text-yellow-400" />
@@ -514,16 +554,25 @@ export default function HistoryPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   {workspace.failureBuckets.length ? (
                     workspace.failureBuckets.map((bucket) => (
-                      <div key={bucket.key} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                      <div
+                        key={bucket.key}
+                        className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-white">{bucket.label}</p>
                           <Badge variant="warning">{bucket.count}</Badge>
                         </div>
                         {bucket.latestEntry ? (
                           <>
-                            <p className="mt-2 text-sm text-slate-300">{bucket.latestEntry.title}</p>
-                            <p className="mt-2 text-sm leading-6 text-slate-400">{bucket.latestEntry.detail}</p>
-                            <p className="mt-2 text-xs text-slate-500">{formatTimestamp(bucket.latestEntry.date)}</p>
+                            <p className="mt-2 text-sm text-slate-300">
+                              {bucket.latestEntry.title}
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">
+                              {bucket.latestEntry.detail}
+                            </p>
+                            <p className="mt-2 text-xs text-slate-500">
+                              {formatTimestamp(bucket.latestEntry.date)}
+                            </p>
                           </>
                         ) : (
                           <p className="mt-2 text-sm text-slate-500">No sample entry recorded.</p>
@@ -539,7 +588,7 @@ export default function HistoryPage() {
               </Card>
             )}
 
-            {focusMode === "relationships" && (
+            {focusMode === 'relationships' && (
               <Card variant="glass">
                 <div className="mb-4 flex items-center gap-2">
                   <Users className="h-5 w-5 text-indigo-300" />
@@ -548,27 +597,36 @@ export default function HistoryPage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   {workspace.counterparties.length ? (
                     workspace.counterparties.map((counterparty) => (
-                      <div key={counterparty.counterparty} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                      <div
+                        key={counterparty.counterparty}
+                        className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                      >
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium text-white">@{counterparty.counterparty}</p>
+                          <p className="text-sm font-medium text-white">
+                            @{counterparty.counterparty}
+                          </p>
                           <Badge variant="default">{counterparty.interactions} touches</Badge>
                         </div>
                         <p className="mt-2 text-sm text-slate-300">
-                          {counterparty.privateFlows} private flows and {counterparty.swapFlows} swap-related events.
+                          {counterparty.privateFlows} private flows and {counterparty.swapFlows}{' '}
+                          swap-related events.
                         </p>
-                        <p className="mt-2 text-xs text-slate-500">Latest interaction: {formatTimestamp(counterparty.latestAt)}</p>
+                        <p className="mt-2 text-xs text-slate-500">
+                          Latest interaction: {formatTimestamp(counterparty.latestAt)}
+                        </p>
                       </div>
                     ))
                   ) : (
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500 md:col-span-2">
-                      Counterparty relationships will appear here once transfer and swap history builds up.
+                      Counterparty relationships will appear here once transfer and swap history
+                      builds up.
                     </div>
                   )}
                 </div>
               </Card>
             )}
 
-            {focusMode === "timeline" && workspace.latestEntries.length > 0 && (
+            {focusMode === 'timeline' && workspace.latestEntries.length > 0 && (
               <Card variant="glass">
                 <div className="mb-4 flex items-center gap-2">
                   <Layers3 className="h-5 w-5 text-indigo-300" />
@@ -576,7 +634,10 @@ export default function HistoryPage() {
                 </div>
                 <div className="grid gap-3">
                   {workspace.latestEntries.slice(0, 5).map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-white">{item.title}</p>
                         <Badge variant={getStateVariant(item.state)}>{item.statusLabel}</Badge>
@@ -593,9 +654,12 @@ export default function HistoryPage() {
               <Card variant="glass" className="py-12 text-center">
                 <div className="flex flex-col items-center gap-4">
                   <AlertCircle className="h-12 w-12 text-slate-500" />
-                  <p className="text-lg text-slate-400">No history entries match the current filters.</p>
+                  <p className="text-lg text-slate-400">
+                    No history entries match the current filters.
+                  </p>
                   <p className="max-w-md text-sm text-slate-500">
-                    Try broadening the filters or generate new wallet, private, or swap activity to populate the timeline.
+                    Try broadening the filters or generate new wallet, private, or swap activity to
+                    populate the timeline.
                   </p>
                 </div>
               </Card>
@@ -608,9 +672,7 @@ export default function HistoryPage() {
                         <Badge variant={getCategoryVariant(item.category)}>
                           {item.category.toUpperCase()}
                         </Badge>
-                        <Badge variant={getStateVariant(item.state)}>
-                          {item.statusLabel}
-                        </Badge>
+                        <Badge variant={getStateVariant(item.state)}>{item.statusLabel}</Badge>
                         {item.privateFlow ? (
                           <Badge variant="success">
                             <Shield className="mr-1 h-3 w-3" />
@@ -632,7 +694,9 @@ export default function HistoryPage() {
 
                       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
-                          <h3 className="truncate text-xl font-semibold text-white">{item.title}</h3>
+                          <h3 className="truncate text-xl font-semibold text-white">
+                            {item.title}
+                          </h3>
                           <p className="mt-1 text-sm leading-6 text-slate-400">{item.detail}</p>
                         </div>
                         <div className="text-left md:text-right">
@@ -643,21 +707,33 @@ export default function HistoryPage() {
 
                       <div className="mt-4 grid gap-3 md:grid-cols-4">
                         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Operation</p>
-                          <p className="mt-2 text-sm font-medium text-white">{item.operation.replaceAll("_", " ")}</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">
+                            Operation
+                          </p>
+                          <p className="mt-2 text-sm font-medium text-white">
+                            {item.operation.replaceAll('_', ' ')}
+                          </p>
                         </div>
                         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-500">Asset</p>
-                          <p className="mt-2 text-sm font-medium text-white">{item.asset || "Not specified"}</p>
+                          <p className="mt-2 text-sm font-medium text-white">
+                            {item.asset || 'Not specified'}
+                          </p>
                         </div>
                         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-500">Amount</p>
-                          <p className="mt-2 text-sm font-medium text-white">{item.amountDisplay}</p>
+                          <p className="mt-2 text-sm font-medium text-white">
+                            {item.amountDisplay}
+                          </p>
                         </div>
                         <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-500">Counterparty</p>
+                          <p className="text-xs uppercase tracking-wide text-slate-500">
+                            Counterparty
+                          </p>
                           <p className="mt-2 text-sm font-medium text-white">
-                            {item.participants?.counterparty ? `@${item.participants.counterparty}` : "Not applicable"}
+                            {item.participants?.counterparty
+                              ? `@${item.participants.counterparty}`
+                              : 'Not applicable'}
                           </p>
                         </div>
                       </div>
@@ -665,21 +741,30 @@ export default function HistoryPage() {
                       {(item.indexing?.detail || item.sponsorship?.detail) && (
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
                           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Indexing</p>
-                            <p className="mt-2 text-sm font-medium text-white">{item.indexing?.status || "Not tracked"}</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-400">{item.indexing?.detail || "No indexing detail recorded."}</p>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Indexing
+                            </p>
+                            <p className="mt-2 text-sm font-medium text-white">
+                              {item.indexing?.status || 'Not tracked'}
+                            </p>
+                            <p className="mt-1 text-sm leading-6 text-slate-400">
+                              {item.indexing?.detail || 'No indexing detail recorded.'}
+                            </p>
                           </div>
                           <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                            <p className="text-xs uppercase tracking-wide text-slate-500">Sponsorship</p>
+                            <p className="text-xs uppercase tracking-wide text-slate-500">
+                              Sponsorship
+                            </p>
                             <p className="mt-2 text-sm font-medium text-white">
                               {item.sponsorship?.attempted
                                 ? item.sponsorship?.sponsored
-                                  ? "Fee sponsored"
-                                  : "Attempted but not sponsored"
-                                : "Not attempted"}
+                                  ? 'Fee sponsored'
+                                  : 'Attempted but not sponsored'
+                                : 'Not attempted'}
                             </p>
                             <p className="mt-1 text-sm leading-6 text-slate-400">
-                              {item.sponsorship?.detail || "No sponsorship note recorded for this entry."}
+                              {item.sponsorship?.detail ||
+                                'No sponsorship note recorded for this entry.'}
                             </p>
                           </div>
                         </div>
@@ -711,7 +796,10 @@ export default function HistoryPage() {
         </section>
 
         <div className="flex justify-center text-xs text-slate-600">
-          <Link href="/dashboard" className="inline-flex items-center transition-colors hover:text-slate-400">
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center transition-colors hover:text-slate-400"
+          >
             <ArrowLeft className="mr-1 h-3 w-3" />
             Back to Dashboard
           </Link>

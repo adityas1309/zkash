@@ -1,6 +1,6 @@
 packages:
-  - "apps/*"
-  - "packages/*"
-  - "workers/*"
+  - 'apps/*'
+  - 'packages/*'
+  - 'workers/*'
 
 # contracts are Rust, not in pnpm

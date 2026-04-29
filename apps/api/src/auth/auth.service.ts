@@ -165,16 +165,18 @@ export class AuthService {
     @InjectModel(User.name) private userModel: Model<User>,
     @Inject(forwardRef(() => UsersService)) private usersService: UsersService,
     private opsService: OpsService,
-  ) { }
+  ) {}
 
   async deleteUser(userId: string): Promise<boolean> {
     const res = await this.userModel.deleteOne({ _id: userId }).exec();
     return res.deletedCount > 0;
   }
 
-  async findOrCreateFromGoogle(
-    profile: { id: string; emails: { value: string }[]; displayName?: string },
-  ): Promise<User> {
+  async findOrCreateFromGoogle(profile: {
+    id: string;
+    emails: { value: string }[];
+    displayName?: string;
+  }): Promise<User> {
     const email = profile.emails?.[0]?.value;
     if (!email) throw new Error('No email from Google');
 
@@ -200,10 +202,10 @@ export class AuthService {
     // DEBUG: Immediate Verification
     try {
       const decrypted = this.decrypt(stellarSecretKeyEncrypted, encryptionKey);
-      if (decrypted !== stellarSecretKey) console.error("CRITICAL: Immediate decryption MISMATCH!");
-      else console.log("IMMEDIATE DECRYPTION PASSED!");
+      if (decrypted !== stellarSecretKey) console.error('CRITICAL: Immediate decryption MISMATCH!');
+      else console.log('IMMEDIATE DECRYPTION PASSED!');
     } catch (e) {
-      console.error("CRITICAL: Immediate decryption THREW:", e);
+      console.error('CRITICAL: Immediate decryption THREW:', e);
     }
 
     const zkSpendingKeyEncrypted = this.encrypt(spendingKey, encryptionKey);
@@ -241,7 +243,8 @@ export class AuthService {
           score: 10,
           tone: 'guest',
           headline: 'Sign in to start your private Stellar workspace.',
-          detail: 'Authentication unlocks wallet generation, trustline setup, private-note actions, and the full dashboard.',
+          detail:
+            'Authentication unlocks wallet generation, trustline setup, private-note actions, and the full dashboard.',
         },
         wallet: {
           public: {
@@ -271,7 +274,8 @@ export class AuthService {
             id: 'login',
             label: 'Authenticate account',
             status: 'attention',
-            detail: 'A Google sign-in is required before the app can provision wallet secrets securely.',
+            detail:
+              'A Google sign-in is required before the app can provision wallet secrets securely.',
             action: 'Sign in with Google',
           },
           {
@@ -353,7 +357,11 @@ export class AuthService {
       {
         id: 'private',
         label: 'Seed private balance',
-        status: hasShieldedBalance ? 'complete' : hasXlm || hasUsdcTrustline ? 'attention' : 'blocked',
+        status: hasShieldedBalance
+          ? 'complete'
+          : hasXlm || hasUsdcTrustline
+            ? 'attention'
+            : 'blocked',
         detail: hasShieldedBalance
           ? `Shielded balances are active with ${privateBalances.xlm} XLM and ${privateBalances.usdc} USDC in private flow.`
           : 'A first deposit into the shielded pool will unlock private send, note splitting, and private swap readiness.',
@@ -362,7 +370,12 @@ export class AuthService {
       {
         id: 'ops',
         label: 'Operational readiness',
-        status: laggingPools === 0 && ready.status === 'ready' ? 'complete' : laggingPools > 0 ? 'attention' : 'blocked',
+        status:
+          laggingPools === 0 && ready.status === 'ready'
+            ? 'complete'
+            : laggingPools > 0
+              ? 'attention'
+              : 'blocked',
         detail:
           laggingPools === 0 && ready.status === 'ready'
             ? 'The canonical indexer is healthy and sponsorship/indexing surfaces are available.'
@@ -385,20 +398,24 @@ export class AuthService {
             score,
             tone: 'ready' as const,
             headline: 'Your account is ready for public, private, and market flows.',
-            detail: 'Funding, trustline, and private-note prerequisites are all in place, so the app can move straight into transactions.',
+            detail:
+              'Funding, trustline, and private-note prerequisites are all in place, so the app can move straight into transactions.',
           }
         : score >= 50
           ? {
               score,
               tone: 'attention' as const,
               headline: 'Your account is close, but a few setup steps still gate smooth execution.',
-              detail: 'You can explore the product now, but finishing wallet funding, trustline setup, or first deposit will reduce friction.',
+              detail:
+                'You can explore the product now, but finishing wallet funding, trustline setup, or first deposit will reduce friction.',
             }
           : {
               score,
               tone: 'blocked' as const,
-              headline: 'Your account exists, but it still needs setup before private flows will feel reliable.',
-              detail: 'The wallet is provisioned, yet core prerequisites like XLM funding or a USDC trustline are still missing.',
+              headline:
+                'Your account exists, but it still needs setup before private flows will feel reliable.',
+              detail:
+                'The wallet is provisioned, yet core prerequisites like XLM funding or a USDC trustline are still missing.',
             };
 
     return {
@@ -476,7 +493,8 @@ export class AuthService {
           : 'USDC is still blocked on trustline or funding readiness.',
     ];
     const privateSignals = [
-      Number(walletWorkspace.balances.private.xlm || 0) > 0 || Number(walletWorkspace.balances.private.usdc || 0) > 0
+      Number(walletWorkspace.balances.private.xlm || 0) > 0 ||
+      Number(walletWorkspace.balances.private.usdc || 0) > 0
         ? `Private balances are seeded with ${walletWorkspace.balances.private.xlm} XLM and ${walletWorkspace.balances.private.usdc} USDC.`
         : 'No shielded balance exists yet, so private sends and exact-note planning remain gated.',
       walletWorkspace.pending.count > 0
@@ -489,7 +507,7 @@ export class AuthService {
         id: 'wallet',
         label: 'Wallet workspace',
         href: '/wallet',
-        readiness: authWorkspace.wallet.public.hasXlm ? 'ready' as const : 'attention' as const,
+        readiness: authWorkspace.wallet.public.hasXlm ? ('ready' as const) : ('attention' as const),
         detail: authWorkspace.wallet.public.hasXlm
           ? 'Wallet controls are funded and ready for balance management.'
           : 'Open wallet first to fund XLM and stabilize setup.',
@@ -498,49 +516,57 @@ export class AuthService {
         id: 'funding',
         label: 'Funding desk',
         href: '/wallet/fund',
-        readiness: authWorkspace.wallet.public.hasXlm && authWorkspace.wallet.public.hasUsdcTrustline
-          ? 'ready' as const
-          : authWorkspace.wallet.public.hasXlm
-            ? 'attention' as const
-            : 'blocked' as const,
-        detail: authWorkspace.wallet.public.hasXlm && authWorkspace.wallet.public.hasUsdcTrustline
-          ? 'Funding prerequisites are mostly complete, so the desk is now about optimization.'
-          : 'Funding desk is the next stop for trustline, faucet, and private seeding work.',
+        readiness:
+          authWorkspace.wallet.public.hasXlm && authWorkspace.wallet.public.hasUsdcTrustline
+            ? ('ready' as const)
+            : authWorkspace.wallet.public.hasXlm
+              ? ('attention' as const)
+              : ('blocked' as const),
+        detail:
+          authWorkspace.wallet.public.hasXlm && authWorkspace.wallet.public.hasUsdcTrustline
+            ? 'Funding prerequisites are mostly complete, so the desk is now about optimization.'
+            : 'Funding desk is the next stop for trustline, faucet, and private seeding work.',
       },
       {
         id: 'status',
         label: 'Status workspace',
         href: '/status',
-        readiness: ready.status === 'ready' ? 'ready' as const : 'attention' as const,
-        detail: ready.status === 'ready'
-          ? 'Operational surfaces are healthy and safe to monitor.'
-          : 'Use status to inspect lagging pools and degraded readiness.',
+        readiness: ready.status === 'ready' ? ('ready' as const) : ('attention' as const),
+        detail:
+          ready.status === 'ready'
+            ? 'Operational surfaces are healthy and safe to monitor.'
+            : 'Use status to inspect lagging pools and degraded readiness.',
       },
       {
         id: 'history',
         label: 'History desk',
         href: '/history',
-        readiness: historyWorkspace.summary.total > 0 ? 'ready' as const : 'attention' as const,
-        detail: historyWorkspace.summary.total > 0
-          ? 'History already has enough signal to investigate activity patterns.'
-          : 'History will become more useful after your first funded or private actions.',
+        readiness: historyWorkspace.summary.total > 0 ? ('ready' as const) : ('attention' as const),
+        detail:
+          historyWorkspace.summary.total > 0
+            ? 'History already has enough signal to investigate activity patterns.'
+            : 'History will become more useful after your first funded or private actions.',
       },
       {
         id: 'swap',
         label: 'Swap market',
         href: '/swap',
-        readiness: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
-          ? 'attention' as const
-          : 'blocked' as const,
-        detail: authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
-          ? 'You can inspect markets now, but deeper execution improves after funding and note prep.'
-          : 'Swap routes are still blocked by missing wallet setup.',
+        readiness:
+          authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
+            ? ('attention' as const)
+            : ('blocked' as const),
+        detail:
+          authWorkspace.wallet.public.hasXlm || authWorkspace.wallet.private.hasShieldedBalance
+            ? 'You can inspect markets now, but deeper execution improves after funding and note prep.'
+            : 'Swap routes are still blocked by missing wallet setup.',
       },
       {
         id: 'fiat',
         label: 'Fiat desk',
         href: '/fiat',
-        readiness: authWorkspace.wallet.public.hasXlm ? 'attention' as const : 'blocked' as const,
+        readiness: authWorkspace.wallet.public.hasXlm
+          ? ('attention' as const)
+          : ('blocked' as const),
         detail: authWorkspace.wallet.public.hasXlm
           ? 'Fiat planning is reachable, but route quality improves with more visible liquidity.'
           : 'Fiat planning should wait until the public wallet is funded.',
@@ -553,7 +579,9 @@ export class AuthService {
         provider: 'google',
         network: authWorkspace.network,
         readiness: authWorkspace.readiness,
-        memberSince: (user as any).createdAt ? new Date((user as any).createdAt).toISOString() : undefined,
+        memberSince: (user as any).createdAt
+          ? new Date((user as any).createdAt).toISOString()
+          : undefined,
       },
       profile: {
         id: user._id.toString(),
@@ -624,9 +652,10 @@ export class AuthService {
             id: 'zk',
             label: 'Shielded note keys',
             status: user.zkSpendingKeyEncrypted && user.zkViewKeyEncrypted ? 'ready' : 'attention',
-            detail: user.zkSpendingKeyEncrypted && user.zkViewKeyEncrypted
-              ? 'Spending and viewing keys are provisioned for private-flow note access.'
-              : 'One or more private-flow keys are missing.',
+            detail:
+              user.zkSpendingKeyEncrypted && user.zkViewKeyEncrypted
+                ? 'Spending and viewing keys are provisioned for private-flow note access.'
+                : 'One or more private-flow keys are missing.',
           },
         ],
       },
@@ -675,14 +704,10 @@ export class AuthService {
 
   private encrypt(plaintext: string, key: Uint8Array): string {
     const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
-    const encrypted = nacl.secretbox(
-      naclUtil.decodeUTF8(plaintext),
-      nonce,
-      key,
-    );
+    const encrypted = nacl.secretbox(naclUtil.decodeUTF8(plaintext), nonce, key);
     const combined = new Uint8Array(nonce.length + encrypted.length);
     combined.set(nonce);
-    combined.set(encrypted, nonce.length);  // FIXED: Add offset to not overwrite nonce
+    combined.set(encrypted, nonce.length); // FIXED: Add offset to not overwrite nonce
     return Buffer.from(combined).toString('base64');
   }
 
@@ -691,11 +716,7 @@ export class AuthService {
     const nonce = new Uint8Array(combined.slice(0, nacl.secretbox.nonceLength));
     const ciphertext = new Uint8Array(combined.slice(nacl.secretbox.nonceLength));
 
-    const decrypted = nacl.secretbox.open(
-      ciphertext,
-      nonce,
-      key,
-    );
+    const decrypted = nacl.secretbox.open(ciphertext, nonce, key);
     if (!decrypted) {
       console.error('Decryption failed for key:', Buffer.from(key).toString('hex'));
       console.error('Nonce:', Buffer.from(nonce).toString('hex'));
@@ -715,7 +736,7 @@ export class AuthService {
   private getNetworkInfo() {
     const isMainnet = process.env.NETWORK === 'mainnet';
     return {
-      mode: isMainnet ? 'mainnet' as const : 'testnet' as const,
+      mode: isMainnet ? ('mainnet' as const) : ('testnet' as const),
       label: isMainnet ? 'Stellar Mainnet' : 'Stellar Testnet',
     };
   }

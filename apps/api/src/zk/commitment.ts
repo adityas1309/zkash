@@ -7,12 +7,7 @@
  * keeping the same commitment/nullifier structure as the circuit.
  */
 
-import {
-  bigIntToBytes32BE,
-  poseidonHash1,
-  poseidonHash2,
-  poseidonHash3,
-} from './poseidon-bls';
+import { bigIntToBytes32BE, poseidonHash1, poseidonHash2, poseidonHash3 } from './poseidon-bls';
 
 /** Field elements as bigint (or number for small values). */
 export interface NoteFields {
@@ -40,11 +35,7 @@ export async function computeCommitment(fields: NoteFields): Promise<{
   const precommitmentBigInt = poseidonHash2(fields.nullifier, fields.secret);
 
   // 3. Commitment: Poseidon(3)(value, label, precommitment)
-  const commitmentBigInt = poseidonHash3(
-    fields.value,
-    fields.label,
-    precommitmentBigInt,
-  );
+  const commitmentBigInt = poseidonHash3(fields.value, fields.label, precommitmentBigInt);
   const commitmentBytes = bigIntToBytes32BE(commitmentBigInt);
 
   return { commitmentBytes, commitmentBigInt, nullifierHash, nullifierHashBytes };

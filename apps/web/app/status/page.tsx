@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   Activity,
   AlertTriangle,
@@ -22,12 +22,12 @@ import {
   Wallet,
   Wrench,
   XCircle,
-} from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+} from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
 interface StatusWorkspace {
   health: {
@@ -36,7 +36,7 @@ interface StatusWorkspace {
     timestamp: string;
   };
   readiness: {
-    status: "ready" | "degraded";
+    status: 'ready' | 'degraded';
     dependencies: {
       mongodb: string;
       indexer: string;
@@ -81,7 +81,7 @@ interface StatusWorkspace {
     };
   };
   alertSummary: Array<{
-    severity: "info" | "warning" | "critical";
+    severity: 'info' | 'warning' | 'critical';
     title: string;
     detail: string;
   }>;
@@ -106,7 +106,7 @@ interface StatusWorkspace {
   dependencyBoard: Array<{
     id: string;
     label: string;
-    status: "healthy" | "degraded" | "critical";
+    status: 'healthy' | 'degraded' | 'critical';
     summary: string;
     metrics: Array<{
       label: string;
@@ -115,7 +115,7 @@ interface StatusWorkspace {
   }>;
   remediationBoard: Array<{
     id: string;
-    severity: "critical" | "warning" | "info";
+    severity: 'critical' | 'warning' | 'info';
     title: string;
     detail: string;
     owner: string;
@@ -146,12 +146,12 @@ interface StatusWorkspace {
   routeHealth: Array<{
     id: string;
     label: string;
-    tone: "critical" | "warning" | "healthy" | "info";
+    tone: 'critical' | 'warning' | 'healthy' | 'info';
     summary: string;
   }>;
   incidentFeed: Array<{
     id: string;
-    severity: "critical" | "warning" | "info";
+    severity: 'critical' | 'warning' | 'info';
     title: string;
     detail: string;
     source: string;
@@ -179,26 +179,26 @@ interface StatusWorkspace {
 
 function formatTimestamp(value?: string) {
   if (!value) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "Unknown time";
+    return 'Unknown time';
   }
   return date.toLocaleString();
 }
 
 function variantFor(value: string) {
-  if (value === "critical" || value === "failed") {
-    return "error" as const;
+  if (value === 'critical' || value === 'failed') {
+    return 'error' as const;
   }
-  if (value === "warning" || value === "degraded" || value === "retryable" || value === "pending") {
-    return "warning" as const;
+  if (value === 'warning' || value === 'degraded' || value === 'retryable' || value === 'pending') {
+    return 'warning' as const;
   }
-  if (value === "healthy" || value === "success" || value === "ready") {
-    return "success" as const;
+  if (value === 'healthy' || value === 'success' || value === 'ready') {
+    return 'success' as const;
   }
-  return "default" as const;
+  return 'default' as const;
 }
 
 function MetricCard({
@@ -220,7 +220,9 @@ function MetricCard({
           <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
           <p className="mt-2 text-sm leading-6 text-slate-400">{detail}</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3 text-indigo-300">{icon}</div>
+        <div className="rounded-2xl border border-white/10 bg-slate-950/80 p-3 text-indigo-300">
+          {icon}
+        </div>
       </div>
     </Card>
   );
@@ -236,11 +238,11 @@ export default function StatusPage() {
       setRefreshing(true);
     }
     try {
-      const response = await fetch(`${API_URL}/status/workspace`, { credentials: "include" });
+      const response = await fetch(`${API_URL}/status/workspace`, { credentials: 'include' });
       const data = await response.json().catch(() => null);
       setWorkspace(response.ok ? data : null);
     } catch (error) {
-      console.error("[StatusPage] Failed to load status workspace", error);
+      console.error('[StatusPage] Failed to load status workspace', error);
       setWorkspace(null);
     } finally {
       setLoading(false);
@@ -262,18 +264,20 @@ export default function StatusPage() {
   const headline = useMemo(() => {
     if (!workspace) {
       return {
-        label: "Unavailable",
-        detail: "The operations cockpit could not be loaded.",
+        label: 'Unavailable',
+        detail: 'The operations cockpit could not be loaded.',
       };
     }
-    return workspace.readiness.status === "ready"
+    return workspace.readiness.status === 'ready'
       ? {
-          label: "Healthy operating band",
-          detail: "Dependencies, queue pressure, and route health are all sitting within a normal range for the current workspace.",
+          label: 'Healthy operating band',
+          detail:
+            'Dependencies, queue pressure, and route health are all sitting within a normal range for the current workspace.',
         }
       : {
-          label: "Remediation recommended",
-          detail: "At least one dependency, queue, or route is drifting out of the healthy band and deserves operator attention.",
+          label: 'Remediation recommended',
+          detail:
+            'At least one dependency, queue, or route is drifting out of the healthy band and deserves operator attention.',
         };
   }, [workspace]);
 
@@ -310,9 +314,11 @@ export default function StatusPage() {
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">{headline.detail}</p>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant={workspace.readiness.status === "ready" ? "success" : "warning"}>{headline.label}</Badge>
+          <Badge variant={workspace.readiness.status === 'ready' ? 'success' : 'warning'}>
+            {headline.label}
+          </Badge>
           <Button variant="ghost" onClick={() => fetchWorkspace(true)}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
         </div>
@@ -353,7 +359,10 @@ export default function StatusPage() {
           </div>
           <div className="space-y-3">
             {workspace.remediationBoard.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -395,14 +404,19 @@ export default function StatusPage() {
               </div>
             ) : (
               workspace.incidentFeed.map((incident) => (
-                <div key={incident.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={incident.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={variantFor(incident.severity)}>{incident.severity}</Badge>
                     <Badge variant="default">{incident.source}</Badge>
                   </div>
                   <h3 className="mt-3 text-base font-semibold text-white">{incident.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-400">{incident.detail}</p>
-                  <p className="mt-3 text-xs text-slate-500">{formatTimestamp(incident.createdAt)}</p>
+                  <p className="mt-3 text-xs text-slate-500">
+                    {formatTimestamp(incident.createdAt)}
+                  </p>
                 </div>
               ))
             )}
@@ -418,7 +432,10 @@ export default function StatusPage() {
           </div>
           <div className="space-y-3">
             {workspace.dependencyBoard.map((dependency) => (
-              <div key={dependency.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={dependency.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{dependency.label}</p>
                   <Badge variant={variantFor(dependency.status)}>{dependency.status}</Badge>
@@ -426,8 +443,13 @@ export default function StatusPage() {
                 <p className="mt-2 text-sm leading-6 text-slate-400">{dependency.summary}</p>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {dependency.metrics.map((metric) => (
-                    <div key={metric.label} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">{metric.label}</p>
+                    <div
+                      key={metric.label}
+                      className="rounded-xl border border-slate-800 bg-slate-900/60 p-3"
+                    >
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        {metric.label}
+                      </p>
                       <p className="mt-1 text-sm font-medium text-white">{metric.value}</p>
                     </div>
                   ))}
@@ -444,7 +466,10 @@ export default function StatusPage() {
           </div>
           <div className="space-y-3">
             {workspace.routeHealth.map((route) => (
-              <div key={route.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={route.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{route.label}</p>
                   <Badge variant={variantFor(route.tone)}>{route.tone}</Badge>
@@ -518,7 +543,10 @@ export default function StatusPage() {
           </div>
           <div className="space-y-3">
             {workspace.alertSummary.map((alert) => (
-              <div key={`${alert.severity}-${alert.title}`} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={`${alert.severity}-${alert.title}`}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{alert.title}</p>
                   <Badge variant={variantFor(alert.severity)}>{alert.severity}</Badge>
@@ -538,16 +566,23 @@ export default function StatusPage() {
           </div>
           <div className="space-y-3">
             {workspace.poolSummaries.map((pool) => (
-              <div key={`${pool.network}-${pool.poolAddress}`} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={`${pool.network}-${pool.poolAddress}`}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-white">
                         {pool.poolAddress.slice(0, 10)}...{pool.poolAddress.slice(-6)}
                       </p>
-                      <Badge variant={pool.status === "healthy" ? "success" : "warning"}>{pool.status}</Badge>
+                      <Badge variant={pool.status === 'healthy' ? 'success' : 'warning'}>
+                        {pool.status}
+                      </Badge>
                     </div>
-                    <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">{pool.network}</p>
+                    <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">
+                      {pool.network}
+                    </p>
                   </div>
                   <a
                     href={`https://stellar.expert/explorer/testnet/contract/${pool.poolAddress}`}
@@ -562,7 +597,9 @@ export default function StatusPage() {
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Ledger</p>
-                    <p className="mt-1 text-sm font-medium text-white">{pool.lastProcessedLedger}</p>
+                    <p className="mt-1 text-sm font-medium text-white">
+                      {pool.lastProcessedLedger}
+                    </p>
                   </div>
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
                     <p className="text-xs uppercase tracking-wide text-slate-500">Events</p>
@@ -573,7 +610,9 @@ export default function StatusPage() {
                     <p className="mt-1 text-sm font-medium text-white">{pool.commitmentCount}</p>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-slate-400">Last successful sync: {formatTimestamp(pool.lastSuccessfulSyncAt)}</p>
+                <p className="mt-3 text-xs text-slate-400">
+                  Last successful sync: {formatTimestamp(pool.lastSuccessfulSyncAt)}
+                </p>
                 {pool.lastError && <p className="mt-2 text-xs text-yellow-200">{pool.lastError}</p>}
               </div>
             ))}
@@ -587,13 +626,22 @@ export default function StatusPage() {
           </div>
           <div className="space-y-3">
             {workspace.activitySummary.recentAudits.slice(0, 8).map((audit, index) => (
-              <div key={`${audit.operation}-${audit.createdAt}-${index}`} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={`${audit.operation}-${audit.createdAt}-${index}`}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-white">{String(audit.operation ?? "unknown").replaceAll("_", " ")}</p>
-                  <Badge variant={variantFor(audit.state ?? "pending")}>{String(audit.state ?? "pending")}</Badge>
+                  <p className="text-sm font-medium text-white">
+                    {String(audit.operation ?? 'unknown').replaceAll('_', ' ')}
+                  </p>
+                  <Badge variant={variantFor(audit.state ?? 'pending')}>
+                    {String(audit.state ?? 'pending')}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-xs text-slate-500">{formatTimestamp(audit.createdAt)}</p>
-                {audit.indexingDetail && <p className="mt-2 text-sm leading-6 text-slate-400">{audit.indexingDetail}</p>}
+                {audit.indexingDetail && (
+                  <p className="mt-2 text-sm leading-6 text-slate-400">{audit.indexingDetail}</p>
+                )}
                 {audit.error && <p className="mt-2 text-sm text-red-300">{audit.error}</p>}
               </div>
             ))}
@@ -614,7 +662,9 @@ export default function StatusPage() {
             Action Center
           </Button>
         </Link>
-        <div className="text-sm text-slate-500">Last refresh: {formatTimestamp(workspace.updatedAt)}</div>
+        <div className="text-sm text-slate-500">
+          Last refresh: {formatTimestamp(workspace.updatedAt)}
+        </div>
       </div>
     </main>
   );

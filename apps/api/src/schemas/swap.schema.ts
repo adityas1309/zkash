@@ -17,12 +17,7 @@ export type SwapProofStatus =
   | 'awaiting_bob'
   | 'ready';
 
-export type SwapExecutionStatus =
-  | 'not_started'
-  | 'ready'
-  | 'processing'
-  | 'confirmed'
-  | 'failed';
+export type SwapExecutionStatus = 'not_started' | 'ready' | 'processing' | 'confirmed' | 'failed';
 
 @Schema({ timestamps: true })
 export class Swap extends Document {
@@ -37,7 +32,15 @@ export class Swap extends Document {
 
   @Prop({
     required: true,
-    enum: ['requested', 'proofs_pending', 'proofs_ready', 'executing', 'completed', 'failed', 'cancelled'],
+    enum: [
+      'requested',
+      'proofs_pending',
+      'proofs_ready',
+      'executing',
+      'completed',
+      'failed',
+      'cancelled',
+    ],
   })
   status: SwapStatus;
 

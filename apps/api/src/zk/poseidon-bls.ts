@@ -42,10 +42,5 @@ export function poseidonHash2(x: bigint, y: bigint): bigint {
 
 /** Poseidon(3) over BLS12-381, returns field element as bigint. */
 export function poseidonHash3(x: bigint, y: bigint, z: bigint): bigint {
-  return poseidon3([
-    normalizeToField(x),
-    normalizeToField(y),
-    normalizeToField(z),
-  ]);
+  return poseidon3([normalizeToField(x), normalizeToField(y), normalizeToField(z)]);
 }
-

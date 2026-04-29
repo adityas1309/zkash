@@ -251,12 +251,21 @@ export default function AccountPage() {
             Identity, readiness, and control surfaces in one place
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Review linked identity, wallet posture, private-flow readiness, operational health, and the guarded actions
-            that matter when this project is used as a real testnet product instead of a static demo.
+            Review linked identity, wallet posture, private-flow readiness, operational health, and
+            the guarded actions that matter when this project is used as a real testnet product
+            instead of a static demo.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant={workspace.session.readiness.tone === 'ready' ? 'success' : workspace.session.readiness.tone === 'attention' ? 'warning' : 'default'}>
+          <Badge
+            variant={
+              workspace.session.readiness.tone === 'ready'
+                ? 'success'
+                : workspace.session.readiness.tone === 'attention'
+                  ? 'warning'
+                  : 'default'
+            }
+          >
             Readiness {workspace.session.readiness.score}
           </Badge>
           <Badge variant={workspace.operations.status === 'ready' ? 'success' : 'warning'}>
@@ -277,18 +286,30 @@ export default function AccountPage() {
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Member since</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{workspace.session.memberSince ? new Date(workspace.session.memberSince).toLocaleDateString() : 'Unknown'}</p>
+          <p className="mt-2 text-2xl font-semibold text-white">
+            {workspace.session.memberSince
+              ? new Date(workspace.session.memberSince).toLocaleDateString()
+              : 'Unknown'}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">{workspace.session.network.label}</p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Private flows</p>
-          <p className="mt-2 text-2xl font-semibold text-white">{workspace.activity.privateFlows}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Tracked private actions across notes, withdrawals, deposits, and private sends.</p>
+          <p className="mt-2 text-2xl font-semibold text-white">
+            {workspace.activity.privateFlows}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Tracked private actions across notes, withdrawals, deposits, and private sends.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Momentum</p>
-          <p className="mt-2 text-2xl font-semibold capitalize text-white">{workspace.activity.velocity.momentum}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{workspace.activity.velocity.last24h.total} actions in the last 24 hours.</p>
+          <p className="mt-2 text-2xl font-semibold capitalize text-white">
+            {workspace.activity.velocity.momentum}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {workspace.activity.velocity.last24h.total} actions in the last 24 hours.
+          </p>
         </Card>
       </section>
 
@@ -301,19 +322,29 @@ export default function AccountPage() {
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Session headline</p>
-              <p className="mt-3 text-lg font-semibold text-white">{workspace.session.readiness.headline}</p>
-              <p className="mt-2 text-sm leading-6 text-slate-400">{workspace.session.readiness.detail}</p>
+              <p className="mt-3 text-lg font-semibold text-white">
+                {workspace.session.readiness.headline}
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                {workspace.session.readiness.detail}
+              </p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Connected identity</p>
                 <p className="mt-2 text-sm font-medium text-white">{workspace.profile.email}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">Google-linked identity is the anchor for decrypting wallet and private-note keys.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Google-linked identity is the anchor for decrypting wallet and private-note keys.
+                </p>
               </div>
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Stellar key</p>
-                <p className="mt-2 text-sm font-medium text-white">{workspace.profile.stellarKeyPreview}</p>
-                <p className="mt-2 break-all font-mono text-xs text-slate-400">{workspace.profile.stellarPublicKey}</p>
+                <p className="mt-2 text-sm font-medium text-white">
+                  {workspace.profile.stellarKeyPreview}
+                </p>
+                <p className="mt-2 break-all font-mono text-xs text-slate-400">
+                  {workspace.profile.stellarPublicKey}
+                </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-3">
@@ -345,7 +376,9 @@ export default function AccountPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Public wallet</p>
-              <p className="mt-3 text-2xl font-semibold text-white">{workspace.wallet.public.xlm} XLM</p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {workspace.wallet.public.xlm} XLM
+              </p>
               <p className="mt-1 text-sm text-slate-300">{workspace.wallet.public.usdc} USDC</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Badge variant={workspace.wallet.public.hasXlm ? 'success' : 'warning'}>
@@ -358,14 +391,22 @@ export default function AccountPage() {
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Private wallet</p>
-              <p className="mt-3 text-2xl font-semibold text-white">{workspace.wallet.private.xlm} XLM</p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                {workspace.wallet.private.xlm} XLM
+              </p>
               <p className="mt-1 text-sm text-slate-300">{workspace.wallet.private.usdc} USDC</p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Badge variant={workspace.wallet.private.hasShieldedBalance ? 'success' : 'warning'}>
-                  {workspace.wallet.private.hasShieldedBalance ? 'Shielded seeded' : 'Shielded empty'}
+                <Badge
+                  variant={workspace.wallet.private.hasShieldedBalance ? 'success' : 'warning'}
+                >
+                  {workspace.wallet.private.hasShieldedBalance
+                    ? 'Shielded seeded'
+                    : 'Shielded empty'}
                 </Badge>
                 <Badge variant={workspace.wallet.pendingWithdrawals > 0 ? 'warning' : 'success'}>
-                  {workspace.wallet.pendingWithdrawals > 0 ? `${workspace.wallet.pendingWithdrawals} queued` : 'No queue backlog'}
+                  {workspace.wallet.pendingWithdrawals > 0
+                    ? `${workspace.wallet.pendingWithdrawals} queued`
+                    : 'No queue backlog'}
                 </Badge>
               </div>
             </div>
@@ -406,15 +447,21 @@ export default function AccountPage() {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Tracked pools</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{workspace.operations.trackedPools}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {workspace.operations.trackedPools}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Lagging pools</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{workspace.operations.laggingPools}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {workspace.operations.laggingPools}
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Sponsored actions</p>
-              <p className="mt-2 text-2xl font-semibold text-white">{workspace.activity.sponsored}</p>
+              <p className="mt-2 text-2xl font-semibold text-white">
+                {workspace.activity.sponsored}
+              </p>
             </div>
           </div>
           <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
@@ -432,23 +479,34 @@ export default function AccountPage() {
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">24h velocity</p>
-              <p className="mt-2 text-sm font-medium text-white">{workspace.activity.velocity.last24h.successful} successful / {workspace.activity.velocity.last24h.total} total</p>
-              <p className="mt-1 text-sm text-slate-400">{workspace.activity.velocity.last24h.pending} still pending.</p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {workspace.activity.velocity.last24h.successful} successful /{' '}
+                {workspace.activity.velocity.last24h.total} total
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {workspace.activity.velocity.last24h.pending} still pending.
+              </p>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">7d average</p>
-              <p className="mt-2 text-sm font-medium text-white">{workspace.activity.velocity.last7d.dailyAverage} actions/day</p>
-              <p className="mt-1 text-sm text-slate-400">{workspace.activity.velocity.last7d.successful} successful actions this week.</p>
+              <p className="mt-2 text-sm font-medium text-white">
+                {workspace.activity.velocity.last7d.dailyAverage} actions/day
+              </p>
+              <p className="mt-1 text-sm text-slate-400">
+                {workspace.activity.velocity.last7d.successful} successful actions this week.
+              </p>
             </div>
           </div>
           <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
             <p className="text-xs uppercase tracking-wide text-slate-500">Latest activity themes</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {workspace.activity.latestTitles.length ? workspace.activity.latestTitles.map((title) => (
-                <Badge key={title} variant="default">
-                  {title}
-                </Badge>
-              )) : (
+              {workspace.activity.latestTitles.length ? (
+                workspace.activity.latestTitles.map((title) => (
+                  <Badge key={title} variant="default">
+                    {title}
+                  </Badge>
+                ))
+              ) : (
                 <span className="text-sm text-slate-500">No tracked activity yet.</span>
               )}
             </div>
@@ -462,10 +520,15 @@ export default function AccountPage() {
           </div>
           <div className="space-y-3">
             {workspace.safety.keyMaterial.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{item.label}</p>
-                  <Badge variant={item.status === 'ready' ? 'success' : 'warning'}>{item.status}</Badge>
+                  <Badge variant={item.status === 'ready' ? 'success' : 'warning'}>
+                    {item.status}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
               </div>
@@ -493,7 +556,10 @@ export default function AccountPage() {
           </div>
           <div className="space-y-3">
             {workspace.safety.checklist.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -501,7 +567,9 @@ export default function AccountPage() {
                       <Badge variant={getVariant(item.status)}>{item.status}</Badge>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
-                    <p className="mt-2 text-xs uppercase tracking-wide text-indigo-300">{item.action}</p>
+                    <p className="mt-2 text-xs uppercase tracking-wide text-indigo-300">
+                      {item.action}
+                    </p>
                   </div>
                   {item.status === 'complete' ? (
                     <BadgeCheck className="h-5 w-5 shrink-0 text-emerald-300" />
@@ -548,7 +616,10 @@ export default function AccountPage() {
           <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
             <div className="space-y-3">
               {workspace.dangerZone.deleteWarning.map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-red-500/10 bg-red-500/5 p-4">
+                <div
+                  key={item}
+                  className="flex items-start gap-3 rounded-2xl border border-red-500/10 bg-red-500/5 p-4"
+                >
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" />
                   <p className="text-sm leading-6 text-slate-300">{item}</p>
                 </div>
@@ -557,7 +628,11 @@ export default function AccountPage() {
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
               <p className="text-xs uppercase tracking-wide text-slate-500">Confirmation</p>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Type <span className="font-semibold text-white">{workspace.dangerZone.deleteConfirmationLabel}</span> exactly before deletion will unlock.
+                Type{' '}
+                <span className="font-semibold text-white">
+                  {workspace.dangerZone.deleteConfirmationLabel}
+                </span>{' '}
+                exactly before deletion will unlock.
               </p>
               <div className="mt-4 space-y-4">
                 <Input
@@ -571,7 +646,12 @@ export default function AccountPage() {
                     {deleteStatus}
                   </div>
                 )}
-                <Button variant="destructive" onClick={handleDelete} isLoading={deleteLoading} disabled={!deleteReady}>
+                <Button
+                  variant="destructive"
+                  onClick={handleDelete}
+                  isLoading={deleteLoading}
+                  disabled={!deleteReady}
+                >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete account
                 </Button>
@@ -588,7 +668,9 @@ export default function AccountPage() {
             Back to Dashboard
           </Button>
         </Link>
-        <div className="text-sm text-slate-500">Last account refresh: {formatTimestamp(lastLoadedAt)}</div>
+        <div className="text-sm text-slate-500">
+          Last account refresh: {formatTimestamp(lastLoadedAt)}
+        </div>
       </div>
     </div>
   );

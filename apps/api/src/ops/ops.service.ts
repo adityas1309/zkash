@@ -19,10 +19,12 @@ export class OpsService {
     @InjectModel(Swap.name) private readonly swapModel: Model<Swap>,
     @InjectModel(Offer.name) private readonly offerModel: Model<Offer>,
     @InjectModel(EncryptedNote.name) private readonly encryptedNoteModel: Model<EncryptedNote>,
-    @InjectModel(PendingWithdrawal.name) private readonly pendingWithdrawalModel: Model<PendingWithdrawal>,
+    @InjectModel(PendingWithdrawal.name)
+    private readonly pendingWithdrawalModel: Model<PendingWithdrawal>,
     @InjectModel(PoolCommitment.name) private readonly poolCommitmentModel: Model<PoolCommitment>,
     @InjectModel(IndexerSyncState.name) private readonly syncStateModel: Model<IndexerSyncState>,
-    @InjectModel(TransactionAudit.name) private readonly transactionAuditModel: Model<TransactionAudit>,
+    @InjectModel(TransactionAudit.name)
+    private readonly transactionAuditModel: Model<TransactionAudit>,
   ) {}
 
   async getHealth() {
@@ -56,7 +58,16 @@ export class OpsService {
   }
 
   async getStats() {
-    const [users, swaps, offers, encryptedNotes, pendingWithdrawals, commitments, syncStates, auditEntries] = await Promise.all([
+    const [
+      users,
+      swaps,
+      offers,
+      encryptedNotes,
+      pendingWithdrawals,
+      commitments,
+      syncStates,
+      auditEntries,
+    ] = await Promise.all([
       this.userModel.countDocuments().exec(),
       this.swapModel.countDocuments().exec(),
       this.offerModel.countDocuments().exec(),
@@ -68,7 +79,9 @@ export class OpsService {
     ]);
 
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const activeUsers = await this.userModel.countDocuments({ updatedAt: { $gte: twentyFourHoursAgo } }).exec();
+    const activeUsers = await this.userModel
+      .countDocuments({ updatedAt: { $gte: twentyFourHoursAgo } })
+      .exec();
     this.metrics.setActiveAccounts(activeUsers);
 
     return {
@@ -113,7 +126,9 @@ export class OpsService {
         .find()
         .sort({ createdAt: -1 })
         .limit(20)
-        .select('operation state txHash error indexingStatus indexingDetail sponsorshipAttempted sponsored createdAt metadata')
+        .select(
+          'operation state txHash error indexingStatus indexingDetail sponsorshipAttempted sponsored createdAt metadata',
+        )
         .lean()
         .exec(),
     ]);
@@ -141,11 +156,25 @@ export class OpsService {
 
     const alertSummary = this.buildAlertSummary(readiness, stats, laggingPools);
     const activitySummary = this.buildActivitySummary(recentAudits as any[]);
-    const dependencyBoard = this.buildDependencyBoard(readiness, stats, laggingPools, activitySummary);
-    const remediationBoard = this.buildRemediationBoard(readiness, stats, laggingPools, activitySummary);
+    const dependencyBoard = this.buildDependencyBoard(
+      readiness,
+      stats,
+      laggingPools,
+      activitySummary,
+    );
+    const remediationBoard = this.buildRemediationBoard(
+      readiness,
+      stats,
+      laggingPools,
+      activitySummary,
+    );
     const throughputBoard = this.buildThroughputBoard(stats, activitySummary);
     const routeHealth = this.buildRouteHealth(stats, activitySummary, readiness);
-    const incidentFeed = this.buildIncidentFeed(laggingPools, recentAudits as any[], activitySummary);
+    const incidentFeed = this.buildIncidentFeed(
+      laggingPools,
+      recentAudits as any[],
+      activitySummary,
+    );
 
     return {
       health,
@@ -215,7 +244,8 @@ export class OpsService {
       alerts.push({
         severity: 'info',
         title: 'No active operational alerts',
-        detail: 'Health, readiness, queue size, and market flow are all within the normal range tracked by the workspace.',
+        detail:
+          'Health, readiness, queue size, and market flow are all within the normal range tracked by the workspace.',
       });
     }
 
@@ -238,9 +268,13 @@ export class OpsService {
   ) {
     const recentFailures = recentAudits.filter((audit) => audit.state === 'failed').length;
     const sponsoredCount = recentAudits.filter((audit) => audit.sponsored).length;
-    const swapAuditCount = recentAudits.filter((audit) => String(audit.operation ?? '').startsWith('swap')).length;
+    const swapAuditCount = recentAudits.filter((audit) =>
+      String(audit.operation ?? '').startsWith('swap'),
+    ).length;
     const walletAuditCount = recentAudits.filter((audit) =>
-      ['public_send', 'private_send', 'deposit', 'withdraw_self', 'split_note'].includes(String(audit.operation ?? '')),
+      ['public_send', 'private_send', 'deposit', 'withdraw_self', 'split_note'].includes(
+        String(audit.operation ?? ''),
+      ),
     ).length;
 
     return {
@@ -296,7 +330,8 @@ export class OpsService {
       {
         id: 'indexer',
         label: 'Canonical indexer',
-        status: laggingPools.length === 0 ? 'healthy' : laggingPools.length > 1 ? 'critical' : 'degraded',
+        status:
+          laggingPools.length === 0 ? 'healthy' : laggingPools.length > 1 ? 'critical' : 'degraded',
         summary:
           laggingPools.length === 0
             ? `${trackedPools} tracked pools are healthy and fresh enough for normal private-flow visibility.`
@@ -441,10 +476,7 @@ export class OpsService {
           'No urgent remediation action is currently required. Continue monitoring queue shape, failure drift, and sponsorship usage while flow grows.',
         owner: 'ops',
         destination: '/status',
-        signals: [
-          `readiness=${readiness.status}`,
-          `active24h=${stats.users?.active24h ?? 0}`,
-        ],
+        signals: [`readiness=${readiness.status}`, `active24h=${stats.users?.active24h ?? 0}`],
       });
     }
 
@@ -598,7 +630,9 @@ export class OpsService {
       });
     }
 
-    for (const audit of recentAudits.filter((item) => item.state === 'failed' || item.state === 'retryable').slice(0, 6)) {
+    for (const audit of recentAudits
+      .filter((item) => item.state === 'failed' || item.state === 'retryable')
+      .slice(0, 6)) {
       incidents.push({
         id: `audit-${String(audit.operation ?? 'activity')}-${String(audit.createdAt ?? '')}`,
         severity: audit.state === 'failed' ? 'warning' : 'info',
@@ -621,7 +655,10 @@ export class OpsService {
     }
 
     return incidents
-      .sort((left, right) => new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime())
+      .sort(
+        (left, right) =>
+          new Date(right.createdAt ?? 0).getTime() - new Date(left.createdAt ?? 0).getTime(),
+      )
       .slice(0, 10);
   }
 }

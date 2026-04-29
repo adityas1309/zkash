@@ -148,7 +148,9 @@ function RouteCard({
   return (
     <Card
       variant={active ? 'neon' : 'glass'}
-      className={active ? 'border-indigo-500/25 bg-gradient-to-br from-indigo-900/30 to-slate-900/70' : ''}
+      className={
+        active ? 'border-indigo-500/25 bg-gradient-to-br from-indigo-900/30 to-slate-900/70' : ''
+      }
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -384,8 +386,8 @@ export default function SendPage() {
             Preflight a payment before you submit it
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This workspace resolves the recipient, compares public and private routes, and tells you whether the next step is
-            send, split, deposit, or retry.
+            This workspace resolves the recipient, compares public and private routes, and tells you
+            whether the next step is send, split, deposit, or retry.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -414,17 +416,27 @@ export default function SendPage() {
       <section className="grid gap-4 md:grid-cols-4">
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Public XLM</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{workspace?.balances.public.xlm ?? '0'}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Visible network balance for public sends and fees.</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {workspace?.balances.public.xlm ?? '0'}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Visible network balance for public sends and fees.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Public USDC</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{workspace?.balances.public.usdc ?? '0'}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Stablecoin liquidity available in the public wallet.</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {workspace?.balances.public.usdc ?? '0'}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Stablecoin liquidity available in the public wallet.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Private notes</p>
-          <p className="mt-2 text-3xl font-semibold text-white">{workspace?.privateNotes?.[asset]?.count ?? 0}</p>
+          <p className="mt-2 text-3xl font-semibold text-white">
+            {workspace?.privateNotes?.[asset]?.count ?? 0}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Largest {asset} note: {workspace?.privateNotes?.[asset]?.largest ?? 0}
           </p>
@@ -446,7 +458,9 @@ export default function SendPage() {
                 <Info className="mt-0.5 shrink-0 text-slate-400" size={18} />
                 <p className="text-sm text-slate-300">
                   You are sending in{' '}
-                  <span className={isPrivate ? 'font-bold text-indigo-400' : 'font-bold text-blue-400'}>
+                  <span
+                    className={isPrivate ? 'font-bold text-indigo-400' : 'font-bold text-blue-400'}
+                  >
                     {isPrivate ? 'Private Mode' : 'Public Mode'}
                   </span>
                   .{' '}
@@ -515,7 +529,11 @@ export default function SendPage() {
 
             {status && (
               <Card
-                variant={status.toLowerCase().includes('failed') || status.toLowerCase().includes('error') ? 'neon' : 'default'}
+                variant={
+                  status.toLowerCase().includes('failed') || status.toLowerCase().includes('error')
+                    ? 'neon'
+                    : 'default'
+                }
                 className="border-l-4 border-l-indigo-500 p-4"
               >
                 <p className="break-all text-sm text-slate-300">{status}</p>
@@ -544,22 +562,31 @@ export default function SendPage() {
                   )}
                 </div>
                 <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-                  <p className="text-lg font-semibold text-white">{preview.recipient.displayLabel}</p>
+                  <p className="text-lg font-semibold text-white">
+                    {preview.recipient.displayLabel}
+                  </p>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     {preview.recipient.stellarPublicKey ?? preview.recipient.identifier}
                   </p>
-                  {preview.recipient.reputation !== null && preview.recipient.reputation !== undefined && (
-                    <p className="mt-2 text-sm text-slate-300">Reputation: {preview.recipient.reputation}</p>
-                  )}
+                  {preview.recipient.reputation !== null &&
+                    preview.recipient.reputation !== undefined && (
+                      <p className="mt-2 text-sm text-slate-300">
+                        Reputation: {preview.recipient.reputation}
+                      </p>
+                    )}
                   {preview.recentRelationship && (
                     <p className="mt-3 text-xs text-slate-500">
-                      Last seen: {preview.recentRelationship.title} on {formatTimestamp(preview.recentRelationship.date)}
+                      Last seen: {preview.recentRelationship.title} on{' '}
+                      {formatTimestamp(preview.recentRelationship.date)}
                     </p>
                   )}
                 </div>
                 <div className="space-y-2">
                   {preview.guidance.map((item) => (
-                    <div key={item} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-300">
+                    <div
+                      key={item}
+                      className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm text-slate-300"
+                    >
                       {item}
                     </div>
                   ))}
@@ -585,13 +612,17 @@ export default function SendPage() {
                 extra={
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Visible balance</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Visible balance
+                      </p>
                       <p className="mt-2 text-sm font-medium text-white">
                         {preview.routes.public.balance} {asset}
                       </p>
                     </div>
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Missing amount</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Missing amount
+                      </p>
                       <p className="mt-2 text-sm font-medium text-white">
                         {preview.routes.public.missingAmount} {asset}
                       </p>
@@ -623,7 +654,9 @@ export default function SendPage() {
                       </p>
                     </div>
                     <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Private total</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Private total
+                      </p>
                       <p className="mt-2 text-sm font-medium text-white">
                         {preview.routes.private.totalPrivateBalance} {asset}
                       </p>
@@ -644,7 +677,10 @@ export default function SendPage() {
           </div>
           <div className="space-y-3">
             {(workspace?.guidance ?? []).map((item) => (
-              <div key={item} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300">
+              <div
+                key={item}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-300"
+              >
                 {item}
               </div>
             ))}
@@ -676,14 +712,19 @@ export default function SendPage() {
                       {counterparty.privateFlows > 0 ? 'Private touch' : 'Public touch'}
                     </Badge>
                   </div>
-                  <p className="mt-2 text-sm text-slate-300">{counterparty.interactions} interactions</p>
-                  <p className="mt-2 text-xs text-slate-500">Latest activity: {formatTimestamp(counterparty.latestAt)}</p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {counterparty.interactions} interactions
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Latest activity: {formatTimestamp(counterparty.latestAt)}
+                  </p>
                 </button>
               ))}
             </div>
           ) : (
             <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm text-slate-500">
-              Recent counterparties will appear here after wallet or swap activity starts building up.
+              Recent counterparties will appear here after wallet or swap activity starts building
+              up.
             </div>
           )}
         </Card>

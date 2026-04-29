@@ -39,7 +39,8 @@ export default function AuthGooglePage() {
           </div>
           <h1 className="mt-5 text-4xl font-bold text-white">Connecting your account</h1>
           <p className="mt-3 text-base leading-7 text-slate-300">
-            Google sign-in provisions the wallet keys for this workspace and restores your setup state across public and private flows.
+            Google sign-in provisions the wallet keys for this workspace and restores your setup
+            state across public and private flows.
           </p>
           <div className="mt-8 rounded-3xl border border-indigo-500/20 bg-indigo-500/10 p-6">
             <p className="text-sm font-medium text-indigo-200">What happens next</p>
@@ -51,7 +52,8 @@ export default function AuthGooglePage() {
                 <div>
                   <p className="text-sm font-medium text-white">Secure wallet recovery context</p>
                   <p className="mt-1 text-sm leading-6 text-slate-400">
-                    Your Stellar and private note secrets are derived into the authenticated workspace and restored after sign-in.
+                    Your Stellar and private note secrets are derived into the authenticated
+                    workspace and restored after sign-in.
                   </p>
                 </div>
               </div>
@@ -62,7 +64,8 @@ export default function AuthGooglePage() {
                 <div>
                   <p className="text-sm font-medium text-white">Readiness checklist unlocked</p>
                   <p className="mt-1 text-sm leading-6 text-slate-400">
-                    After the callback, you will see whether XLM funding, the USDC trustline, and private deposits are still missing.
+                    After the callback, you will see whether XLM funding, the USDC trustline, and
+                    private deposits are still missing.
                   </p>
                 </div>
               </div>
@@ -88,7 +91,10 @@ export default function AuthGooglePage() {
           <div className="mt-5 space-y-3">
             {workspace.checklist.length ? (
               workspace.checklist.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium text-white">{item.label}</p>
                     <Badge
@@ -104,13 +110,18 @@ export default function AuthGooglePage() {
                     </Badge>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-slate-400">{item.detail}</p>
-                  <p className="mt-2 text-xs uppercase tracking-wide text-indigo-300">{item.action}</p>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-indigo-300">
+                    {item.action}
+                  </p>
                 </div>
               ))
             ) : (
               <>
                 {workspace.nextActions.map((item) => (
-                  <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+                  >
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="h-4 w-4 text-indigo-300" />
                       <p className="text-sm leading-6 text-slate-300">{item}</p>

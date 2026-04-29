@@ -1,6 +1,13 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Asset, Horizon, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import {
+  Asset,
+  Horizon,
+  Keypair,
+  Networks,
+  Operation,
+  TransactionBuilder,
+} from '@stellar/stellar-sdk';
 import { Model, Types } from 'mongoose';
 import { AuthService } from '../auth/auth.service';
 import { getContractAddress, getHorizonUrl, isMainnetContext } from '../network.context';
@@ -109,7 +116,10 @@ export class SwapService {
     return swap;
   }
 
-  async executeSwap(swapId: string, sellerId: Types.ObjectId): Promise<{ txHash: string; auditId: string }> {
+  async executeSwap(
+    swapId: string,
+    sellerId: Types.ObjectId,
+  ): Promise<{ txHash: string; auditId: string }> {
     const swap = await this.swapModel.findById(swapId).exec();
     if (!swap) {
       throw new Error('Swap not found');
@@ -226,7 +236,8 @@ export class SwapService {
       await this.transactionAuditService.updateState(audit._id.toString(), 'success', {
         txHash,
         indexingStatus: 'tracked',
-        indexingDetail: 'Public swap settles directly on-chain and does not wait on private note indexing.',
+        indexingDetail:
+          'Public swap settles directly on-chain and does not wait on private note indexing.',
       });
 
       return { txHash, auditId: audit._id.toString() };
@@ -300,7 +311,11 @@ export class SwapService {
     const actorRole = this.getPartyRole(swap, userId);
     if (!actorRole) {
       await this.markAuditFailure(audit._id.toString(), 'You are not a party to this swap');
-      return { ready: false, error: 'You are not a party to this swap', auditId: audit._id.toString() };
+      return {
+        ready: false,
+        error: 'You are not a party to this swap',
+        auditId: audit._id.toString(),
+      };
     }
 
     const asset: 'USDC' | 'XLM' = actorRole === 'alice' ? offer.assetIn : offer.assetOut;
@@ -325,7 +340,8 @@ export class SwapService {
       await this.transactionAuditService.updateState(audit._id.toString(), 'retryable', {
         error: message,
         indexingStatus: 'tracked',
-        indexingDetail: 'Proof generation can be retried after note splitting or a matching deposit arrives.',
+        indexingDetail:
+          'Proof generation can be retried after note splitting or a matching deposit arrives.',
       });
       return {
         ready: false,
@@ -438,7 +454,12 @@ export class SwapService {
     pubSignalsBytesB64: string,
     nullifierHex: string,
     options: { source?: string; existingAuditId?: string } = {},
-  ): Promise<{ role: SwapPartyRole; ready: boolean; proofStatus: SwapProofStatus; auditId: string }> {
+  ): Promise<{
+    role: SwapPartyRole;
+    ready: boolean;
+    proofStatus: SwapProofStatus;
+    auditId: string;
+  }> {
     const swap = await this.swapModel.findById(swapId).exec();
     if (!swap || !this.isProofCollectionState(swap.status)) {
       throw new Error('Swap not found or not ready for proofs');
@@ -552,8 +573,16 @@ export class SwapService {
         throw new Error('Users not found');
       }
 
-      const aliceEncKey = this.authService.getDecryptionKeyForUser(dbAlice, dbAlice.googleId, dbAlice.email);
-      const bobEncKey = this.authService.getDecryptionKeyForUser(dbBob, dbBob.googleId, dbBob.email);
+      const aliceEncKey = this.authService.getDecryptionKeyForUser(
+        dbAlice,
+        dbAlice.googleId,
+        dbAlice.email,
+      );
+      const bobEncKey = this.authService.getDecryptionKeyForUser(
+        dbBob,
+        dbBob.googleId,
+        dbBob.email,
+      );
       const aliceSecret = this.authService.decrypt(dbAlice.stellarSecretKeyEncrypted, aliceEncKey);
       const bobSecret = this.authService.decrypt(dbBob.stellarSecretKeyEncrypted, bobEncKey);
 
@@ -599,18 +628,27 @@ export class SwapService {
         dbBobNewCommitment = bobRes.commitmentBytes;
         dbBobNewAsset = 'USDC';
         contractBobOutputCommitment = dbBobNewCommitment;
-        const usdcLeaves = await this.sorobanService.getCommitments(usdcPool, dbBob.stellarPublicKey);
+        const usdcLeaves = await this.sorobanService.getCommitments(
+          usdcPool,
+          dbBob.stellarPublicKey,
+        );
         contractBobOutputRoot = await this.merkleTree.computeRootFromLeaves(
           [...usdcLeaves, dbBobNewCommitment],
           20,
         );
 
-        const aliceRes = await this.usersService.generateNote(dbAlice._id.toString(), swap.amountOut);
+        const aliceRes = await this.usersService.generateNote(
+          dbAlice._id.toString(),
+          swap.amountOut,
+        );
         dbAliceNewNote = aliceRes.noteFields;
         dbAliceNewCommitment = aliceRes.commitmentBytes;
         dbAliceNewAsset = 'XLM';
         contractAliceOutputCommitment = dbAliceNewCommitment;
-        const xlmLeaves = await this.sorobanService.getCommitments(xlmPool, dbAlice.stellarPublicKey);
+        const xlmLeaves = await this.sorobanService.getCommitments(
+          xlmPool,
+          dbAlice.stellarPublicKey,
+        );
         contractAliceOutputRoot = await this.merkleTree.computeRootFromLeaves(
           [...xlmLeaves, dbAliceNewCommitment],
           20,
@@ -623,12 +661,18 @@ export class SwapService {
         contractAlicePubSignals = bobPubSignals;
         contractAliceNullifier = bobNullifier;
 
-        const aliceRes = await this.usersService.generateNote(dbAlice._id.toString(), swap.amountOut);
+        const aliceRes = await this.usersService.generateNote(
+          dbAlice._id.toString(),
+          swap.amountOut,
+        );
         dbAliceNewNote = aliceRes.noteFields;
         dbAliceNewCommitment = aliceRes.commitmentBytes;
         dbAliceNewAsset = 'USDC';
         contractBobOutputCommitment = dbAliceNewCommitment;
-        const usdcLeaves = await this.sorobanService.getCommitments(usdcPool, dbAlice.stellarPublicKey);
+        const usdcLeaves = await this.sorobanService.getCommitments(
+          usdcPool,
+          dbAlice.stellarPublicKey,
+        );
         contractBobOutputRoot = await this.merkleTree.computeRootFromLeaves(
           [...usdcLeaves, dbAliceNewCommitment],
           20,
@@ -690,8 +734,14 @@ export class SwapService {
       }
 
       try {
-        await this.usersService.markNoteSpent(dbAlice._id.toString(), Buffer.from(aliceNullifier).toString('hex'));
-        await this.usersService.markNoteSpent(dbBob._id.toString(), Buffer.from(bobNullifier).toString('hex'));
+        await this.usersService.markNoteSpent(
+          dbAlice._id.toString(),
+          Buffer.from(aliceNullifier).toString('hex'),
+        );
+        await this.usersService.markNoteSpent(
+          dbBob._id.toString(),
+          Buffer.from(bobNullifier).toString('hex'),
+        );
       } catch (e) {
         console.error('[SwapService] Failed to mark input notes as spent:', e);
       }
@@ -703,7 +753,12 @@ export class SwapService {
       swap.lastError = undefined;
       await swap.save();
 
-      this.autoWithdrawSafe(dbAlice._id.toString(), dbAlice.username, dbAliceNewAsset, swap.amountOut);
+      this.autoWithdrawSafe(
+        dbAlice._id.toString(),
+        dbAlice.username,
+        dbAliceNewAsset,
+        swap.amountOut,
+      );
       this.autoWithdrawSafe(dbBob._id.toString(), dbBob.username, dbBobNewAsset, swap.amountIn);
 
       await this.transactionAuditService.updateState(audit._id.toString(), 'success', {
@@ -733,7 +788,12 @@ export class SwapService {
     }
   }
 
-  private async autoWithdrawSafe(userId: string, username: string, asset: 'USDC' | 'XLM', amount: number) {
+  private async autoWithdrawSafe(
+    userId: string,
+    username: string,
+    asset: 'USDC' | 'XLM',
+    amount: number,
+  ) {
     const MAX_RETRIES = 20;
     const RETRY_DELAY_MS = 30_000;
 
@@ -869,7 +929,8 @@ export class SwapService {
       participantRole === 'alice'
         ? ((offer?.assetIn as 'USDC' | 'XLM') ?? 'XLM')
         : ((offer?.assetOut as 'USDC' | 'XLM') ?? 'USDC');
-    const myFundingAmount = participantRole === 'alice' ? Number(swap.amountIn) || 0 : Number(swap.amountOut) || 0;
+    const myFundingAmount =
+      participantRole === 'alice' ? Number(swap.amountIn) || 0 : Number(swap.amountOut) || 0;
     const publicFundingBalance = Number(
       myFundingAsset === 'USDC' ? viewerBalances.usdc || 0 : viewerBalances.xlm || 0,
     );
@@ -888,9 +949,10 @@ export class SwapService {
         privateFundingBalance === myFundingAmount || privateFundingBalance >= myFundingAmount,
     };
 
-    const routeMode = status.proofs.ready || swap.proofStatus === 'ready' || swap.status === 'proofs_pending'
-      ? 'private'
-      : 'public';
+    const routeMode =
+      status.proofs.ready || swap.proofStatus === 'ready' || swap.status === 'proofs_pending'
+        ? 'private'
+        : 'public';
 
     const actionBoard: Array<{
       id: string;
@@ -899,7 +961,13 @@ export class SwapService {
       detail: string;
       cta: string;
       href?: string;
-      action: 'accept' | 'prepare_proof' | 'deposit' | 'execute_public' | 'execute_private' | 'wait';
+      action:
+        | 'accept'
+        | 'prepare_proof'
+        | 'deposit'
+        | 'execute_public'
+        | 'execute_private'
+        | 'wait';
     }> = [];
 
     if (swap.status === 'requested' && participantRole === 'bob') {
@@ -907,7 +975,8 @@ export class SwapService {
         id: 'accept-request',
         severity: 'critical',
         title: 'Accept the buyer request',
-        detail: 'The buyer is blocked until the seller accepts and the lifecycle moves into proof collection or execution.',
+        detail:
+          'The buyer is blocked until the seller accepts and the lifecycle moves into proof collection or execution.',
         cta: 'Accept request',
         action: 'accept',
       });
@@ -918,10 +987,9 @@ export class SwapService {
         id: 'prepare-proof',
         severity: 'critical',
         title: `Prepare an exact ${myFundingAmount} ${myFundingAsset} proof`,
-        detail:
-          proofRequirement.hasPrivateFunding
-            ? 'You have enough private balance to attempt proof preparation, but exact-note shape may still require splitting.'
-            : 'Private balance is not ready for this proof amount yet, so deposit or note preparation will be needed first.',
+        detail: proofRequirement.hasPrivateFunding
+          ? 'You have enough private balance to attempt proof preparation, but exact-note shape may still require splitting.'
+          : 'Private balance is not ready for this proof amount yet, so deposit or note preparation will be needed first.',
         cta: proofRequirement.hasPrivateFunding ? 'Prepare proof' : 'Fund private balance',
         href: proofRequirement.hasPrivateFunding ? undefined : '/wallet/fund',
         action: proofRequirement.hasPrivateFunding ? 'prepare_proof' : 'deposit',
@@ -933,7 +1001,8 @@ export class SwapService {
         id: 'execute-private',
         severity: 'critical',
         title: 'Finalize private execution',
-        detail: 'Both proofs are already present. The remaining blocker is an actual private execution submission.',
+        detail:
+          'Both proofs are already present. The remaining blocker is an actual private execution submission.',
         cta: 'Execute privately',
         action: 'execute_private',
       });
@@ -944,18 +1013,26 @@ export class SwapService {
         id: 'watch-execution',
         severity: 'info',
         title: 'Monitor execution outcome',
-        detail: 'The swap is already executing, so the right next step is monitoring rather than submitting a new action.',
+        detail:
+          'The swap is already executing, so the right next step is monitoring rather than submitting a new action.',
         cta: 'Refresh status',
         action: 'wait',
       });
     }
 
-    if (!actionBoard.length && participantRole === 'bob' && routeMode === 'public' && swap.status !== 'completed' && swap.status !== 'failed') {
+    if (
+      !actionBoard.length &&
+      participantRole === 'bob' &&
+      routeMode === 'public' &&
+      swap.status !== 'completed' &&
+      swap.status !== 'failed'
+    ) {
       actionBoard.push({
         id: 'execute-public',
         severity: 'warning',
         title: 'Execute public settlement',
-        detail: 'Public settlement is controlled by the seller once both sides are operationally ready.',
+        detail:
+          'Public settlement is controlled by the seller once both sides are operationally ready.',
         cta: 'Execute publicly',
         action: 'execute_public',
       });
@@ -966,7 +1043,10 @@ export class SwapService {
         id: 'review-failure',
         severity: 'critical',
         title: 'Review the failed lifecycle before retrying',
-        detail: swap.lastError || status.execution.lastError || 'A recent failure is stored in the swap execution state or audit trail.',
+        detail:
+          swap.lastError ||
+          status.execution.lastError ||
+          'A recent failure is stored in the swap execution state or audit trail.',
         cta: 'Inspect audit trail',
         href: '/history',
         action: 'wait',
@@ -1006,7 +1086,8 @@ export class SwapService {
         id: 'requested',
         label: 'Request created',
         status: swap.status === 'requested' ? 'active' : 'done',
-        detail: 'A buyer request is on record and waiting for acceptance or the next route decision.',
+        detail:
+          'A buyer request is on record and waiting for acceptance or the next route decision.',
       },
       {
         id: 'proofs',
@@ -1021,7 +1102,8 @@ export class SwapService {
                 : swap.status === 'failed'
                   ? 'blocked'
                   : 'pending',
-        detail: 'Private flow requires both parties to produce exact-value proofs tied to the swap route.',
+        detail:
+          'Private flow requires both parties to produce exact-value proofs tied to the swap route.',
       },
       {
         id: 'execution',
@@ -1034,13 +1116,16 @@ export class SwapService {
               : swap.status === 'failed'
                 ? 'blocked'
                 : 'pending',
-        detail: 'The final settlement leg can be public or private depending on route and readiness.',
+        detail:
+          'The final settlement leg can be public or private depending on route and readiness.',
       },
       {
         id: 'completion',
         label: 'Completion and audit visibility',
-        status: swap.status === 'completed' ? 'done' : swap.status === 'failed' ? 'blocked' : 'pending',
-        detail: 'A finished swap should leave behind a clear tx hash or audit trail for both parties.',
+        status:
+          swap.status === 'completed' ? 'done' : swap.status === 'failed' ? 'blocked' : 'pending',
+        detail:
+          'A finished swap should leave behind a clear tx hash or audit trail for both parties.',
       },
     ];
 
@@ -1097,7 +1182,10 @@ export class SwapService {
     return swaps.map((swap) => this.serializeSwapSummary(swap, userId));
   }
 
-  private getPartyRole(swap: Pick<Swap, 'aliceId' | 'bobId'>, userId: Types.ObjectId): SwapPartyRole | null {
+  private getPartyRole(
+    swap: Pick<Swap, 'aliceId' | 'bobId'>,
+    userId: Types.ObjectId,
+  ): SwapPartyRole | null {
     if (swap.aliceId.toString() === userId.toString()) {
       return 'alice';
     }
@@ -1135,7 +1223,8 @@ export class SwapService {
 
   private serializeSwapSummary(swap: any, userId?: Types.ObjectId) {
     const role = userId ? this.getPartyRole(swap, userId) : null;
-    const myProofSubmitted = role === 'alice' ? !!swap.aliceProofBytes : role === 'bob' ? !!swap.bobProofBytes : false;
+    const myProofSubmitted =
+      role === 'alice' ? !!swap.aliceProofBytes : role === 'bob' ? !!swap.bobProofBytes : false;
     const counterpartyProofSubmitted =
       role === 'alice' ? !!swap.bobProofBytes : role === 'bob' ? !!swap.aliceProofBytes : false;
 

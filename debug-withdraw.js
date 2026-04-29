@@ -21,11 +21,11 @@ async function main() {
   // Resolve circuit artifact paths the same way as ProofService expects
   const wasmPath = path.resolve(
     __dirname,
-    'packages/circuits/private_transfer/build/main_js/main.wasm'
+    'packages/circuits/private_transfer/build/main_js/main.wasm',
   );
   const zkeyPath = path.resolve(
     __dirname,
-    'packages/circuits/private_transfer/output/main_final.zkey'
+    'packages/circuits/private_transfer/output/main_final.zkey',
   );
 
   if (!fs.existsSync(wasmPath)) {
@@ -52,11 +52,7 @@ async function main() {
 
   try {
     console.log('\nRunning groth16.fullProve...');
-    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-      input,
-      wasmPath,
-      zkeyPath
-    );
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(input, wasmPath, zkeyPath);
     console.log('\n✅ fullProve succeeded.');
     console.log('Public signals:');
     console.dir(publicSignals, { depth: null });
@@ -67,7 +63,7 @@ async function main() {
         pi_b: proof.pi_b,
         pi_c: proof.pi_c,
       },
-      { depth: null }
+      { depth: null },
     );
   } catch (err) {
     console.error('\n❌ fullProve failed.');

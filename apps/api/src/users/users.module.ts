@@ -34,4 +34,4 @@ import { TransactionsModule } from '../transactions/transactions.module';
   providers: [UsersService],
   exports: [UsersService],
 })
-export class UsersModule { }
+export class UsersModule {}

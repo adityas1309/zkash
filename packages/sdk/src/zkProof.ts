@@ -5,7 +5,7 @@
  */
 
 const FR_SIZE = 32;
-const G1_SIZE = 96;  // 48 * 2
+const G1_SIZE = 96; // 48 * 2
 const G2_SIZE = 192; // 48 * 4
 
 function bigIntToBytes48BE(n: bigint): Uint8Array {
@@ -93,7 +93,8 @@ export function proofToBytes(proof: SnarkJsProof): Uint8Array {
 export function publicSignalsToBytes(publicSignals: (string | number)[]): Uint8Array {
   const out = new Uint8Array(publicSignals.length * FR_SIZE);
   for (let i = 0; i < publicSignals.length; i++) {
-    const n = typeof publicSignals[i] === 'string' ? BigInt(publicSignals[i]) : BigInt(publicSignals[i]);
+    const n =
+      typeof publicSignals[i] === 'string' ? BigInt(publicSignals[i]) : BigInt(publicSignals[i]);
     out.set(bigIntToBytes32BE(n), i * FR_SIZE);
   }
   return out;
@@ -109,9 +110,10 @@ export function vkToBytes(vk: SnarkJsVk): Uint8Array {
   const gamma = parsePoint(vk.vk_gamma_2);
   const delta = parsePoint(vk.vk_delta_2);
   if (alpha.length < 2) throw new Error('vk_alpha_1 must be G1');
-  if (beta.length < 4 || gamma.length < 4 || delta.length < 4) throw new Error('vk beta/gamma/delta must be G2');
+  if (beta.length < 4 || gamma.length < 4 || delta.length < 4)
+    throw new Error('vk beta/gamma/delta must be G2');
   const nPub = vk.nPublic;
-  const icLen = (vk.IC?.length ?? 0);
+  const icLen = vk.IC?.length ?? 0;
   if (icLen !== nPub + 1) throw new Error('IC length must be nPublic + 1');
   const size = G1_SIZE + G2_SIZE * 3 + icLen * G1_SIZE;
   const out = new Uint8Array(size);
@@ -143,7 +145,7 @@ export function vkToBytes(vk: SnarkJsVk): Uint8Array {
 export function proofToSorobanBytes(
   proof: SnarkJsProof,
   vk: SnarkJsVk,
-  publicSignals: (string | number)[]
+  publicSignals: (string | number)[],
 ): { proofBytes: Uint8Array; pubSignalsBytes: Uint8Array; vkBytes: Uint8Array } {
   return {
     proofBytes: proofToBytes(proof),

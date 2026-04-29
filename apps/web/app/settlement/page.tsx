@@ -133,7 +133,12 @@ function variantFor(value: string) {
   if (value === 'critical' || value === 'blocked' || value === 'failed') {
     return 'error' as const;
   }
-  if (value === 'warning' || value === 'attention' || value === 'retryable' || value === 'pending') {
+  if (
+    value === 'warning' ||
+    value === 'attention' ||
+    value === 'retryable' ||
+    value === 'pending'
+  ) {
     return 'warning' as const;
   }
   if (value === 'ready' || value === 'success') {
@@ -226,7 +231,8 @@ export default function SettlementPage() {
     if (workspace.summary.queuedWithdrawals > 0) {
       return {
         label: 'Settlement backlog is active',
-        detail: 'Private value is still moving toward the visible wallet, so balance clarity depends on queue progress and confirmation.',
+        detail:
+          'Private value is still moving toward the visible wallet, so balance clarity depends on queue progress and confirmation.',
       };
     }
     if (workspace.summary.retryable > 0 || workspace.summary.laggingPrivate > 0) {
@@ -237,7 +243,8 @@ export default function SettlementPage() {
     }
     return {
       label: 'Settlement is calm',
-      detail: 'No major queue or freshness pressure is distorting how public and private balances should be interpreted.',
+      detail:
+        'No major queue or freshness pressure is distorting how public and private balances should be interpreted.',
     };
   }, [workspace]);
 
@@ -278,20 +285,35 @@ export default function SettlementPage() {
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={workspace.summary.queuedWithdrawals > 0 ? 'warning' : workspace.summary.retryable > 0 ? 'warning' : 'success'}>
+              <Badge
+                variant={
+                  workspace.summary.queuedWithdrawals > 0
+                    ? 'warning'
+                    : workspace.summary.retryable > 0
+                      ? 'warning'
+                      : 'success'
+                }
+              >
                 {headline.label}
               </Badge>
-              <Badge variant="default">{workspace.summary.queuedWithdrawals} queued withdrawals</Badge>
-              <Badge variant="default">{workspace.summary.laggingPrivate} lagging private items</Badge>
+              <Badge variant="default">
+                {workspace.summary.queuedWithdrawals} queued withdrawals
+              </Badge>
+              <Badge variant="default">
+                {workspace.summary.laggingPrivate} lagging private items
+              </Badge>
               <Badge variant="default">Updated {formatTimestamp(workspace.updatedAt)}</Badge>
             </div>
-            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">Settlement Workspace</p>
+            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">
+              Settlement Workspace
+            </p>
             <h1 className="mt-3 bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-3xl font-bold text-transparent md:text-5xl">
               See what has settled, what is still in flight, and what will become visible next
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300 md:text-base">
-              This desk exists for the moments when a balance looks stale, a private withdrawal is queued, or a proof
-              has been submitted but the user still cannot tell whether value is visible, pending, or safe to retry.
+              This desk exists for the moments when a balance looks stale, a private withdrawal is
+              queued, or a proof has been submitted but the user still cannot tell whether value is
+              visible, pending, or safe to retry.
             </p>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">{headline.detail}</p>
           </div>
@@ -299,18 +321,30 @@ export default function SettlementPage() {
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[34rem]">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Ready lanes</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.readyLanes}</p>
-              <p className="mt-2 text-sm text-slate-400">Settlement lanes currently calm enough for normal use.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workspace.summary.readyLanes}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Settlement lanes currently calm enough for normal use.
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Retry pressure</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.retryable}</p>
-              <p className="mt-2 text-sm text-slate-400">Failed or retryable items still asking for user attention.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workspace.summary.retryable}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Failed or retryable items still asking for user attention.
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Timeline size</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.trackedTimeline}</p>
-              <p className="mt-2 text-sm text-slate-400">Recent settlement-relevant history entries being tracked here.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workspace.summary.trackedTimeline}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Recent settlement-relevant history entries being tracked here.
+              </p>
             </div>
           </div>
         </div>
@@ -322,7 +356,9 @@ export default function SettlementPage() {
             <TimerReset className="h-4 w-4 text-amber-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Queued value</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{workspace.summary.queuedWithdrawals}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {workspace.summary.queuedWithdrawals}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Private withdrawals that still separate note value from visible wallet confirmation.
           </p>
@@ -332,7 +368,9 @@ export default function SettlementPage() {
             <Shield className="h-4 w-4 text-emerald-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Sponsored touches</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{workspace.summary.sponsoredSettlementTouches}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {workspace.summary.sponsoredSettlementTouches}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Settlement-adjacent actions that already benefitted from sponsorship support.
           </p>
@@ -342,7 +380,9 @@ export default function SettlementPage() {
             <Clock3 className="h-4 w-4 text-cyan-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Lagging private items</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{workspace.summary.laggingPrivate}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {workspace.summary.laggingPrivate}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Private-flow entries still waiting on indexer freshness or canonical visibility.
           </p>
@@ -352,7 +392,9 @@ export default function SettlementPage() {
             <Activity className="h-4 w-4 text-indigo-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Timeline coverage</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{workspace.summary.trackedTimeline}</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {workspace.summary.trackedTimeline}
+          </p>
           <p className="mt-2 text-sm leading-6 text-slate-400">
             Settlement-relevant actions currently being mapped across audit and queue sources.
           </p>
@@ -379,7 +421,8 @@ export default function SettlementPage() {
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{lane.detail}</p>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
-                      <span className="font-semibold text-slate-200">Next step:</span> {lane.nextStep}
+                      <span className="font-semibold text-slate-200">Next step:</span>{' '}
+                      {lane.nextStep}
                     </p>
                   </div>
                   <div className="grid gap-2 text-right">
@@ -423,7 +466,8 @@ export default function SettlementPage() {
           <div className="space-y-3">
             {workspace.recommendedActions.length === 0 ? (
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-200">
-                No urgent settlement action is visible right now. The wallet looks settled enough for normal product use.
+                No urgent settlement action is visible right now. The wallet looks settled enough
+                for normal product use.
               </div>
             ) : (
               workspace.recommendedActions.map((item) => (
@@ -476,11 +520,15 @@ export default function SettlementPage() {
           <div className="space-y-4">
             {workspace.queueCards.length === 0 ? (
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 text-sm leading-6 text-emerald-200">
-                The withdrawal queue is empty. Private value is not currently waiting on visible settlement.
+                The withdrawal queue is empty. Private value is not currently waiting on visible
+                settlement.
               </div>
             ) : (
               workspace.queueCards.map((item) => (
-                <div key={item.id} className={`rounded-[26px] border p-5 ${tonePanelClass(item.tone)}`}>
+                <div
+                  key={item.id}
+                  className={`rounded-[26px] border p-5 ${tonePanelClass(item.tone)}`}
+                >
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -491,9 +539,13 @@ export default function SettlementPage() {
                         <Badge variant={variantFor(item.assetTone)}>{item.asset}</Badge>
                       </div>
                       <p className="mt-3 text-sm leading-6 text-slate-300">{item.summary}</p>
-                      <p className="mt-3 text-sm leading-6 text-slate-400">Created {formatTimestamp(item.createdAt)}</p>
+                      <p className="mt-3 text-sm leading-6 text-slate-400">
+                        Created {formatTimestamp(item.createdAt)}
+                      </p>
                       {item.txHash && (
-                        <p className="mt-2 break-all font-mono text-xs text-slate-500">{item.txHash}</p>
+                        <p className="mt-2 break-all font-mono text-xs text-slate-500">
+                          {item.txHash}
+                        </p>
                       )}
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-3">
@@ -508,7 +560,10 @@ export default function SettlementPage() {
 
                   <div className="mt-5 grid gap-3 md:grid-cols-3">
                     {item.notes.map((note) => (
-                      <div key={note} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm leading-6 text-slate-300">
+                      <div
+                        key={note}
+                        className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-sm leading-6 text-slate-300"
+                      >
                         {note}
                       </div>
                     ))}
@@ -526,7 +581,10 @@ export default function SettlementPage() {
           </div>
           <div className="space-y-4">
             {workspace.assetWindows.map((item) => (
-              <div key={item.asset} className={`rounded-2xl border p-4 ${tonePanelClass(item.tone)}`}>
+              <div
+                key={item.asset}
+                className={`rounded-2xl border p-4 ${tonePanelClass(item.tone)}`}
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold text-white">{item.asset}</p>
                   <Badge variant={variantFor(item.tone)}>{item.tone}</Badge>
@@ -579,7 +637,10 @@ export default function SettlementPage() {
           </div>
           <div className="space-y-3">
             {workspace.outlook.map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item}
+                className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <Sparkles className="mt-1 h-4 w-4 shrink-0 text-sky-300" />
                 <p className="text-sm leading-6 text-slate-300">{item}</p>
               </div>
@@ -597,11 +658,16 @@ export default function SettlementPage() {
           <div className="space-y-4">
             {workspace.settlementTimeline.length === 0 ? (
               <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-5 text-sm leading-6 text-slate-400">
-                No settlement-relevant timeline entries are available yet. Deposits, withdrawals, or private actions will populate this desk as soon as the wallet starts using those routes.
+                No settlement-relevant timeline entries are available yet. Deposits, withdrawals, or
+                private actions will populate this desk as soon as the wallet starts using those
+                routes.
               </div>
             ) : (
               workspace.settlementTimeline.map((item) => (
-                <div key={item.id} className="rounded-[26px] border border-slate-800 bg-slate-950/70 p-5">
+                <div
+                  key={item.id}
+                  className="rounded-[26px] border border-slate-800 bg-slate-950/70 p-5"
+                >
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -619,17 +685,29 @@ export default function SettlementPage() {
                         <span>{formatTimestamp(item.date)}</span>
                         {item.indexing?.status && <span>Indexing: {item.indexing.status}</span>}
                       </div>
-                      {item.txHash && <p className="mt-2 break-all font-mono text-xs text-slate-500">{item.txHash}</p>}
+                      {item.txHash && (
+                        <p className="mt-2 break-all font-mono text-xs text-slate-500">
+                          {item.txHash}
+                        </p>
+                      )}
                     </div>
                     <div className="grid gap-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-4 xl:w-72">
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Settlement lens</p>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">
+                        Settlement lens
+                      </p>
                       <p className="text-sm leading-6 text-slate-300">
                         {item.privateFlow
                           ? 'This action affects shielded balances, note visibility, or movement back into the visible wallet.'
                           : 'This action is already visible or is settling directly into the public wallet.'}
                       </p>
-                      {item.indexing?.detail && <p className="text-sm leading-6 text-slate-400">{item.indexing.detail}</p>}
-                      {item.sponsorship?.detail && <p className="text-sm leading-6 text-slate-400">{item.sponsorship.detail}</p>}
+                      {item.indexing?.detail && (
+                        <p className="text-sm leading-6 text-slate-400">{item.indexing.detail}</p>
+                      )}
+                      {item.sponsorship?.detail && (
+                        <p className="text-sm leading-6 text-slate-400">
+                          {item.sponsorship.detail}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -641,11 +719,15 @@ export default function SettlementPage() {
 
       <section className="flex flex-col gap-4 rounded-[28px] border border-slate-800 bg-slate-950/80 p-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Use this desk when balances feel ambiguous</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Confirm settlement before you assume the wallet is final</h2>
+          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+            Use this desk when balances feel ambiguous
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Confirm settlement before you assume the wallet is final
+          </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            If the next question is “did this private value settle yet?” or “should I retry this withdrawal?”, this is
-            the first place to check before jumping into a new flow.
+            If the next question is “did this private value settle yet?” or “should I retry this
+            withdrawal?”, this is the first place to check before jumping into a new flow.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

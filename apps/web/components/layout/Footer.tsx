@@ -1,41 +1,41 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import Image from "next/image";
-import { motion } from "framer-motion";
-import { Github, Twitter, Mail, Shield, Lock, Eye } from "lucide-react";
+import Link from 'next/link';
+import Image from 'next/image';
+import { motion } from 'framer-motion';
+import { Github, Twitter, Mail, Shield, Lock, Eye } from 'lucide-react';
 
 const footerLinks = {
   product: [
-    { name: "Dashboard", href: "/dashboard" },
-    { name: "Wallet", href: "/wallet" },
-    { name: "Swap", href: "/swap" },
-    { name: "History", href: "/history" },
+    { name: 'Dashboard', href: '/dashboard' },
+    { name: 'Wallet', href: '/wallet' },
+    { name: 'Swap', href: '/swap' },
+    { name: 'History', href: '/history' },
   ],
   privacy: [
-    { name: "Zero-Knowledge Proofs", href: "#" },
-    { name: "End-to-End Encryption", href: "#" },
-    { name: "Non-Custodial", href: "#" },
-    { name: "Privacy Policy", href: "#" },
+    { name: 'Zero-Knowledge Proofs', href: '#' },
+    { name: 'End-to-End Encryption', href: '#' },
+    { name: 'Non-Custodial', href: '#' },
+    { name: 'Privacy Policy', href: '#' },
   ],
   resources: [
-    { name: "Documentation", href: "#" },
-    { name: "API Reference", href: "#" },
-    { name: "Support", href: "#" },
-    { name: "Status", href: "#" },
+    { name: 'Documentation', href: '#' },
+    { name: 'API Reference', href: '#' },
+    { name: 'Support', href: '#' },
+    { name: 'Status', href: '#' },
   ],
 };
 
 const socialLinks = [
-  { icon: Github, href: "#", label: "GitHub" },
-  { icon: Twitter, href: "#", label: "Twitter" },
-  { icon: Mail, href: "#", label: "Email" },
+  { icon: Github, href: '#', label: 'GitHub' },
+  { icon: Twitter, href: '#', label: 'Twitter' },
+  { icon: Mail, href: '#', label: 'Email' },
 ];
 
 const privacyFeatures = [
-  { icon: Shield, text: "Military-grade encryption" },
-  { icon: Eye, text: "Anonymous transactions" },
-  { icon: Lock, text: "Non-custodial security" },
+  { icon: Shield, text: 'Military-grade encryption' },
+  { icon: Eye, text: 'Anonymous transactions' },
+  { icon: Lock, text: 'Non-custodial security' },
 ];
 
 export function Footer() {
@@ -66,8 +66,8 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-slate-400 text-sm leading-relaxed mb-6 max-w-sm">
-              Privacy-first P2P payments and swaps on Stellar testnet. Transfer
-              and convert instantly with zero-knowledge proofs.
+              Privacy-first P2P payments and swaps on Stellar testnet. Transfer and convert
+              instantly with zero-knowledge proofs.
             </p>
 
             {/* Privacy Features */}
@@ -90,9 +90,7 @@ export function Footer() {
 
           {/* Product Links */}
           <div>
-            <h3 className="font-bold text-white mb-4 text-sm font-secondary">
-              Product
-            </h3>
+            <h3 className="font-bold text-white mb-4 text-sm font-secondary">Product</h3>
             <ul className="space-y-3">
               {footerLinks.product.map((link) => (
                 <li key={link.name}>
@@ -109,9 +107,7 @@ export function Footer() {
 
           {/* Privacy Links */}
           <div>
-            <h3 className="font-bold text-white mb-4 text-sm font-secondary">
-              Privacy
-            </h3>
+            <h3 className="font-bold text-white mb-4 text-sm font-secondary">Privacy</h3>
             <ul className="space-y-3">
               {footerLinks.privacy.map((link) => (
                 <li key={link.name}>
@@ -128,9 +124,7 @@ export function Footer() {
 
           {/* Resources Links */}
           <div>
-            <h3 className="font-bold text-white mb-4 text-sm font-secondary">
-              Resources
-            </h3>
+            <h3 className="font-bold text-white mb-4 text-sm font-secondary">Resources</h3>
             <ul className="space-y-3">
               {footerLinks.resources.map((link) => (
                 <li key={link.name}>

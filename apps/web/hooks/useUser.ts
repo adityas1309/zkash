@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useMemo } from "react";
-import { useAuthWorkspace } from "./useAuthWorkspace";
+import { useMemo } from 'react';
+import { useAuthWorkspace } from './useAuthWorkspace';
 
 export interface User {
   id?: string;

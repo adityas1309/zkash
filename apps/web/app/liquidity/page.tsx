@@ -211,24 +211,28 @@ export default function LiquidityPage() {
     if (workspace.capitalSummary.totalCapital === 0) {
       return {
         label: 'No deployable capital yet',
-        detail: 'The wallet still needs real liquidity before route quality or deployment choices can matter.',
+        detail:
+          'The wallet still needs real liquidity before route quality or deployment choices can matter.',
       };
     }
     if (workspace.capitalSummary.queuedCapital > 0) {
       return {
         label: 'Some capital is still in transit',
-        detail: 'Queued settlement means part of the balance is real but not fully public or redeployable yet.',
+        detail:
+          'Queued settlement means part of the balance is real but not fully public or redeployable yet.',
       };
     }
     if (workspace.summary.readyWindows >= 3) {
       return {
         label: 'Liquidity posture is healthy',
-        detail: 'Multiple deployment windows are ready, so the account can choose routes based on strategy instead of pure constraint.',
+        detail:
+          'Multiple deployment windows are ready, so the account can choose routes based on strategy instead of pure constraint.',
       };
     }
     return {
       label: 'Liquidity posture needs shaping',
-      detail: 'Capital exists, but more of it should be moved into the right lane before the best routes become easy.',
+      detail:
+        'Capital exists, but more of it should be moved into the right lane before the best routes become easy.',
     };
   }, [workspace]);
 
@@ -269,20 +273,35 @@ export default function LiquidityPage() {
         <div className="relative flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-4xl">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={variantFor(headline.label.includes('healthy') ? 'ready' : headline.label.includes('transit') ? 'attention' : workspace.capitalSummary.totalCapital > 0 ? 'info' : 'blocked')}>
+              <Badge
+                variant={variantFor(
+                  headline.label.includes('healthy')
+                    ? 'ready'
+                    : headline.label.includes('transit')
+                      ? 'attention'
+                      : workspace.capitalSummary.totalCapital > 0
+                        ? 'info'
+                        : 'blocked',
+                )}
+              >
                 {headline.label}
               </Badge>
               <Badge variant="default">{workspace.summary.readyWindows} ready windows</Badge>
-              <Badge variant="default">Dry powder {formatAmount(workspace.summary.dryPowder)}</Badge>
+              <Badge variant="default">
+                Dry powder {formatAmount(workspace.summary.dryPowder)}
+              </Badge>
               <Badge variant="default">Updated {formatTimestamp(workspace.updatedAt)}</Badge>
             </div>
-            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">Liquidity Workspace</p>
+            <p className="mt-4 text-xs uppercase tracking-[0.32em] text-slate-500">
+              Liquidity Workspace
+            </p>
             <h1 className="mt-3 bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-3xl font-bold text-transparent md:text-5xl">
               See where capital is actually deployable, idle, stuck, or strategically underused
             </h1>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-300 md:text-base">
-              This desk answers the practical capital question the other workspaces only imply: what money can move
-              now, what should stay visible, what should be shielded, and what is real but not truly deployable yet.
+              This desk answers the practical capital question the other workspaces only imply: what
+              money can move now, what should stay visible, what should be shielded, and what is
+              real but not truly deployable yet.
             </p>
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-400">{headline.detail}</p>
           </div>
@@ -290,18 +309,30 @@ export default function LiquidityPage() {
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[34rem]">
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Total capital</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{formatAmount(workspace.capitalSummary.totalCapital)}</p>
-              <p className="mt-2 text-sm text-slate-400">All visible and shielded balance combined.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {formatAmount(workspace.capitalSummary.totalCapital)}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                All visible and shielded balance combined.
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Queued capital</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{formatAmount(workspace.capitalSummary.queuedCapital)}</p>
-              <p className="mt-2 text-sm text-slate-400">Value still waiting on settlement clarity.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {formatAmount(workspace.capitalSummary.queuedCapital)}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Value still waiting on settlement clarity.
+              </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
               <p className="text-xs uppercase tracking-wide text-slate-500">Route score</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{workspace.summary.routeScoreAverage}</p>
-              <p className="mt-2 text-sm text-slate-400">Average deployment strength across route families.</p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {workspace.summary.routeScoreAverage}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Average deployment strength across route families.
+              </p>
             </div>
           </div>
         </div>
@@ -313,24 +344,36 @@ export default function LiquidityPage() {
             <Wallet className="h-4 w-4 text-cyan-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Visible capital</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{formatAmount(workspace.capitalSummary.visibleCapital)}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Immediate public deployment, recovery, and fiat-ready liquidity.</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {formatAmount(workspace.capitalSummary.visibleCapital)}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Immediate public deployment, recovery, and fiat-ready liquidity.
+          </p>
         </Card>
         <Card variant="glass">
           <div className="flex items-center gap-2 text-slate-200">
             <Shield className="h-4 w-4 text-emerald-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Shielded capital</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{formatAmount(workspace.capitalSummary.shieldedCapital)}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Protected route capacity and privacy-native balance posture.</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {formatAmount(workspace.capitalSummary.shieldedCapital)}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Protected route capacity and privacy-native balance posture.
+          </p>
         </Card>
         <Card variant="glass">
           <div className="flex items-center gap-2 text-slate-200">
             <Zap className="h-4 w-4 text-fuchsia-300" />
             <p className="text-xs uppercase tracking-wide text-slate-500">Dry powder</p>
           </div>
-          <p className="mt-3 text-3xl font-semibold text-white">{formatAmount(workspace.capitalSummary.dryPowder)}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Capital that can most realistically answer the next meaningful route.</p>
+          <p className="mt-3 text-3xl font-semibold text-white">
+            {formatAmount(workspace.capitalSummary.dryPowder)}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Capital that can most realistically answer the next meaningful route.
+          </p>
         </Card>
         <Card variant="glass">
           <div className="flex items-center gap-2 text-slate-200">
@@ -338,7 +381,9 @@ export default function LiquidityPage() {
             <p className="text-xs uppercase tracking-wide text-slate-500">Active users</p>
           </div>
           <p className="mt-3 text-3xl font-semibold text-white">{workspace.summary.activeUsers}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Current activity signal around the wider system stats surface.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Current activity signal around the wider system stats surface.
+          </p>
         </Card>
       </section>
 
@@ -350,7 +395,10 @@ export default function LiquidityPage() {
           </div>
           <div className="space-y-4">
             {workspace.deploymentWindows.map((window) => (
-              <div key={window.id} className={`rounded-[26px] border p-5 ${tonePanelClass(window.tone)}`}>
+              <div
+                key={window.id}
+                className={`rounded-[26px] border p-5 ${tonePanelClass(window.tone)}`}
+              >
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -363,11 +411,14 @@ export default function LiquidityPage() {
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-300">{window.summary}</p>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
-                      <span className="font-semibold text-slate-200">Next move:</span> {window.nextMove}
+                      <span className="font-semibold text-slate-200">Next move:</span>{' '}
+                      {window.nextMove}
                     </p>
                   </div>
                   <div className="grid gap-2 text-right">
-                    <p className="text-2xl font-semibold text-white">{formatAmount(window.availableCapital)}</p>
+                    <p className="text-2xl font-semibold text-white">
+                      {formatAmount(window.availableCapital)}
+                    </p>
                     <p className="text-sm text-slate-400">{window.routeCount} route signal(s)</p>
                   </div>
                 </div>
@@ -462,7 +513,10 @@ export default function LiquidityPage() {
           </div>
           <div className="space-y-5">
             {workspace.deploymentScenarios.map((scenario) => (
-              <div key={scenario.id} className={`rounded-[26px] border p-5 ${tonePanelClass(scenario.tone)}`}>
+              <div
+                key={scenario.id}
+                className={`rounded-[26px] border p-5 ${tonePanelClass(scenario.tone)}`}
+              >
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -483,7 +537,10 @@ export default function LiquidityPage() {
                 </div>
                 <div className="mt-5 space-y-3">
                   {scenario.steps.map((step, index) => (
-                    <div key={step} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div
+                      key={step}
+                      className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3"
+                    >
                       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-indigo-500/30 bg-indigo-500/10 text-xs font-semibold text-indigo-200">
                         {index + 1}
                       </div>
@@ -504,7 +561,10 @@ export default function LiquidityPage() {
             </div>
             <div className="space-y-4">
               {workspace.pressureBoard.map((item) => (
-                <div key={item.id} className={`rounded-2xl border p-4 ${tonePanelClass(item.tone)}`}>
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border p-4 ${tonePanelClass(item.tone)}`}
+                >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-white">{item.label}</p>
@@ -526,7 +586,8 @@ export default function LiquidityPage() {
             <div className="space-y-3">
               {workspace.actionBoard.length === 0 ? (
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-200">
-                  No urgent liquidity action is visible right now. The account can choose routes more freely.
+                  No urgent liquidity action is visible right now. The account can choose routes
+                  more freely.
                 </div>
               ) : (
                 workspace.actionBoard.map((item) => (
@@ -561,7 +622,10 @@ export default function LiquidityPage() {
           </div>
           <div className="space-y-3">
             {workspace.outlook.map((item) => (
-              <div key={item} className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={item}
+                className="flex items-start gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <Sparkles className="mt-1 h-4 w-4 shrink-0 text-sky-300" />
                 <p className="text-sm leading-6 text-slate-300">{item}</p>
               </div>
@@ -581,7 +645,9 @@ export default function LiquidityPage() {
             >
               <div>
                 <p className="text-sm font-semibold text-white">Open portfolio desk</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">Re-check allocation and public/private posture before moving capital.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Re-check allocation and public/private posture before moving capital.
+                </p>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-500" />
             </Link>
@@ -591,7 +657,9 @@ export default function LiquidityPage() {
             >
               <div>
                 <p className="text-sm font-semibold text-white">Open settlement desk</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">Confirm queued or in-flight capital before counting it as deployable twice.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Confirm queued or in-flight capital before counting it as deployable twice.
+                </p>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-500" />
             </Link>
@@ -601,7 +669,9 @@ export default function LiquidityPage() {
             >
               <div>
                 <p className="text-sm font-semibold text-white">Open playbook</p>
-                <p className="mt-2 text-sm leading-6 text-slate-400">Translate liquidity posture into actual scenario-based next steps.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">
+                  Translate liquidity posture into actual scenario-based next steps.
+                </p>
               </div>
               <ArrowRight className="h-4 w-4 text-slate-500" />
             </Link>
@@ -613,8 +683,12 @@ export default function LiquidityPage() {
                 className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/70 p-4 transition hover:border-indigo-500/30 hover:bg-slate-900"
               >
                 <div>
-                  <p className="text-sm font-semibold text-white">View account on Stellar Explorer</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">Cross-check visible account liquidity directly on-chain.</p>
+                  <p className="text-sm font-semibold text-white">
+                    View account on Stellar Explorer
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Cross-check visible account liquidity directly on-chain.
+                  </p>
                 </div>
                 <ExternalLink className="h-4 w-4 text-slate-500" />
               </a>
@@ -625,11 +699,15 @@ export default function LiquidityPage() {
 
       <section className="flex flex-col gap-4 rounded-[28px] border border-slate-800 bg-slate-950/80 p-6 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">Use this desk when the question is deployability</p>
-          <h2 className="mt-2 text-2xl font-semibold text-white">Confirm what capital is actually free to move next</h2>
+          <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
+            Use this desk when the question is deployability
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">
+            Confirm what capital is actually free to move next
+          </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This is the workspace for the moments when balances exist but route choice is still unclear because some
-            value is queued, over-visible, over-private, or simply underused.
+            This is the workspace for the moments when balances exist but route choice is still
+            unclear because some value is queued, over-visible, over-private, or simply underused.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

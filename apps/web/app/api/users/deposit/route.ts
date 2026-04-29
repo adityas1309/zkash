@@ -43,7 +43,7 @@ export async function POST(request: Request) {
           ? 'Deposit is taking longer than expected. Check the dashboard or try again in a moment.'
           : `Deposit request failed: ${message}`,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } finally {
     clearTimeout(timeoutId);

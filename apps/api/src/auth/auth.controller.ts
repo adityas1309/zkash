@@ -8,7 +8,7 @@ import { DeleteAccountDto } from '../common/dto/auth.dto';
 @Controller('auth')
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Get('workspace')
   async workspace(@Req() req: any) {
@@ -95,8 +95,12 @@ export class AuthController {
   @Post('delete-me')
   @UseGuards(SessionAuthGuard)
   async deleteMeConfirmed(@Req() req: any, @Body() body: DeleteAccountDto) {
-    const expected = String(req.user.username ?? '').trim().toLowerCase();
-    const provided = String(body.confirmation ?? '').trim().toLowerCase();
+    const expected = String(req.user.username ?? '')
+      .trim()
+      .toLowerCase();
+    const provided = String(body.confirmation ?? '')
+      .trim()
+      .toLowerCase();
 
     if (!expected || provided !== expected) {
       return {

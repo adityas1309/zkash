@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import createGlobe from "cobe";
-import { useEffect, useRef } from "react";
-import { useSpring } from "framer-motion";
+import createGlobe from 'cobe';
+import { useEffect, useRef } from 'react';
+import { useSpring } from 'framer-motion';
 
 export function Globe({ className }: { className?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -18,9 +18,8 @@ export function Globe({ className }: { className?: string }) {
   useEffect(() => {
     let phi = 0;
     let width = 0;
-    const onResize = () =>
-      canvasRef.current && (width = canvasRef.current.offsetWidth);
-    window.addEventListener("resize", onResize);
+    const onResize = () => canvasRef.current && (width = canvasRef.current.offsetWidth);
+    window.addEventListener('resize', onResize);
     onResize();
     const globe = createGlobe(canvasRef.current!, {
       devicePixelRatio: 2,
@@ -46,10 +45,10 @@ export function Globe({ className }: { className?: string }) {
         state.height = width * 2;
       },
     });
-    setTimeout(() => (canvasRef.current!.style.opacity = "1"));
+    setTimeout(() => (canvasRef.current!.style.opacity = '1'));
     return () => {
       globe.destroy();
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener('resize', onResize);
     };
   }, [r]);
 
@@ -57,34 +56,33 @@ export function Globe({ className }: { className?: string }) {
     <div
       className={className}
       style={{
-        width: "100%",
+        width: '100%',
         maxWidth: 1400,
         aspectRatio: 1,
-        margin: "auto",
-        position: "relative",
+        margin: 'auto',
+        position: 'relative',
       }}
     >
       <canvas
         ref={canvasRef}
         style={{
-          width: "100%",
-          height: "100%",
-          contain: "layout paint size",
+          width: '100%',
+          height: '100%',
+          contain: 'layout paint size',
           opacity: 0,
-          transition: "opacity 1s ease",
+          transition: 'opacity 1s ease',
         }}
         onPointerDown={(e) => {
-          pointerInteracting.current =
-            e.clientX - pointerInteractionMovement.current;
-          canvasRef.current!.style.cursor = "grabbing";
+          pointerInteracting.current = e.clientX - pointerInteractionMovement.current;
+          canvasRef.current!.style.cursor = 'grabbing';
         }}
         onPointerUp={() => {
           pointerInteracting.current = null;
-          canvasRef.current!.style.cursor = "grab";
+          canvasRef.current!.style.cursor = 'grab';
         }}
         onPointerOut={() => {
           pointerInteracting.current = null;
-          canvasRef.current!.style.cursor = "grab";
+          canvasRef.current!.style.cursor = 'grab';
         }}
         onMouseMove={(e) => {
           if (pointerInteracting.current !== null) {

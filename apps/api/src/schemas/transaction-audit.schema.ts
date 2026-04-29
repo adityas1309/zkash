@@ -1,12 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
-export type TransactionAuditState =
-  | 'queued'
-  | 'pending'
-  | 'success'
-  | 'failed'
-  | 'retryable';
+export type TransactionAuditState = 'queued' | 'pending' | 'success' | 'failed' | 'retryable';
 
 @Schema({ timestamps: true })
 export class TransactionAudit extends Document {

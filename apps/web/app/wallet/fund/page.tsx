@@ -231,7 +231,9 @@ export default function FundingDeskPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok && data.success) {
-        setStatusMessage(`Friendbot funding submitted${data.txHash ? ` with transaction ${data.txHash}.` : '.'}`);
+        setStatusMessage(
+          `Friendbot funding submitted${data.txHash ? ` with transaction ${data.txHash}.` : '.'}`,
+        );
       } else {
         setStatusMessage(data.error || 'Friendbot funding failed.');
       }
@@ -254,7 +256,9 @@ export default function FundingDeskPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (response.ok && data.success) {
-        setStatusMessage(`Trustline submitted${data.hash ? ` with transaction ${data.hash}.` : '.'}`);
+        setStatusMessage(
+          `Trustline submitted${data.hash ? ` with transaction ${data.hash}.` : '.'}`,
+        );
       } else {
         setStatusMessage(data.message || data.error || 'Trustline setup failed.');
       }
@@ -297,8 +301,8 @@ export default function FundingDeskPage() {
             Stage wallet setup before you enter real flows
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            This desk plans funding, trustline readiness, and private-balance seeding so users know whether the next
-            move is Friendbot, trustline setup, or a first shielded deposit.
+            This desk plans funding, trustline readiness, and private-balance seeding so users know
+            whether the next move is Friendbot, trustline setup, or a first shielded deposit.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -321,22 +325,30 @@ export default function FundingDeskPage() {
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Visible {asset}</p>
           <p className="mt-2 text-3xl font-semibold text-white">{visibleAssetBalance}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Current public balance available for setup and direct usage.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Current public balance available for setup and direct usage.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Private {asset}</p>
           <p className="mt-2 text-3xl font-semibold text-white">{privateAssetBalance}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Shielded balance readiness for the selected route.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Shielded balance readiness for the selected route.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Pending queue</p>
           <p className="mt-2 text-3xl font-semibold text-white">{workspace.pending.count}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Queued withdrawals still waiting to re-surface publicly.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Queued withdrawals still waiting to re-surface publicly.
+          </p>
         </Card>
         <Card variant="glass">
           <p className="text-xs uppercase tracking-wide text-slate-500">Planned target</p>
           <p className="mt-2 text-3xl font-semibold text-white">{targetLabel(target)}</p>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Funding guidance is tuned to the route you want to unlock next.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            Funding guidance is tuned to the route you want to unlock next.
+          </p>
         </Card>
       </section>
 
@@ -356,7 +368,9 @@ export default function FundingDeskPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-400">Target route</label>
+                <label className="mb-2 block text-sm font-medium text-slate-400">
+                  Target route
+                </label>
                 <select
                   value={target}
                   onChange={(event) => setTarget(event.target.value as FundingTarget)}
@@ -407,7 +421,11 @@ export default function FundingDeskPage() {
             )}
 
             <div className="grid gap-3 md:grid-cols-3">
-              <Button onClick={handleFriendbot} isLoading={faucetLoading} disabled={!workspace.user.stellarPublicKey}>
+              <Button
+                onClick={handleFriendbot}
+                isLoading={faucetLoading}
+                disabled={!workspace.user.stellarPublicKey}
+              >
                 <Droplet className="mr-2 h-4 w-4" />
                 Request XLM
               </Button>
@@ -455,7 +473,10 @@ export default function FundingDeskPage() {
 
               <div className="space-y-3">
                 {plan.stages.map((stage) => (
-                  <div key={stage.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                  <div
+                    key={stage.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -493,19 +514,25 @@ export default function FundingDeskPage() {
                   <div className="mt-3 space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-slate-300">Public XLM ready</span>
-                      <Badge variant={workspace.fundingSignals.publicXlmReady ? 'success' : 'warning'}>
+                      <Badge
+                        variant={workspace.fundingSignals.publicXlmReady ? 'success' : 'warning'}
+                      >
                         {workspace.fundingSignals.publicXlmReady ? 'Yes' : 'No'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-slate-300">Trustline preparation</span>
-                      <Badge variant={workspace.fundingSignals.trustlineReady ? 'success' : 'warning'}>
+                      <Badge
+                        variant={workspace.fundingSignals.trustlineReady ? 'success' : 'warning'}
+                      >
                         {workspace.fundingSignals.trustlineReady ? 'Ready' : 'Waiting'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-slate-300">Private balance seeded</span>
-                      <Badge variant={workspace.fundingSignals.privateSeeded ? 'success' : 'warning'}>
+                      <Badge
+                        variant={workspace.fundingSignals.privateSeeded ? 'success' : 'warning'}
+                      >
                         {workspace.fundingSignals.privateSeeded ? 'Ready' : 'Pending'}
                       </Badge>
                     </div>
@@ -529,7 +556,10 @@ export default function FundingDeskPage() {
           </div>
           <div className="space-y-3">
             {workspace.readinessChecklist.map((entry) => (
-              <div key={entry.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div
+                key={entry.id}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -566,7 +596,10 @@ export default function FundingDeskPage() {
               </div>
             ) : (
               workspace.fundingEvents.map((event) => (
-                <div key={event.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+                <div
+                  key={event.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4"
+                >
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -609,7 +642,10 @@ export default function FundingDeskPage() {
           </div>
           <div className="space-y-3">
             {workspace.guidance.map((entry) => (
-              <div key={entry} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-6 text-slate-300">
+              <div
+                key={entry}
+                className="rounded-2xl border border-slate-800 bg-slate-950/70 p-4 text-sm leading-6 text-slate-300"
+              >
                 {entry}
               </div>
             ))}
@@ -622,7 +658,9 @@ export default function FundingDeskPage() {
             <h2 className="text-xl font-semibold text-white">Route intent shortcuts</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            {(['public_send', 'private_flow', 'swap_readiness', 'fiat_sell'] as FundingTarget[]).map((option) => (
+            {(
+              ['public_send', 'private_flow', 'swap_readiness', 'fiat_sell'] as FundingTarget[]
+            ).map((option) => (
               <button
                 key={option}
                 type="button"
@@ -635,13 +673,19 @@ export default function FundingDeskPage() {
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-white">{targetLabel(option)}</p>
-                  <Badge variant={target === option ? 'success' : 'default'}>{target === option ? 'Active' : 'Preview'}</Badge>
+                  <Badge variant={target === option ? 'success' : 'default'}>
+                    {target === option ? 'Active' : 'Preview'}
+                  </Badge>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-400">
-                  {option === 'public_send' && 'Prioritize visible wallet funding and direct payment readiness.'}
-                  {option === 'private_flow' && 'Seed shielded balances so private transfers stop feeling blocked.'}
-                  {option === 'swap_readiness' && 'Balance visible liquidity with exact-note and deposit preparation.'}
-                  {option === 'fiat_sell' && 'Prepare the asset mix that can actually reach a sell route cleanly.'}
+                  {option === 'public_send' &&
+                    'Prioritize visible wallet funding and direct payment readiness.'}
+                  {option === 'private_flow' &&
+                    'Seed shielded balances so private transfers stop feeling blocked.'}
+                  {option === 'swap_readiness' &&
+                    'Balance visible liquidity with exact-note and deposit preparation.'}
+                  {option === 'fiat_sell' &&
+                    'Prepare the asset mix that can actually reach a sell route cleanly.'}
                 </p>
               </button>
             ))}

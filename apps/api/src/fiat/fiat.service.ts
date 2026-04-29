@@ -1,11 +1,28 @@
-import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
-import { Asset, Horizon, Keypair, Networks, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import {
+  Asset,
+  Horizon,
+  Keypair,
+  Networks,
+  Operation,
+  TransactionBuilder,
+} from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 import Razorpay from 'razorpay';
 import { isMainnetContext, getHorizonUrl } from '../network.context';
 import { User } from '../schemas/user.schema';
 import { UsersService } from '../users/users.service';
-import { BankAccountDetailsDto, CreateOrderDto, FiatPlanDto, SellFiatDto } from './dto/create-order.dto';
+import {
+  BankAccountDetailsDto,
+  CreateOrderDto,
+  FiatPlanDto,
+  SellFiatDto,
+} from './dto/create-order.dto';
 
 @Injectable()
 export class FiatService {
@@ -93,31 +110,39 @@ export class FiatService {
           ? {
               tone: 'ready',
               label: 'Checkout configured',
-              detail: 'Razorpay keys are present, so buy-side checkout can open without additional environment work.',
+              detail:
+                'Razorpay keys are present, so buy-side checkout can open without additional environment work.',
             }
           : {
               tone: 'blocked',
               label: 'Checkout unavailable',
-              detail: 'Razorpay keys are missing, so buy-side checkout remains blocked until provider configuration is restored.',
-            },
-        inventory: workspace.balances.totalXlm > 0
-          ? {
-              tone: workspace.balances.publicXlm > 0 ? 'ready' : 'attention',
-              label: workspace.balances.publicXlm > 0 ? 'Public sell inventory ready' : 'Inventory is partly private',
               detail:
-                workspace.balances.publicXlm > 0
-                  ? 'There is visible XLM available to fund at least part of a sell-side payout directly from the public wallet.'
-                  : 'Your current XLM lives outside the public wallet, so sell-side payouts may need a private withdrawal step first.',
-            }
-          : {
-              tone: 'blocked',
-              label: 'No sell inventory',
-              detail: 'You currently hold no XLM inventory across public and private balances, so sell-side payout planning is blocked.',
+                'Razorpay keys are missing, so buy-side checkout remains blocked until provider configuration is restored.',
             },
+        inventory:
+          workspace.balances.totalXlm > 0
+            ? {
+                tone: workspace.balances.publicXlm > 0 ? 'ready' : 'attention',
+                label:
+                  workspace.balances.publicXlm > 0
+                    ? 'Public sell inventory ready'
+                    : 'Inventory is partly private',
+                detail:
+                  workspace.balances.publicXlm > 0
+                    ? 'There is visible XLM available to fund at least part of a sell-side payout directly from the public wallet.'
+                    : 'Your current XLM lives outside the public wallet, so sell-side payouts may need a private withdrawal step first.',
+              }
+            : {
+                tone: 'blocked',
+                label: 'No sell inventory',
+                detail:
+                  'You currently hold no XLM inventory across public and private balances, so sell-side payout planning is blocked.',
+              },
         payoutRail: {
           tone: 'attention',
           label: `Payout rail holds for ${workspace.payoutPolicy.holdMinutes} minutes`,
-          detail: 'Bank settlement remains modeled as a queued payout after XLM collection rather than instant fiat delivery.',
+          detail:
+            'Bank settlement remains modeled as a queued payout after XLM collection rather than instant fiat delivery.',
         },
       },
       scenarioCards: [
@@ -126,28 +151,32 @@ export class FiatService {
           title: 'Buy into public wallet',
           mode: 'public',
           action: 'buy',
-          detail: 'Simpler path for visible wallet funding and easier verification of successful fulfillment.',
+          detail:
+            'Simpler path for visible wallet funding and easier verification of successful fulfillment.',
         },
         {
           id: 'buy_zk',
           title: 'Buy into private flow',
           mode: 'zk',
           action: 'buy',
-          detail: 'Best when the goal is to continue into private send or shielded swap flows after indexing catches up.',
+          detail:
+            'Best when the goal is to continue into private send or shielded swap flows after indexing catches up.',
         },
         {
           id: 'sell_visible',
           title: 'Sell visible XLM',
           mode: 'public',
           action: 'sell',
-          detail: 'Cleanest sell path when public inventory already covers the requested XLM amount.',
+          detail:
+            'Cleanest sell path when public inventory already covers the requested XLM amount.',
         },
         {
           id: 'sell_withdrawal',
           title: 'Sell after private withdrawal',
           mode: 'zk',
           action: 'sell',
-          detail: 'Needed when the sell amount exists mostly in private balances rather than the visible wallet.',
+          detail:
+            'Needed when the sell amount exists mostly in private balances rather than the visible wallet.',
         },
       ],
     };
@@ -177,7 +206,8 @@ export class FiatService {
       },
       destination: {
         mode: normalized.mode,
-        fulfillmentType: normalized.mode === 'zk' ? 'private_balance_flow' : 'public_wallet_transfer',
+        fulfillmentType:
+          normalized.mode === 'zk' ? 'private_balance_flow' : 'public_wallet_transfer',
       },
       readiness: {
         providerConfigured: !!this.razorpay,
@@ -188,7 +218,9 @@ export class FiatService {
             : 'Public buy flow is simpler to observe because the XLM lands directly in the visible wallet.',
       },
       warnings: [
-        !this.razorpay ? 'Razorpay is not configured, so this checkout cannot complete until provider keys are added.' : null,
+        !this.razorpay
+          ? 'Razorpay is not configured, so this checkout cannot complete until provider keys are added.'
+          : null,
         normalized.mode === 'zk'
           ? 'Shielded fulfillment is modeled as a private balance path. Make sure downstream private actions account for indexing delay.'
           : 'Public fulfillment sends XLM directly to the wallet and exposes the transfer on-chain.',
@@ -326,7 +358,9 @@ export class FiatService {
         ],
         warnings: buyPreview.warnings,
         nextActions: [
-          buyPreview.readiness.providerConfigured ? 'Proceed to create the order and open checkout.' : 'Restore Razorpay configuration before attempting checkout.',
+          buyPreview.readiness.providerConfigured
+            ? 'Proceed to create the order and open checkout.'
+            : 'Restore Razorpay configuration before attempting checkout.',
           dto.mode === 'zk'
             ? 'Expect a private-handling step after payment verification and allow for indexing visibility.'
             : 'Watch for the public wallet transfer hash after payment verification completes.',
@@ -359,20 +393,18 @@ export class FiatService {
             : needsPrivateWithdrawal
               ? 'attention'
               : 'ready',
-        headline:
-          !bankValidation.valid
-            ? 'Sell-side payout needs a valid bank destination first.'
-            : inventoryShortfall > 0
-              ? 'Sell-side payout is blocked by insufficient XLM inventory.'
-              : needsPrivateWithdrawal
-                ? 'Sell-side payout is possible, but some inventory is still private.'
-                : 'Sell-side payout is ready to initiate from visible inventory.',
-        detail:
-          !bankValidation.valid
-            ? bankValidation.detail
+        headline: !bankValidation.valid
+          ? 'Sell-side payout needs a valid bank destination first.'
+          : inventoryShortfall > 0
+            ? 'Sell-side payout is blocked by insufficient XLM inventory.'
             : needsPrivateWithdrawal
-              ? 'A private withdrawal step should happen before the visible sell transfer can complete cleanly.'
-              : 'Inventory and bank routing both look structurally ready for payout initiation.',
+              ? 'Sell-side payout is possible, but some inventory is still private.'
+              : 'Sell-side payout is ready to initiate from visible inventory.',
+        detail: !bankValidation.valid
+          ? bankValidation.detail
+          : needsPrivateWithdrawal
+            ? 'A private withdrawal step should happen before the visible sell transfer can complete cleanly.'
+            : 'Inventory and bank routing both look structurally ready for payout initiation.',
       },
       stages: [
         {
@@ -384,7 +416,8 @@ export class FiatService {
         {
           id: 'inventory_source',
           label: 'Prepare XLM inventory',
-          status: inventoryShortfall > 0 ? 'blocked' : needsPrivateWithdrawal ? 'attention' : 'ready',
+          status:
+            inventoryShortfall > 0 ? 'blocked' : needsPrivateWithdrawal ? 'attention' : 'ready',
           detail:
             inventoryShortfall > 0
               ? `You are short by ${inventoryShortfall} XLM across total inventory.`
@@ -417,22 +450,24 @@ export class FiatService {
           title: 'Use public XLM inventory',
           recommended: publicReady,
           tone: publicReady ? 'ready' : 'attention',
-          detail:
-            publicReady
-              ? 'Visible inventory is already enough to fund the payout deduction directly.'
-              : 'Visible inventory alone is not enough, so this route may need help from a private withdrawal first.',
+          detail: publicReady
+            ? 'Visible inventory is already enough to fund the payout deduction directly.'
+            : 'Visible inventory alone is not enough, so this route may need help from a private withdrawal first.',
         },
         {
           route: 'private_withdrawal',
           title: 'Withdraw private XLM first',
           recommended: needsPrivateWithdrawal,
-          tone: needsPrivateWithdrawal ? 'attention' : inventoryShortfall > 0 ? 'blocked' : 'default',
-          detail:
-            needsPrivateWithdrawal
-              ? 'This route converts private inventory into a visible payout source before the fiat deduction step.'
-              : inventoryShortfall > 0
-                ? 'Even a private withdrawal would not fully cover the requested payout size right now.'
-                : 'Private withdrawal is optional because visible inventory is already enough.',
+          tone: needsPrivateWithdrawal
+            ? 'attention'
+            : inventoryShortfall > 0
+              ? 'blocked'
+              : 'default',
+          detail: needsPrivateWithdrawal
+            ? 'This route converts private inventory into a visible payout source before the fiat deduction step.'
+            : inventoryShortfall > 0
+              ? 'Even a private withdrawal would not fully cover the requested payout size right now.'
+              : 'Private withdrawal is optional because visible inventory is already enough.',
         },
       ],
       bankAccount: {
@@ -442,7 +477,9 @@ export class FiatService {
       },
       warnings: sellPreview.warnings,
       nextActions: [
-        bankValidation.valid ? 'Keep the bank destination as-is for payout creation.' : 'Correct the bank destination before proceeding.',
+        bankValidation.valid
+          ? 'Keep the bank destination as-is for payout creation.'
+          : 'Correct the bank destination before proceeding.',
         publicReady
           ? 'Proceed with payout initiation from visible inventory.'
           : needsPrivateWithdrawal
@@ -454,7 +491,9 @@ export class FiatService {
 
   async createOrder(user: User, dto: CreateOrderDto) {
     const normalized = this.normalizeBuyDto(dto);
-    this.logger.log(`Creating Razorpay order for ${user.username}: ${normalized.amount} ${normalized.currency}`);
+    this.logger.log(
+      `Creating Razorpay order for ${user.username}: ${normalized.amount} ${normalized.currency}`,
+    );
 
     if (!this.razorpay) {
       throw new InternalServerErrorException('Payment gateway not configured');
@@ -584,7 +623,12 @@ export class FiatService {
     try {
       const adminKeypair = Keypair.fromSecret(this.adminSecret);
       const adminPublicKey = adminKeypair.publicKey();
-      const txHash = await this.usersService.sendPublic(user._id.toString(), adminPublicKey, amount, 'native');
+      const txHash = await this.usersService.sendPublic(
+        user._id.toString(),
+        adminPublicKey,
+        amount,
+        'native',
+      );
       const preview = await this.previewSell(user, {
         amount: Number(amount),
         accountDetails,
@@ -592,7 +636,8 @@ export class FiatService {
 
       return {
         status: 'PENDING',
-        message: 'Payout initiated. XLM was deducted and the payout is now waiting in the fiat queue.',
+        message:
+          'Payout initiated. XLM was deducted and the payout is now waiting in the fiat queue.',
         txHash,
         payoutId: `payout_${Date.now()}`,
         preview: {
@@ -626,14 +671,16 @@ export class FiatService {
     if (!accountDetails.accountNo || !/^[0-9]{9,18}$/.test(accountDetails.accountNo)) {
       return {
         valid: false,
-        detail: 'Account number must contain 9 to 18 digits before payout can be planned confidently.',
+        detail:
+          'Account number must contain 9 to 18 digits before payout can be planned confidently.',
       };
     }
 
     if (!accountDetails.ifsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(accountDetails.ifsc)) {
       return {
         valid: false,
-        detail: 'IFSC code must match the standard Indian bank format before payout can be planned confidently.',
+        detail:
+          'IFSC code must match the standard Indian bank format before payout can be planned confidently.',
       };
     }
 

@@ -20,7 +20,8 @@ import { validateEnvironment } from './common/env';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: process.env.NODE_ENV === 'production' ? undefined : join(__dirname, '../../../../.env'),
+      envFilePath:
+        process.env.NODE_ENV === 'production' ? undefined : join(__dirname, '../../../../.env'),
       validate: (env) => {
         validateEnvironment(env);
         return env;
@@ -36,7 +37,8 @@ import { validateEnvironment } from './common/env';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const uri = configService.get<string>('MONGODB_URI') || configService.get<string>('MONGO_URI');
+        const uri =
+          configService.get<string>('MONGODB_URI') || configService.get<string>('MONGO_URI');
         return {
           uri: uri ?? 'mongodb://localhost:27017/lop',
         };
