@@ -1,6 +1,9 @@
 #![no_std]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, IntoVal};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    IntoVal,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -28,7 +31,7 @@ impl ZkSwap {
     /// Both parties must have signed. Pools verify the ZK proofs internally.
     /// Atomic swap: Alice's USDC note -> Bob, Bob's XLM note -> Alice.
     /// Both parties must have signed. Pools verify the ZK proofs internally.
-    /// 
+    ///
     /// PRIVACY UPDATE:
     /// No explicit "Alice" or "Bob" addresses.
     /// Authorization is purely ZK proof possession.
@@ -46,12 +49,15 @@ impl ZkSwap {
         bob_proof: soroban_sdk::Bytes,
         bob_pub_signals: soroban_sdk::Bytes,
         bob_nullifier: BytesN<32>,
-        bob_output_commitment: BytesN<32>,   // New USDC note for Bob
-        bob_output_root: BytesN<32>,         // New USDC root
+        bob_output_commitment: BytesN<32>, // New USDC note for Bob
+        bob_output_root: BytesN<32>,       // New USDC root
     ) -> Result<(), Error> {
         soroban_sdk::log!(&env, "ZkSwap: execute called (anonymous)");
 
         // Note: No require_auth(). The proofs are the auth.
+        if params.amount_usdc <= 0 || params.amount_xlm <= 0 {
+            return Err(Error::Generic);
+        }
 
         // 1. Withdraw/Transfer from USDC Pool
         // Alice spends 1 USDC note (nullifier) -> Creates 1 USDC note for Bob (bob_output_commitment)
@@ -59,7 +65,7 @@ impl ZkSwap {
         // For Swap:
         // Alice burns USDC note -> Bob gets USDC note.
         // Bob burns XLM note -> Alice gets XLM note.
-        
+
         // Step 1: Alice burns USDC note, Bob gets new USDC note.
         // We call usdc_pool.transfer(proof=alice, new_commitment=bob_output_commitment)
         soroban_sdk::log!(&env, "ZkSwap: internal transfer USDC -> Bob");
@@ -73,6 +79,7 @@ impl ZkSwap {
                 alice_nullifier.into_val(&env),
                 bob_output_commitment.into_val(&env),
                 bob_output_root.into_val(&env),
+                (params.amount_usdc as i128).into_val(&env),
             ],
         );
 
@@ -89,6 +96,7 @@ impl ZkSwap {
                 bob_nullifier.into_val(&env),
                 alice_output_commitment.into_val(&env),
                 alice_output_root.into_val(&env),
+                (params.amount_xlm as i128).into_val(&env),
             ],
         );
 

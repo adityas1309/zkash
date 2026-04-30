@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs';
 import { proofToBytes, publicSignalsToBytes, type SnarkJsProof } from 'sdk';
@@ -22,6 +23,14 @@ function bytesToBigInt(buf: Uint8Array): bigint {
     hex += buf[i].toString(16).padStart(2, '0');
   }
   return BigInt('0x' + hex);
+}
+
+export function recipientBindingFromAddress(address: string): bigint {
+  const digest = createHash('sha256').update(address, 'utf8').digest();
+  // Public inputs are BLS12-381 field elements. Clearing the top byte keeps the
+  // address binding below the field modulus while remaining deterministic.
+  digest[0] = 0;
+  return bytesToBigInt(digest);
 }
 
 function bigIntToBytes32Hex(n: bigint): string {
@@ -95,6 +104,8 @@ export class ProofService {
       stateIndex?: number;
       /** Siblings (depth 20) for the leaf. */
       stateSiblings?: Uint8Array[];
+      /** Public binding: recipient hash for withdrawals, output commitment for transfers. */
+      publicBinding?: bigint | Uint8Array;
     },
   ): Promise<{
     proofBytes: Uint8Array;
@@ -115,8 +126,15 @@ export class ProofService {
     if (opts.stateIndex === undefined || opts.stateIndex === null) {
       throw new Error('stateIndex required for Withdraw proof');
     }
+    if (opts.publicBinding === undefined || opts.publicBinding === null) {
+      throw new Error('publicBinding required for bound Withdraw proof');
+    }
     const stateSiblings = opts.stateSiblings.map((b) => bytesToBigInt(b).toString());
     const stateIndex = opts.stateIndex;
+    const binding =
+      typeof opts.publicBinding === 'bigint'
+        ? opts.publicBinding
+        : bytesToBigInt(opts.publicBinding);
 
     // Optional sanity check: recompute root from path.
     if (opts.commitmentBytes) {
@@ -142,13 +160,12 @@ export class ProofService {
       value: note.value.toString(),
       nullifier: note.nullifier.toString(),
       secret: note.secret.toString(),
+      binding: binding.toString(),
       stateSiblings,
       stateIndex: stateIndex.toString(),
       labelIndex: labelIndex.toString(),
       labelSiblings,
     };
-
-    console.log('[ProofService] Input to Witness:', JSON.stringify(input, null, 2));
 
     if (!fs.existsSync(this.wasmPath)) {
       throw new Error(

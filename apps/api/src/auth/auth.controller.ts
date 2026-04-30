@@ -79,19 +79,6 @@ export class AuthController {
     });
   }
 
-  @Get('delete-me')
-  @UseGuards(SessionAuthGuard)
-  async deleteMe(@Req() req: any, @Res() res: Response) {
-    this.logger.log(`Deleting user: ${req.user._id}`);
-    await this.authService.deleteUser(req.user._id);
-    req.logout((err: any) => {
-      if (err) this.logger.error('Logout error during deletion:', err);
-      req.session.destroy(() => {
-        res.redirect('/');
-      });
-    });
-  }
-
   @Post('delete-me')
   @UseGuards(SessionAuthGuard)
   async deleteMeConfirmed(@Req() req: any, @Body() body: DeleteAccountDto) {

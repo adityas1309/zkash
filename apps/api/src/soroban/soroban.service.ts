@@ -12,6 +12,36 @@ export class SorobanService {
     return new StellarSdk.rpc.Server(getSorobanRpcUrl());
   }
 
+  private getRootAdminKeypair(): StellarSdk.Keypair | null {
+    const secret =
+      process.env.POOL_ROOT_ADMIN_SECRET_KEY ||
+      process.env.SHIELDED_POOL_ADMIN_SECRET_KEY ||
+      process.env.ADMIN_SECRET_KEY ||
+      process.env.FIAT_ADMIN_SECRET;
+
+    if (!secret) {
+      return null;
+    }
+
+    try {
+      return StellarSdk.Keypair.fromSecret(secret);
+    } catch {
+      console.warn('[SorobanService] Configured pool root admin secret is invalid');
+      return null;
+    }
+  }
+
+  private signRootAdminIfConfigured(
+    tx: StellarSdk.Transaction,
+    alreadySignedPublicKeys: string[],
+  ): void {
+    const adminKeypair = this.getRootAdminKeypair();
+    if (!adminKeypair || alreadySignedPublicKeys.includes(adminKeypair.publicKey())) {
+      return;
+    }
+    tx.sign(adminKeypair);
+  }
+
   /**
    * Poll getTransaction until the TX is confirmed or fails.
    * Returns the confirmed TX hash, or throws on failure/timeout.
@@ -181,17 +211,19 @@ export class SorobanService {
   }
 
   /**
-   * Invoke ShieldedPool.deposit(from, commitment, new_root).
+   * Invoke ShieldedPool.deposit(from, commitment, previous_root, new_root).
    * Signer must be `from`; transfers FIXED_AMOUNT (1 token) to the pool.
    */
   async invokeShieldedPoolDeposit(
     poolContractId: string,
     signerSecretKey: string,
     commitmentBytes: Uint8Array,
+    previousRootBytes: Uint8Array,
     newRootBytes: Uint8Array,
     amount: string,
   ): Promise<string> {
     if (commitmentBytes.length !== 32) throw new Error('Commitment must be 32 bytes');
+    if (previousRootBytes.length !== 32) throw new Error('previousRoot must be 32 bytes');
     if (newRootBytes.length !== 32) throw new Error('newRoot must be 32 bytes');
 
     const keypair = StellarSdk.Keypair.fromSecret(signerSecretKey);
@@ -205,6 +237,7 @@ export class SorobanService {
     const args = [
       StellarSdk.nativeToScVal(StellarSdk.Address.fromString(keypair.publicKey())),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(commitmentBytes)),
+      StellarSdk.xdr.ScVal.scvBytes(Buffer.from(previousRootBytes)),
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(newRootBytes)),
       StellarSdk.xdr.ScVal.scvI128(
         new StellarSdk.xdr.Int128Parts({
@@ -225,6 +258,7 @@ export class SorobanService {
 
     const prepared = await this.prepareTransactionWithBuffer(tx);
     prepared.sign(keypair);
+    this.signRootAdminIfConfigured(prepared, [keypair.publicKey()]);
     const result = await this.server.sendTransaction(prepared);
     if (result.status === 'ERROR') {
       throw new Error(String(result.errorResult ?? 'Transaction failed'));
@@ -259,8 +293,8 @@ export class SorobanService {
       StellarSdk.xdr.ScVal.scvBytes(Buffer.from(nullifierBytes)),
     ];
 
-    // Debug: log state root from pubSignals
-    // pubSignals = [nullifierHash(32), withdrawnValue(32), stateRoot(32), associationRoot(32)]
+    // Debug: log state root from pubSignals.
+    // pubSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot, binding]
     if (pubSignalsBytes.length >= 96) {
       const stateRoot = pubSignalsBytes.subarray(64, 96);
       console.log(
@@ -368,6 +402,7 @@ export class SorobanService {
 
     const prepared = await this.prepareTransactionWithBuffer(tx);
     prepared.sign(aliceKp); // Sign as submitter/fee-payer
+    this.signRootAdminIfConfigured(prepared, [aliceKp.publicKey()]);
 
     const result = await this.server.sendTransaction(prepared);
     if (result.status === 'ERROR') {

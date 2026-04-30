@@ -233,8 +233,12 @@ export class SwapController {
 
   @Put(':id/complete')
   @UseGuards(SessionAuthGuard)
-  complete(@Param('id') id: string, @Body() body: CompleteSwapDto) {
-    return this.swapService.complete(id, body.txHash);
+  complete(
+    @Param('id') id: string,
+    @Body() body: CompleteSwapDto,
+    @Req() req: { user: { _id: Types.ObjectId } },
+  ) {
+    return this.swapService.complete(id, req.user._id, body.txHash);
   }
 
   @Get('my')

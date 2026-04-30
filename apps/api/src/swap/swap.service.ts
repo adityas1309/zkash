@@ -1,4 +1,11 @@
-import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  forwardRef,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import {
   Asset,
@@ -9,18 +16,23 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import { Model, Types } from 'mongoose';
+import * as nacl from 'tweetnacl';
+import * as naclUtil from 'tweetnacl-util';
 import { AuthService } from '../auth/auth.service';
 import { getContractAddress, getHorizonUrl, isMainnetContext } from '../network.context';
-import { Offer } from '../schemas/offer.schema';
+import { Offer, type AssetType } from '../schemas/offer.schema';
 import { Swap, SwapExecutionStatus, SwapProofStatus, SwapStatus } from '../schemas/swap.schema';
 import { User } from '../schemas/user.schema';
 import { SorobanService } from '../soroban/soroban.service';
 import { TransactionAuditService } from '../transactions/transaction-audit.service';
 import { UsersService } from '../users/users.service';
+import type { NoteFields } from '../zk/commitment';
 import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { ProofService } from '../zk/proof.service';
 
 type SwapPartyRole = 'alice' | 'bob';
+
+const TRANSFER_PUBLIC_SIGNAL_BYTES = 5 * 32;
 
 type SwapAuditOperation =
   | 'swap_request'
@@ -40,8 +52,17 @@ interface SwapAuditContext {
   metadata?: Record<string, unknown>;
 }
 
+interface PreparedOutputNote {
+  noteFields: NoteFields;
+  commitmentBytes: Uint8Array;
+  commitmentHex: string;
+  asset: AssetType;
+}
+
 @Injectable()
 export class SwapService {
+  private static readonly SCALE_FACTOR = 10_000_000n;
+
   get server(): Horizon.Server {
     return new Horizon.Server(getHorizonUrl());
   }
@@ -65,6 +86,35 @@ export class SwapService {
     amountOut: number,
     offerId?: Types.ObjectId,
   ) {
+    if (aliceId.toString() === bobId.toString()) {
+      throw new BadRequestException('Cannot request a swap with yourself');
+    }
+    if (!offerId) {
+      throw new BadRequestException('Offer is required for swap requests');
+    }
+
+    const offer = await this.offerModel.findById(offerId).exec();
+    if (!offer) {
+      throw new BadRequestException('Offer not found');
+    }
+    if (!offer.active) {
+      throw new BadRequestException('Offer is no longer active');
+    }
+    if (offer.merchantId.toString() !== bobId.toString()) {
+      throw new BadRequestException('Offer does not belong to the requested merchant');
+    }
+    if (offer.assetIn === offer.assetOut) {
+      throw new BadRequestException('Offer asset pair is invalid');
+    }
+    if (amountIn < offer.min || amountIn > offer.max) {
+      throw new BadRequestException('Requested amount is outside the offer limits');
+    }
+
+    const quotedAmountOut = amountIn * offer.rate;
+    if (!this.isSameStellarAmount(amountOut, quotedAmountOut)) {
+      throw new BadRequestException('Requested output amount does not match the offer rate');
+    }
+
     const swap = await this.swapModel.create({
       aliceId,
       bobId,
@@ -151,9 +201,10 @@ export class SwapService {
     try {
       const seller = await this.userModel.findById(swap.bobId).exec();
       const buyer = await this.userModel.findById(swap.aliceId).exec();
+      const offer = swap.offerId ? await this.offerModel.findById(swap.offerId).exec() : null;
 
-      if (!seller || !buyer) {
-        throw new Error('Users not found');
+      if (!seller || !buyer || !offer) {
+        throw new Error('Users or offer not found');
       }
       if (!seller.googleId || !buyer.googleId) {
         throw new Error('Google IDs required');
@@ -184,12 +235,6 @@ export class SwapService {
       const sellerAccount = await this.server.loadAccount(seller.stellarPublicKey);
 
       const isMainnet = isMainnetContext();
-      const usdcIssuer =
-        process.env.USDC_ISSUER ||
-        (isMainnet
-          ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
-          : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
-      const usdcAsset = new Asset('USDC', usdcIssuer);
 
       const tx = new TransactionBuilder(sellerAccount, {
         fee: '100',
@@ -198,7 +243,7 @@ export class SwapService {
         .addOperation(
           Operation.payment({
             destination: buyer.stellarPublicKey,
-            asset: usdcAsset,
+            asset: this.stellarAssetFor(offer.assetOut),
             amount: swap.amountOut.toString(),
           }),
         )
@@ -206,7 +251,7 @@ export class SwapService {
           Operation.payment({
             source: buyer.stellarPublicKey,
             destination: seller.stellarPublicKey,
-            asset: Asset.native(),
+            asset: this.stellarAssetFor(offer.assetIn),
             amount: swap.amountIn.toString(),
           }),
         )
@@ -264,22 +309,46 @@ export class SwapService {
     }
   }
 
-  async complete(swapId: string, txHash: string) {
+  async complete(swapId: string, actorId: Types.ObjectId, txHash: string) {
+    if (!/^[a-fA-F0-9]{64}$/.test(txHash)) {
+      throw new BadRequestException('Invalid transaction hash');
+    }
+
     const swap = await this.swapModel.findById(swapId).exec();
     if (!swap) {
-      return null;
+      throw new NotFoundException('Swap not found');
     }
+
+    const actorRole = this.getPartyRole(swap, actorId);
+    if (!actorRole) {
+      throw new ForbiddenException('You are not a party to this swap');
+    }
+
+    if (swap.status === 'completed') {
+      if (swap.txHash !== txHash) {
+        throw new BadRequestException('Swap is already completed with a different transaction');
+      }
+      return swap;
+    }
+
+    if (swap.status !== 'executing' && swap.status !== 'proofs_ready') {
+      throw new BadRequestException('Swap is not ready to be completed');
+    }
+
+    await this.verifyPublicSwapSettlement(txHash, swap);
 
     swap.status = 'completed';
     swap.executionStatus = 'confirmed';
     swap.txHash = txHash;
     swap.completedAt = new Date();
+    swap.lastActorId = actorId;
+    swap.lastActorRole = actorRole;
     swap.lastError = undefined;
     await swap.save();
 
     await this.createAudit(swap, {
       operation: 'swap_complete',
-      actorId: swap.lastActorId ?? swap.aliceId,
+      actorId,
       state: 'success',
       txHash,
     });
@@ -320,6 +389,25 @@ export class SwapService {
 
     const asset: 'USDC' | 'XLM' = actorRole === 'alice' ? offer.assetIn : offer.assetOut;
     const amountRequired = actorRole === 'alice' ? swap.amountIn : swap.amountOut;
+    const outputRecipientRole: SwapPartyRole = actorRole === 'alice' ? 'bob' : 'alice';
+    const outputRecipient = await this.userModel
+      .findById(actorRole === 'alice' ? swap.bobId : swap.aliceId)
+      .exec();
+    if (!outputRecipient) {
+      await this.markAuditFailure(audit._id.toString(), 'Counterparty not found for swap');
+      return {
+        ready: false,
+        error: 'Counterparty not found for swap',
+        auditId: audit._id.toString(),
+      };
+    }
+    const outputNote = await this.ensureOutputNote(
+      swap,
+      outputRecipientRole,
+      outputRecipient,
+      asset,
+      amountRequired,
+    );
     const minValue = BigInt(Math.round(amountRequired * 10_000_000));
     const poolAddress =
       asset === 'USDC'
@@ -414,7 +502,7 @@ export class SwapService {
       { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
       stateRoot,
       note.value,
-      { commitmentBytes, stateIndex, stateSiblings },
+      { commitmentBytes, stateIndex, stateSiblings, publicBinding: outputNote.commitmentBytes },
     );
 
     const submitResult = await this.submitSwapProof(
@@ -469,6 +557,22 @@ export class SwapService {
     const isBob = swap.bobId.toString() === userId.toString();
     if (!isAlice && !isBob) {
       throw new Error('You are not a party to this swap');
+    }
+
+    const pubSignalLength = Buffer.from(pubSignalsBytesB64, 'base64').length;
+    if (pubSignalLength !== TRANSFER_PUBLIC_SIGNAL_BYTES) {
+      throw new Error('Swap proofs must use the output-bound transfer circuit');
+    }
+    const pubSignals = Buffer.from(pubSignalsBytesB64, 'base64');
+    const bindingHex = pubSignals.subarray(4 * 32, 5 * 32).toString('hex');
+    const expectedOutputCommitment = isAlice
+      ? swap.bobOutputCommitment
+      : swap.aliceOutputCommitment;
+    if (!expectedOutputCommitment) {
+      throw new Error('Prepare the swap output note before submitting this proof');
+    }
+    if (bindingHex !== expectedOutputCommitment) {
+      throw new Error('Swap proof binding does not match the prepared output commitment');
     }
 
     const auditId =
@@ -538,6 +642,12 @@ export class SwapService {
     if (!swap || !this.isExecutionReady(swap)) {
       throw new Error('Swap not found or not ready for execution');
     }
+    if (
+      alicePubSignals.length !== TRANSFER_PUBLIC_SIGNAL_BYTES ||
+      bobPubSignals.length !== TRANSFER_PUBLIC_SIGNAL_BYTES
+    ) {
+      throw new Error('Swap proofs must use the output-bound transfer circuit');
+    }
 
     const actorRole = this.getPartyRole(swap, executorId);
     if (!actorRole) {
@@ -593,8 +703,25 @@ export class SwapService {
       }
       const xlmPool = getContractAddress('SHIELDED_POOL_XLM_ADDRESS') ?? usdcPool;
 
-      const amountUsdc = String(Math.round(swap.amountOut * 10_000_000));
-      const amountXlm = String(Math.round(swap.amountIn * 10_000_000));
+      const amountUsdcValue = offer.assetIn === 'USDC' ? swap.amountIn : swap.amountOut;
+      const amountXlmValue = offer.assetIn === 'XLM' ? swap.amountIn : swap.amountOut;
+      const amountUsdc = this.toScaledAmount(amountUsdcValue).toString();
+      const amountXlm = this.toScaledAmount(amountXlmValue).toString();
+
+      const aliceOutput = this.getPreparedOutputNote(
+        swap,
+        'alice',
+        dbAlice,
+        offer.assetOut,
+        swap.amountOut,
+      );
+      const bobOutput = this.getPreparedOutputNote(
+        swap,
+        'bob',
+        dbBob,
+        offer.assetIn,
+        swap.amountIn,
+      );
 
       let contractAliceProof: Uint8Array;
       let contractAlicePubSignals: Uint8Array;
@@ -608,25 +735,18 @@ export class SwapService {
       let contractBobOutputCommitment: Uint8Array;
       let contractBobOutputRoot: Uint8Array;
 
-      let dbAliceNewNote;
-      let dbAliceNewCommitment: Uint8Array;
-      let dbBobNewNote;
-      let dbBobNewCommitment: Uint8Array;
-      let dbAliceNewAsset: 'USDC' | 'XLM';
-      let dbBobNewAsset: 'USDC' | 'XLM';
+      const dbAliceNewNote = aliceOutput.noteFields;
+      const dbAliceNewCommitment = aliceOutput.commitmentBytes;
+      const dbAliceNewAsset = aliceOutput.asset;
+      const dbBobNewNote = bobOutput.noteFields;
+      const dbBobNewCommitment = bobOutput.commitmentBytes;
+      const dbBobNewAsset = bobOutput.asset;
 
       if (offer.assetIn === 'USDC' && offer.assetOut === 'XLM') {
+        // Alice spends USDC and mints the prepared USDC output note for Bob.
         contractAliceProof = aliceProof;
         contractAlicePubSignals = alicePubSignals;
         contractAliceNullifier = aliceNullifier;
-        contractBobProof = bobProof;
-        contractBobPubSignals = bobPubSignals;
-        contractBobNullifier = bobNullifier;
-
-        const bobRes = await this.usersService.generateNote(dbBob._id.toString(), swap.amountIn);
-        dbBobNewNote = bobRes.noteFields;
-        dbBobNewCommitment = bobRes.commitmentBytes;
-        dbBobNewAsset = 'USDC';
         contractBobOutputCommitment = dbBobNewCommitment;
         const usdcLeaves = await this.sorobanService.getCommitments(
           usdcPool,
@@ -637,13 +757,10 @@ export class SwapService {
           20,
         );
 
-        const aliceRes = await this.usersService.generateNote(
-          dbAlice._id.toString(),
-          swap.amountOut,
-        );
-        dbAliceNewNote = aliceRes.noteFields;
-        dbAliceNewCommitment = aliceRes.commitmentBytes;
-        dbAliceNewAsset = 'XLM';
+        // Bob spends XLM and mints the prepared XLM output note for Alice.
+        contractBobProof = bobProof;
+        contractBobPubSignals = bobPubSignals;
+        contractBobNullifier = bobNullifier;
         contractAliceOutputCommitment = dbAliceNewCommitment;
         const xlmLeaves = await this.sorobanService.getCommitments(
           xlmPool,
@@ -654,20 +771,10 @@ export class SwapService {
           20,
         );
       } else if (offer.assetIn === 'XLM' && offer.assetOut === 'USDC') {
-        contractBobProof = aliceProof;
-        contractBobPubSignals = alicePubSignals;
-        contractBobNullifier = aliceNullifier;
+        // Bob spends USDC and mints the prepared USDC output note for Alice.
         contractAliceProof = bobProof;
         contractAlicePubSignals = bobPubSignals;
         contractAliceNullifier = bobNullifier;
-
-        const aliceRes = await this.usersService.generateNote(
-          dbAlice._id.toString(),
-          swap.amountOut,
-        );
-        dbAliceNewNote = aliceRes.noteFields;
-        dbAliceNewCommitment = aliceRes.commitmentBytes;
-        dbAliceNewAsset = 'USDC';
         contractBobOutputCommitment = dbAliceNewCommitment;
         const usdcLeaves = await this.sorobanService.getCommitments(
           usdcPool,
@@ -678,10 +785,10 @@ export class SwapService {
           20,
         );
 
-        const bobRes = await this.usersService.generateNote(dbBob._id.toString(), swap.amountIn);
-        dbBobNewNote = bobRes.noteFields;
-        dbBobNewCommitment = bobRes.commitmentBytes;
-        dbBobNewAsset = 'XLM';
+        // Alice spends XLM and mints the prepared XLM output note for Bob.
+        contractBobProof = aliceProof;
+        contractBobPubSignals = alicePubSignals;
+        contractBobNullifier = aliceNullifier;
         contractAliceOutputCommitment = dbBobNewCommitment;
         const xlmLeaves = await this.sorobanService.getCommitments(xlmPool, dbBob.stellarPublicKey);
         contractAliceOutputRoot = await this.merkleTree.computeRootFromLeaves(
@@ -1182,6 +1289,162 @@ export class SwapService {
     return swaps.map((swap) => this.serializeSwapSummary(swap, userId));
   }
 
+  private toScaledAmount(amount: number): bigint {
+    return BigInt(Math.round(amount * Number(SwapService.SCALE_FACTOR)));
+  }
+
+  private encryptOutputNote(
+    recipient: User,
+    noteFields: NoteFields,
+    commitmentBytes: Uint8Array,
+    asset: AssetType,
+  ): string {
+    if (!recipient.googleId) {
+      throw new Error('Recipient Google ID required for output note encryption');
+    }
+    const encKey = this.authService.getDecryptionKeyForUser(
+      recipient,
+      recipient.googleId,
+      recipient.email,
+    );
+    const payload = JSON.stringify({
+      label: noteFields.label.toString(),
+      value: noteFields.value.toString(),
+      nullifier: noteFields.nullifier.toString(),
+      secret: noteFields.secret.toString(),
+      commitment: Buffer.from(commitmentBytes).toString('hex'),
+      asset,
+    });
+    const nonce = nacl.randomBytes(nacl.secretbox.nonceLength);
+    const ciphertext = nacl.secretbox(naclUtil.decodeUTF8(payload), nonce, encKey);
+    const combined = Buffer.concat([Buffer.from(nonce), Buffer.from(ciphertext)]);
+    return combined.toString('base64');
+  }
+
+  private decryptOutputNote(
+    recipient: User,
+    encryptedBase64: string,
+    expectedAsset?: AssetType,
+    expectedAmount?: number,
+  ): PreparedOutputNote {
+    if (!recipient.googleId) {
+      throw new Error('Recipient Google ID required for output note decryption');
+    }
+    const encKey = this.authService.getDecryptionKeyForUser(
+      recipient,
+      recipient.googleId,
+      recipient.email,
+    );
+    const combined = Buffer.from(encryptedBase64, 'base64');
+    const nonce = new Uint8Array(combined.subarray(0, nacl.secretbox.nonceLength));
+    const ciphertext = new Uint8Array(combined.subarray(nacl.secretbox.nonceLength));
+    const decrypted = nacl.secretbox.open(ciphertext, nonce, encKey);
+    if (!decrypted) {
+      throw new Error('Output note decryption failed');
+    }
+    const parsed = JSON.parse(naclUtil.encodeUTF8(decrypted)) as {
+      label: string;
+      value: string;
+      nullifier: string;
+      secret: string;
+      commitment: string;
+      asset: AssetType;
+    };
+    const noteFields: NoteFields = {
+      label: BigInt(parsed.label),
+      value: BigInt(parsed.value),
+      nullifier: BigInt(parsed.nullifier),
+      secret: BigInt(parsed.secret),
+    };
+    if (expectedAsset && parsed.asset !== expectedAsset) {
+      throw new Error('Prepared output note asset does not match swap terms');
+    }
+    if (expectedAmount !== undefined && noteFields.value !== this.toScaledAmount(expectedAmount)) {
+      throw new Error('Prepared output note amount does not match swap terms');
+    }
+    return {
+      noteFields,
+      commitmentHex: parsed.commitment,
+      commitmentBytes: new Uint8Array(Buffer.from(parsed.commitment, 'hex')),
+      asset: parsed.asset,
+    };
+  }
+
+  private async ensureOutputNote(
+    swap: Swap,
+    recipientRole: SwapPartyRole,
+    recipient: User,
+    asset: AssetType,
+    amount: number,
+  ): Promise<PreparedOutputNote> {
+    const existingCiphertext =
+      recipientRole === 'alice' ? swap.aliceOutputNoteCiphertext : swap.bobOutputNoteCiphertext;
+    if (existingCiphertext) {
+      return this.decryptOutputNote(recipient, existingCiphertext, asset, amount);
+    }
+
+    const generated = await this.usersService.generateNote(recipient._id.toString(), amount);
+    const commitmentHex = Buffer.from(generated.commitmentBytes).toString('hex');
+    const encrypted = this.encryptOutputNote(
+      recipient,
+      generated.noteFields,
+      generated.commitmentBytes,
+      asset,
+    );
+
+    if (recipientRole === 'alice') {
+      swap.aliceOutputNoteCiphertext = encrypted;
+      swap.aliceOutputCommitment = commitmentHex;
+      swap.aliceOutputAsset = asset;
+    } else {
+      swap.bobOutputNoteCiphertext = encrypted;
+      swap.bobOutputCommitment = commitmentHex;
+      swap.bobOutputAsset = asset;
+    }
+    await swap.save();
+
+    return {
+      noteFields: generated.noteFields,
+      commitmentBytes: generated.commitmentBytes,
+      commitmentHex,
+      asset,
+    };
+  }
+
+  private getPreparedOutputNote(
+    swap: Swap,
+    recipientRole: SwapPartyRole,
+    recipient: User,
+    asset: AssetType,
+    amount: number,
+  ): PreparedOutputNote {
+    const encrypted =
+      recipientRole === 'alice' ? swap.aliceOutputNoteCiphertext : swap.bobOutputNoteCiphertext;
+    const commitment =
+      recipientRole === 'alice' ? swap.aliceOutputCommitment : swap.bobOutputCommitment;
+    if (!encrypted || !commitment) {
+      throw new Error('Prepared output note missing. Prepare both swap proofs again.');
+    }
+    const note = this.decryptOutputNote(recipient, encrypted, asset, amount);
+    if (note.commitmentHex !== commitment) {
+      throw new Error('Prepared output note commitment mismatch');
+    }
+    return note;
+  }
+
+  private getUsdcIssuer(): string {
+    return (
+      process.env.USDC_ISSUER ||
+      (isMainnetContext()
+        ? 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN'
+        : 'GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5')
+    );
+  }
+
+  private stellarAssetFor(asset: AssetType): Asset {
+    return asset === 'XLM' ? Asset.native() : new Asset('USDC', this.getUsdcIssuer());
+  }
+
   private getPartyRole(
     swap: Pick<Swap, 'aliceId' | 'bobId'>,
     userId: Types.ObjectId,
@@ -1201,6 +1464,87 @@ export class SwapService {
 
   private isExecutionReady(swap: Pick<Swap, 'status' | 'proofStatus'>) {
     return swap.status === 'proofs_ready' || swap.proofStatus === 'ready';
+  }
+
+  private async verifyPublicSwapSettlement(
+    txHash: string,
+    swap: Pick<Swap, 'aliceId' | 'bobId' | 'offerId' | 'amountIn' | 'amountOut'>,
+  ) {
+    const [alice, bob, offer] = await Promise.all([
+      this.userModel.findById(swap.aliceId).exec(),
+      this.userModel.findById(swap.bobId).exec(),
+      swap.offerId ? this.offerModel.findById(swap.offerId).exec() : Promise.resolve(null),
+    ]);
+
+    if (!alice || !bob || !offer) {
+      throw new BadRequestException('Swap participants or offer could not be loaded');
+    }
+
+    try {
+      const transaction = await this.server.transactions().transaction(txHash).call();
+      if ((transaction as any).successful === false) {
+        throw new BadRequestException('Transaction was not successful');
+      }
+      const operations = await this.server.operations().forTransaction(txHash).limit(200).call();
+      const payments = operations.records.filter((operation: any) => operation.type === 'payment');
+
+      const expectedLegs = [
+        {
+          from: bob.stellarPublicKey,
+          to: alice.stellarPublicKey,
+          asset: offer.assetOut,
+          amount: swap.amountOut,
+        },
+        {
+          from: alice.stellarPublicKey,
+          to: bob.stellarPublicKey,
+          asset: offer.assetIn,
+          amount: swap.amountIn,
+        },
+      ];
+
+      const settlesBothLegs = expectedLegs.every((leg) =>
+        payments.some((operation: any) => this.paymentMatchesExpectedLeg(operation, leg)),
+      );
+
+      if (!settlesBothLegs) {
+        throw new BadRequestException('Transaction does not settle both swap payment legs');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException('Transaction hash was not found on the Stellar network');
+    }
+  }
+
+  private paymentMatchesExpectedLeg(
+    operation: any,
+    leg: { from: string; to: string; asset: AssetType; amount: number },
+  ) {
+    const operationFrom = operation.from ?? operation.source_account;
+    return (
+      operationFrom === leg.from &&
+      operation.to === leg.to &&
+      this.paymentAssetMatches(operation, leg.asset) &&
+      this.isSameStellarAmount(operation.amount, leg.amount)
+    );
+  }
+
+  private paymentAssetMatches(operation: any, asset: AssetType) {
+    if (asset === 'XLM') {
+      return operation.asset_type === 'native';
+    }
+    return (
+      operation.asset_type !== 'native' &&
+      operation.asset_code === 'USDC' &&
+      operation.asset_issuer === this.getUsdcIssuer()
+    );
+  }
+
+  private isSameStellarAmount(actualValue: unknown, expectedValue: number) {
+    const actual = Number(actualValue);
+    return Number.isFinite(actual) && Math.abs(actual - expectedValue) <= 0.0000001;
   }
 
   private computeProofStatus(

@@ -9,6 +9,7 @@ template Withdraw(treeDepth, associationDepth) {
     signal input withdrawnValue;
     signal input stateRoot;             // a known state root
     signal input associationRoot;       // root of the association set Merkle tree
+    signal input binding;               // recipient hash for withdraws, output commitment for transfers
 
     // PRIVATE SIGNALS
 
@@ -83,6 +84,9 @@ template Withdraw(treeDepth, associationDepth) {
 
     // ensure withdrawn value doesn't exceed commitment value
     // (this is enforced by the remainingValue being non-negative through range check)
+    // Keep the binding as a public signal so the proof can only verify for the
+    // recipient/output commitment chosen during proof generation.
+    binding === binding;
 }
 
-component main {public [withdrawnValue, stateRoot, associationRoot]} = Withdraw(20, 2);  // state tree depth 20, association tree depth 2
+component main {public [withdrawnValue, stateRoot, associationRoot, binding]} = Withdraw(20, 2);  // state tree depth 20, association tree depth 2

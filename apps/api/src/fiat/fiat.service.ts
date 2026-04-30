@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
 import {
   Asset,
   Horizon,
@@ -13,8 +14,10 @@ import {
   TransactionBuilder,
 } from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
+import { Model } from 'mongoose';
 import Razorpay from 'razorpay';
 import { isMainnetContext, getHorizonUrl } from '../network.context';
+import { FiatOrder } from '../schemas/fiat-order.schema';
 import { User } from '../schemas/user.schema';
 import { UsersService } from '../users/users.service';
 import {
@@ -23,6 +26,23 @@ import {
   FiatPlanDto,
   SellFiatDto,
 } from './dto/create-order.dto';
+
+type RazorpayOrderDetails = {
+  id: string;
+  amount: number | string;
+  amount_paid?: number | string;
+  currency: string;
+  status?: string;
+};
+
+type RazorpayPaymentDetails = {
+  id: string;
+  order_id?: string;
+  amount?: number | string;
+  currency?: string;
+  status?: string;
+  captured?: boolean;
+};
 
 @Injectable()
 export class FiatService {
@@ -38,7 +58,10 @@ export class FiatService {
   private readonly sellFeePercent = Number(process.env.FIAT_SELL_FEE_PERCENT || '1.5');
   private readonly payoutHoldMinutes = Number(process.env.FIAT_PAYOUT_HOLD_MINUTES || '10');
 
-  constructor(private readonly usersService: UsersService) {
+  constructor(
+    private readonly usersService: UsersService,
+    @InjectModel(FiatOrder.name) private readonly fiatOrderModel: Model<FiatOrder>,
+  ) {
     this.server = new Horizon.Server(getHorizonUrl());
 
     if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
@@ -513,6 +536,15 @@ export class FiatService {
 
       const order = await this.razorpay.orders.create(options as any);
       const preview = await this.previewBuy(user, normalized);
+      await this.fiatOrderModel.create({
+        userId: user._id,
+        razorpayOrderId: order.id,
+        amountInr: normalized.amount,
+        amountPaise: Number(order.amount),
+        currency: String(order.currency ?? normalized.currency).toUpperCase(),
+        mode: normalized.mode,
+        status: 'created',
+      });
 
       return {
         orderId: order.id,
@@ -547,8 +579,16 @@ export class FiatService {
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
       .update(`${razorpayOrderId}|${razorpayPaymentId}`)
       .digest('hex');
+    if (!/^[a-fA-F0-9]{64}$/.test(razorpaySignature)) {
+      throw new BadRequestException('Invalid payment signature');
+    }
+    const expectedSignature = Buffer.from(generatedSignature, 'hex');
+    const receivedSignature = Buffer.from(razorpaySignature, 'hex');
 
-    if (generatedSignature !== razorpaySignature) {
+    if (
+      expectedSignature.length !== receivedSignature.length ||
+      !crypto.timingSafeEqual(expectedSignature, receivedSignature)
+    ) {
       this.logger.error(`Signature mismatch for order ${razorpayOrderId}`);
       throw new BadRequestException('Invalid payment signature');
     }
@@ -557,19 +597,119 @@ export class FiatService {
       throw new InternalServerErrorException('Payment gateway not configured');
     }
 
-    let amountPaidInRupees = 0;
-    try {
-      const order = await this.razorpay.orders.fetch(razorpayOrderId);
-      amountPaidInRupees = Number(order.amount) / 100;
-    } catch (error) {
-      this.logger.warn('Failed to fetch order details during verification', error);
+    const fiatOrder = await this.fiatOrderModel.findOne({ razorpayOrderId }).exec();
+    if (!fiatOrder) {
+      throw new BadRequestException('Unknown payment order');
+    }
+    if (fiatOrder.userId.toString() !== user._id.toString()) {
+      throw new BadRequestException('Payment order does not belong to this user');
+    }
+    if (fiatOrder.mode !== mode) {
+      throw new BadRequestException('Payment mode does not match the created order');
+    }
+    if (fiatOrder.status === 'fulfilled' || fiatOrder.status === 'paid') {
+      throw new BadRequestException('Payment has already been processed');
+    }
+    if (fiatOrder.razorpayPaymentId && fiatOrder.razorpayPaymentId !== razorpayPaymentId) {
+      throw new BadRequestException('Payment order is already linked to another payment');
     }
 
+    const order = (await this.razorpay.orders.fetch(razorpayOrderId)) as RazorpayOrderDetails;
+    const payment = (await this.razorpay.payments.fetch(
+      razorpayPaymentId,
+    )) as RazorpayPaymentDetails;
+
+    if (payment.order_id && payment.order_id !== razorpayOrderId) {
+      throw new BadRequestException('Payment does not belong to this order');
+    }
+
+    const orderAmountPaise = Number(order.amount);
+    const paymentAmountPaise = Number(payment.amount ?? order.amount);
+    const expectedCurrency = fiatOrder.currency.toUpperCase();
+    const orderCurrency = String(order.currency).toUpperCase();
+    const paymentCurrency = String(payment.currency ?? order.currency).toUpperCase();
+
+    if (
+      orderAmountPaise !== fiatOrder.amountPaise ||
+      paymentAmountPaise !== fiatOrder.amountPaise ||
+      orderCurrency !== expectedCurrency ||
+      paymentCurrency !== expectedCurrency
+    ) {
+      throw new BadRequestException('Payment amount or currency does not match the created order');
+    }
+
+    const orderIsPaid =
+      String(order.status ?? '').toLowerCase() === 'paid' ||
+      Number(order.amount_paid ?? 0) >= fiatOrder.amountPaise;
+    const paymentIsCaptured =
+      String(payment.status ?? '').toLowerCase() === 'captured' || payment.captured === true;
+
+    if (!orderIsPaid || !paymentIsCaptured) {
+      throw new BadRequestException('Payment has not been captured by Razorpay');
+    }
+
+    let reservedOrder: FiatOrder | null;
+    try {
+      reservedOrder = await this.fiatOrderModel
+        .findOneAndUpdate(
+          { _id: fiatOrder._id, status: 'created' },
+          {
+            $set: {
+              status: 'paid',
+              razorpayPaymentId,
+              paidAt: new Date(),
+            },
+          },
+          { new: true },
+        )
+        .exec();
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        throw new BadRequestException('Payment has already been processed');
+      }
+      throw error;
+    }
+
+    if (!reservedOrder) {
+      throw new BadRequestException('Payment has already been processed');
+    }
+
+    const amountPaidInRupees = reservedOrder.amountInr;
     const grossXlm = amountPaidInRupees * this.buyRateInrToXlm;
     const feeXlm = grossXlm * (this.buyFeePercent / 100);
     const netXlm = (grossXlm - feeXlm).toFixed(7);
 
-    return this.processBuy(user, netXlm, mode, razorpayOrderId);
+    try {
+      const fulfillment = await this.processBuy(user, netXlm, mode, razorpayOrderId);
+      await this.fiatOrderModel
+        .updateOne(
+          { _id: reservedOrder._id },
+          {
+            $set: {
+              status: 'fulfilled',
+              netXlm,
+              fulfilledTxHash: fulfillment.txHash,
+              processedAt: new Date(),
+            },
+            $unset: { failureReason: '' },
+          },
+        )
+        .exec();
+      return fulfillment;
+    } catch (error: any) {
+      await this.fiatOrderModel
+        .updateOne(
+          { _id: reservedOrder._id },
+          {
+            $set: {
+              status: 'failed',
+              failureReason: error?.message ?? String(error),
+            },
+          },
+        )
+        .exec();
+      throw error;
+    }
   }
 
   async processBuy(user: User, amount: string, mode: 'public' | 'zk', orderId: string) {

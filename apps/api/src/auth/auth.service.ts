@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User } from '../schemas/user.schema';
 import { Keypair } from '@stellar/stellar-sdk';
+import * as crypto from 'crypto';
 import * as nacl from 'tweetnacl';
 import * as naclUtil from 'tweetnacl-util';
 import { UsersService } from '../users/users.service';
@@ -186,6 +187,9 @@ export class AuthService {
         user.googleId = profile.id;
         await user.save();
       }
+      if ((user.keyDerivationVersion ?? 1) < 2) {
+        await this.migrateUserKeyEncryption(user, profile.id, email);
+      }
       return user;
     }
 
@@ -193,20 +197,9 @@ export class AuthService {
     const { stellarPublicKey, stellarSecretKey } = this.createStellarKeypair();
     const { spendingKey, viewKey } = this.createzkKeypair();
 
-    const encryptionKey = this.deriveEncryptionKey(profile.id, email);
-    console.log(`[AuthService] New User - GoogleID: ${profile.id}, Email: ${email}`);
-    console.log(`[AuthService] Derived Key (Hex): ${Buffer.from(encryptionKey).toString('hex')}`);
+    const encryptionKey = this.deriveEncryptionKey(profile.id, email, 2);
 
     const stellarSecretKeyEncrypted = this.encrypt(stellarSecretKey, encryptionKey);
-
-    // DEBUG: Immediate Verification
-    try {
-      const decrypted = this.decrypt(stellarSecretKeyEncrypted, encryptionKey);
-      if (decrypted !== stellarSecretKey) console.error('CRITICAL: Immediate decryption MISMATCH!');
-      else console.log('IMMEDIATE DECRYPTION PASSED!');
-    } catch (e) {
-      console.error('CRITICAL: Immediate decryption THREW:', e);
-    }
 
     const zkSpendingKeyEncrypted = this.encrypt(spendingKey, encryptionKey);
     const zkViewKeyEncrypted = this.encrypt(viewKey, encryptionKey);
@@ -219,6 +212,7 @@ export class AuthService {
       stellarSecretKeyEncrypted,
       zkSpendingKeyEncrypted,
       zkViewKeyEncrypted,
+      keyDerivationVersion: 2,
       reputation: 0,
       identityCommitment: undefined,
     });
@@ -696,8 +690,46 @@ export class AuthService {
     };
   }
 
-  private deriveEncryptionKey(googleId: string, email: string): Uint8Array {
-    const input = `${googleId}:${email}`;
+  private async migrateUserKeyEncryption(
+    user: User,
+    googleId: string,
+    email: string,
+  ): Promise<void> {
+    const legacyKey = this.deriveEncryptionKey(googleId, email, 1);
+    const upgradedKey = this.deriveEncryptionKey(googleId, email, 2);
+
+    const stellarSecretKey = this.decrypt(user.stellarSecretKeyEncrypted, legacyKey);
+    const zkSpendingKey = this.decrypt(user.zkSpendingKeyEncrypted, legacyKey);
+    const zkViewKey = this.decrypt(user.zkViewKeyEncrypted, legacyKey);
+
+    user.stellarSecretKeyEncrypted = this.encrypt(stellarSecretKey, upgradedKey);
+    user.zkSpendingKeyEncrypted = this.encrypt(zkSpendingKey, upgradedKey);
+    user.zkViewKeyEncrypted = this.encrypt(zkViewKey, upgradedKey);
+    user.keyDerivationVersion = 2;
+    await user.save();
+  }
+
+  private deriveEncryptionKey(googleId: string, email: string, version = 2): Uint8Array {
+    const normalizedEmail = email.trim().toLowerCase();
+    const input = version >= 2 ? `${googleId}:${normalizedEmail}` : `${googleId}:${email}`;
+
+    if (version >= 2) {
+      const serverSecret = process.env.KEY_ENCRYPTION_SECRET ?? process.env.SESSION_SECRET;
+      if (!serverSecret) {
+        throw new Error(
+          'KEY_ENCRYPTION_SECRET or SESSION_SECRET is required for wallet encryption',
+        );
+      }
+      const salt = `zkash-wallet-v2:${serverSecret}`;
+      return new Uint8Array(
+        crypto.scryptSync(input, salt, nacl.secretbox.keyLength, {
+          N: 16384,
+          r: 8,
+          p: 1,
+        }),
+      );
+    }
+
     const hash = nacl.hash(naclUtil.decodeUTF8(input));
     return hash.slice(0, nacl.secretbox.keyLength);
   }
@@ -718,19 +750,13 @@ export class AuthService {
 
     const decrypted = nacl.secretbox.open(ciphertext, nonce, key);
     if (!decrypted) {
-      console.error('Decryption failed for key:', Buffer.from(key).toString('hex'));
-      console.error('Nonce:', Buffer.from(nonce).toString('hex'));
-      console.error('Ciphertext length:', ciphertext.length);
-      throw new Error('Decryption failed - nacl.secretbox.open returned null');
+      throw new Error('Decryption failed');
     }
     return naclUtil.encodeUTF8(decrypted);
   }
 
   getDecryptionKeyForUser(user: User, googleId: string, email: string): Uint8Array {
-    console.log(`[AuthService] Decrypting - GoogleID: ${googleId}, Email: ${email}`);
-    const key = this.deriveEncryptionKey(googleId, email);
-    console.log(`[AuthService] Derived Key (Hex): ${Buffer.from(key).toString('hex')}`);
-    return key;
+    return this.deriveEncryptionKey(googleId, email, user.keyDerivationVersion ?? 1);
   }
 
   private getNetworkInfo() {

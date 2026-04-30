@@ -103,6 +103,19 @@ export class Swap extends Document {
   bobPubSignalsBytes?: string;
   @Prop()
   bobNullifier?: string;
+
+  @Prop()
+  aliceOutputNoteCiphertext?: string;
+  @Prop()
+  aliceOutputCommitment?: string;
+  @Prop({ enum: ['USDC', 'XLM'] })
+  aliceOutputAsset?: 'USDC' | 'XLM';
+  @Prop()
+  bobOutputNoteCiphertext?: string;
+  @Prop()
+  bobOutputCommitment?: string;
+  @Prop({ enum: ['USDC', 'XLM'] })
+  bobOutputAsset?: 'USDC' | 'XLM';
 }
 
 export const SwapSchema = SchemaFactory.createForClass(Swap);

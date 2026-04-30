@@ -83,6 +83,7 @@ export class ExecutePrivateSwapDto {
 export class CompleteSwapDto {
   @IsString()
   @IsNotEmpty()
+  @Matches(/^[a-fA-F0-9]{64}$/)
   txHash: string;
 }
 

@@ -27,6 +27,9 @@ export class User extends Document {
   @Prop()
   googleId?: string;
 
+  @Prop({ default: 1 })
+  keyDerivationVersion: number;
+
   @Prop({ unique: true, sparse: true })
   identityCommitment?: string;
 }

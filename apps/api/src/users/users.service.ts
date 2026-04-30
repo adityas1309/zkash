@@ -20,7 +20,7 @@ import {
 import * as nacl from 'tweetnacl';
 import * as naclUtil from 'tweetnacl-util';
 import { computeCommitment, type NoteFields } from '../zk/commitment';
-import { ProofService } from '../zk/proof.service';
+import { ProofService, recipientBindingFromAddress } from '../zk/proof.service';
 import { MerkleTreeService } from '../zk/merkle-tree.service';
 import { isMainnetContext, getContractAddress, getHorizonUrl } from '../network.context';
 import { MetricsService } from '../ops/metrics.service';
@@ -470,12 +470,13 @@ export class UsersService {
           { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
           stateRoot,
           amountBigInt,
-          { commitmentBytes, stateIndex, stateSiblings },
+          {
+            commitmentBytes,
+            stateIndex,
+            stateSiblings,
+            publicBinding: recipientBindingFromAddress(recipient.stellarPublicKey),
+          },
         );
-      console.warn(`[sendPrivate] proofBytes HEX: ${Buffer.from(proofBytes).toString('hex')}`);
-      console.warn(
-        `[sendPrivate] pubSignalsBytes HEX: ${Buffer.from(pubSignalsBytes).toString('hex')}`,
-      );
       console.log(`[sendPrivate] proof generated, nullifierHash: ${nullifierHash.slice(0, 16)}...`);
 
       // Store 'nullifierHash' in PendingWithdrawal because the recipient interacts with the contract
@@ -636,7 +637,12 @@ export class UsersService {
           { label: note.label, value: note.value, nullifier: note.nullifier, secret: note.secret },
           stateRoot,
           note.value,
-          { commitmentBytes, stateIndex, stateSiblings },
+          {
+            commitmentBytes,
+            stateIndex,
+            stateSiblings,
+            publicBinding: recipientBindingFromAddress(user.stellarPublicKey),
+          },
         );
 
       // 3. Submit withdrawal to contract immediately
@@ -729,7 +735,7 @@ export class UsersService {
         const pubSignalsBytes = Buffer.from(p.pubSignalsBytes, 'base64');
 
         // Robustness fix: Extract nullifierHash from public signals (index 0).
-        // publicSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot]
+        // publicSignals = [nullifierHash, withdrawnValue, stateRoot, associationRoot, binding]
         // Each is 32 bytes.
         // Even if p.nullifier stored the SECRET (old bug), this extracts the HASH required by contract.
         const nullifierHashFromSignals = pubSignalsBytes.subarray(0, 32);
@@ -822,11 +828,20 @@ export class UsersService {
       const { commitmentBytes } = await computeCommitment(noteFields);
 
       // Compute the new merkle root (poseidon, depth 20) from on-chain commitments list + this commitment.
+      const currentRootBytes = await this.withTimeout(
+        this.sorobanService.getMerkleRoot(poolAddress, user.stellarPublicKey),
+        DEPOSIT_TIMEOUT_MS,
+        'getMerkleRoot',
+      );
       const existingLeaves = await this.withTimeout(
         this.sorobanService.getCommitments(poolAddress, user.stellarPublicKey),
         DEPOSIT_TIMEOUT_MS,
         'getCommitments',
       );
+      const computedCurrentRoot = await this.merkleTree.computeRootFromLeaves(existingLeaves, 20);
+      if (!Buffer.from(computedCurrentRoot).equals(Buffer.from(currentRootBytes))) {
+        throw new Error('Pool root changed while preparing deposit. Please retry.');
+      }
       const newLeaves = [...existingLeaves, commitmentBytes];
       const newRootBytes = await this.merkleTree.computeRootFromLeaves(newLeaves, 20);
 
@@ -835,6 +850,7 @@ export class UsersService {
           poolAddress,
           secretKey,
           commitmentBytes,
+          currentRootBytes,
           newRootBytes,
           scaledAmount.toString(),
         ),
