@@ -24,6 +24,8 @@
 
 - **Deployed Website:** [zkash-swap.vercel.app](https://zkash-swap.vercel.app)
 - **Demo Video:** [YouTube Walkthrough](https://youtu.be/9XibJXIC4qg)
+- **Feedback Form:** [Google Form](https://docs.google.com/forms/d/e/1FAIpQLSexwX8xHe_f7y2BotDnJH116XHM7X_JgPpUwgdjN-Nuh9sX8g/viewform?usp=publish-editor)
+- **Response Sheet:** [Google Sheets Responses](https://docs.google.com/spreadsheets/d/1fsjEuFbLU5-bIYS9ThCtp0zXaumSrEE6wpvOcYBCJCY/edit?usp=sharing)
 
 ---
 
@@ -206,6 +208,9 @@ Deployment also expects these GitHub repository variables:
 ## 📈 User Onboarding & Feedback
 
 We actively collect user feedback to improve ZKASH and deliver a better experience.
+
+**Feedback Form:** [Google Form](https://docs.google.com/forms/d/e/1FAIpQLSexwX8xHe_f7y2BotDnJH116XHM7X_JgPpUwgdjN-Nuh9sX8g/viewform?usp=publish-editor)
+**Response Sheet:** [Google Sheets Responses](https://docs.google.com/spreadsheets/d/1fsjEuFbLU5-bIYS9ThCtp0zXaumSrEE6wpvOcYBCJCY/edit?usp=sharing)
 
 All anonymized user feedback and testnet wallet addresses (created before April 2026) have been recorded for transparency.
 **Download User Data:** [user_feedback.csv](./user_feedback.csv)
