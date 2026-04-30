@@ -1,4 +1,4 @@
-import { MerkleTreeService } from './apps/api/src/zk/merkle-tree.service';
+import { MerkleTreeService } from '../../apps/api/src/zk/merkle-tree.service';
 import * as crypto from 'crypto';
 
 async function test() {

@@ -1,5 +1,7 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+const repoRoot = path.resolve(__dirname, '../..');
+
+require('dotenv').config({ path: path.join(repoRoot, '.env') });
 const SDK = require('@stellar/stellar-sdk');
 
 async function testSimulateDeposit() {

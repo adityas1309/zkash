@@ -20,11 +20,10 @@ deploy.sh
 
 packages/circuits/private_transfer/output/verification_key.json
 shielded_pool_address.txt
-shielded_pool_address.txt
 verifier_address.txt
 zk_swap_address.txt
+deployments/*_address.txt
 verification_key.json
 CIRCUIT_FILES.md
-.gitignore
 DEPLOYMENT.md
 .env*.local

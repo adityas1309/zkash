@@ -11,12 +11,31 @@
 - [Smart Contracts](#-smart-contracts)
 - [Key Features](#-key-features)
 - [Architecture & Tech Stack](#-architecture--tech-stack)
+- [Repository Layout](#repository-layout)
 - [Local Setup & Development](#️-local-setup--development)
 - [CI/CD Pipeline](#cicd-pipeline)
 - [References](#-references)
 - [User Onboarding & Feedback](#-user-onboarding--feedback)
 - [Submission Checklist](#-submission-checklist)
 - [User Details](#user-details)
+
+---
+
+## Repository Layout
+
+The root is kept for workspace-level configuration only. Supporting files live in purpose-specific folders:
+
+| Path                   | Purpose                                                |
+| ---------------------- | ------------------------------------------------------ |
+| `apps/`                | Product apps (`api`, `web`)                            |
+| `packages/`            | Shared circuits, contracts, and SDK packages           |
+| `workers/`             | Background worker packages                             |
+| `scripts/deploy/`      | Manual contract deployment and fee helper scripts      |
+| `scripts/debug/`       | Local reproduction and debugging utilities             |
+| `scripts/maintenance/` | One-off maintenance utilities                          |
+| `docs/`                | Project docs, plans, screenshots, and feedback exports |
+| `deployments/`         | Contract address outputs                               |
+| `fixtures/`            | Debug and test fixture inputs                          |
 
 ---
 
@@ -31,13 +50,13 @@
 
 ## Website Screenshots
 
-| Screenshot 1                                          | Screenshot 2                                          |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| ![ZKASH website screenshot 1](<./screenshot (1).png>) | ![ZKASH website screenshot 2](<./screenshot (2).png>) |
+| Screenshot 1                                                           | Screenshot 2                                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| ![ZKASH website screenshot 1](./docs/assets/screenshots/website-1.png) | ![ZKASH website screenshot 2](./docs/assets/screenshots/website-2.png) |
 
-| Screenshot 3                                          | Screenshot 4                                          |
-| ----------------------------------------------------- | ----------------------------------------------------- |
-| ![ZKASH website screenshot 3](<./screenshot (3).png>) | ![ZKASH website screenshot 4](<./screenshot (4).png>) |
+| Screenshot 3                                                           | Screenshot 4                                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| ![ZKASH website screenshot 3](./docs/assets/screenshots/website-3.png) | ![ZKASH website screenshot 4](./docs/assets/screenshots/website-4.png) |
 
 ---
 
@@ -172,7 +191,7 @@ soroban contract optimize --wasm target/wasm32-unknown-unknown/release/shielded_
 
 The GitHub Actions workflow in [`.github/workflows/ci-cd.yml`](./.github/workflows/ci-cd.yml) runs on every push, pull request, and manual dispatch.
 
-![CI/CD workflow run screenshot](./cicd_Screenshot.png)
+![CI/CD workflow run screenshot](./docs/assets/screenshots/ci-cd-workflow.png)
 
 | Stage                     | Command           | Purpose                                                                                            |
 | ------------------------- | ----------------- | -------------------------------------------------------------------------------------------------- |
@@ -213,7 +232,7 @@ We actively collect user feedback to improve ZKASH and deliver a better experien
 **Response Sheet:** [Google Sheets Responses](https://docs.google.com/spreadsheets/d/1fsjEuFbLU5-bIYS9ThCtp0zXaumSrEE6wpvOcYBCJCY/edit?usp=sharing)
 
 All anonymized user feedback and testnet wallet addresses (created before April 2026) have been recorded for transparency.
-**Download User Data:** [user_feedback.csv](./user_feedback.csv)
+**Download User Data:** [user-feedback.csv](./docs/data/user-feedback.csv)
 
 ### Future Improvements Based on Feedback
 
@@ -265,7 +284,7 @@ We have listened to your pain points! Below is how the app has evolved based on 
 ### Core Requirements
 
 - **Live Demo Link:** [zkash-swap.vercel.app](https://zkash-swap.vercel.app)
-- **30+ User Wallet Addresses:** Available in [user_feedback.csv](./user_feedback.csv) (all visible on [Stellar Testnet Explorer](https://stellar.expert/explorer/testnet/))
+- **30+ User Wallet Addresses:** Available in [user-feedback.csv](./docs/data/user-feedback.csv) (all visible on [Stellar Testnet Explorer](https://stellar.expert/explorer/testnet/))
 - **Security Checklist:** [Completed Security Audit](./docs/SECURITY.md)
 - **Community Contribution:** [Twitter Product Announcement](https://x.com/zkash_swap)
 

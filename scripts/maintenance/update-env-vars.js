@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Run this from the root `c:\Users\singh\Downloads\lop-main (1)\lop-main\`
+const repoRoot = path.resolve(__dirname, '../..');
 
 const files = [
   'apps/api/src/users/users.service.ts',
@@ -15,7 +15,7 @@ const files = [
 ];
 
 files.forEach((file) => {
-  const filePath = path.join(__dirname, file);
+  const filePath = path.join(repoRoot, file);
   if (!fs.existsSync(filePath)) {
     console.log('Skipping missing file: ' + filePath);
     return;
@@ -29,13 +29,13 @@ files.forEach((file) => {
 
   if (needsReplacement) {
     let importPath = path
-      .relative(path.dirname(filePath), path.join(__dirname, 'apps/api/src/network.context'))
+      .relative(path.dirname(filePath), path.join(repoRoot, 'apps/api/src/network.context'))
       .replace(/\\/g, '/');
     if (!importPath.startsWith('.')) importPath = './' + importPath;
 
     // Add import statement if not already there
     if (!content.includes('getContractAddress')) {
-      // Find the last import statment and insert after it, or insert at top
+      // Find the last import statement and insert after it, or insert at top
       const lastImportMatch = [...content.matchAll(/^import .*;/gm)].pop();
       if (lastImportMatch) {
         const insertPos = lastImportMatch.index + lastImportMatch[0].length;

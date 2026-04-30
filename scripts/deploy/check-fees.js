@@ -1,5 +1,8 @@
 const SDK = require('@stellar/stellar-sdk');
 const fs = require('fs');
+const path = require('path');
+
+const repoRoot = path.resolve(__dirname, '../..');
 
 async function checkDeployFee() {
   try {
@@ -11,7 +14,10 @@ async function checkDeployFee() {
 
     console.log(`Checking deploy cost for groth16_verifier...`);
     const wasm = fs.readFileSync(
-      'packages/contracts/groth16_verifier/target/wasm32v1-none/release/groth16_verifier.wasm',
+      path.join(
+        repoRoot,
+        'packages/contracts/groth16_verifier/target/wasm32v1-none/release/groth16_verifier.wasm',
+      ),
     );
 
     // Get account sequence

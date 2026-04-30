@@ -17,6 +17,10 @@
     "test": "pnpm -r --if-present run test",
     "ci:quality": "pnpm lint && pnpm format:check && pnpm typecheck",
     "ci:test": "pnpm test",
+    "check:deploy-fee": "node scripts/deploy/check-fees.js",
+    "debug:withdraw": "node scripts/debug/debug-withdraw.js",
+    "deploy:all": "cmd /c scripts\\deploy\\deploy-all.bat",
+    "deploy:contracts": "cmd /c scripts\\deploy\\deploy-contracts.bat",
     "init-shielded-pool": "node --env-file=.env scripts/init-shielded-pool.mjs"
   },
   "packageManager": "pnpm@9.0.0",

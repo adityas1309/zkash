@@ -1,9 +1,9 @@
 // debug-withdraw.js
 // Usage:
 //   1) Save the circuit input JSON (the object logged under
-//      "[ProofService] Input to Witness") to a file, e.g. input.json
+//      "[ProofService] Input to Witness") to a file, e.g. fixtures/zk/withdraw-input.json
 //   2) From repo root, run:
-//        node debug-withdraw.js input.json
+//        node scripts/debug/debug-withdraw.js fixtures/zk/withdraw-input.json
 //
 // This runs snarkjs.groth16.fullProve directly on main.wasm/main_final.zkey
 // so you can see the raw witness error coming from the Withdraw circuit.
@@ -11,20 +11,22 @@
 const fs = require('fs');
 const path = require('path');
 
+const repoRoot = path.resolve(__dirname, '../..');
+
 async function main() {
   const [, , inputPath] = process.argv;
   if (!inputPath) {
-    console.error('Usage: node debug-withdraw.js path/to/input.json');
+    console.error('Usage: node scripts/debug/debug-withdraw.js path/to/input.json');
     process.exit(1);
   }
 
   // Resolve circuit artifact paths the same way as ProofService expects
   const wasmPath = path.resolve(
-    __dirname,
+    repoRoot,
     'packages/circuits/private_transfer/build/main_js/main.wasm',
   );
   const zkeyPath = path.resolve(
-    __dirname,
+    repoRoot,
     'packages/circuits/private_transfer/output/main_final.zkey',
   );
 
@@ -53,7 +55,7 @@ async function main() {
   try {
     console.log('\nRunning groth16.fullProve...');
     const { proof, publicSignals } = await snarkjs.groth16.fullProve(input, wasmPath, zkeyPath);
-    console.log('\n✅ fullProve succeeded.');
+    console.log('\nfullProve succeeded.');
     console.log('Public signals:');
     console.dir(publicSignals, { depth: null });
     console.log('Proof (truncated):');
@@ -66,7 +68,7 @@ async function main() {
       { depth: null },
     );
   } catch (err) {
-    console.error('\n❌ fullProve failed.');
+    console.error('\nfullProve failed.');
     console.error('Message:', err && err.message ? err.message : String(err));
     console.error('\nFull error object:');
     console.dir(err, { depth: null });
